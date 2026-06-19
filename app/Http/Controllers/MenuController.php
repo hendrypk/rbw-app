@@ -9,9 +9,7 @@ class MenuController extends Controller
 {
     public function index()
     {
-        return Inertia::render('menus/Index', [
-            'menus' => Menu::paginate(10)
-        ]);
+        return Inertia::render('menus/Index');
     }
 
     // Menampilkan halaman form tambah

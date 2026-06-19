@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -23,12 +24,18 @@ class RawMaterial extends Model
         'is_active',
     ];
 
+    protected $attributes = [
+        'stock_qty' => 0,
+        'avg_cost'  => 0,
+        'last_cost' => 0,
+    ];
+
     protected $casts = [
-        'stock_qty'         => 'decimal:4',
-        'avg_cost'          => 'decimal:4',
-        'last_cost'         => 'decimal:4',
-        'min_stock'         => 'decimal:4',
-        'conversion_factor' => 'decimal:4',
+        'stock_qty'         => 'decimal:2',
+        'avg_cost'          => 'decimal:2',
+        'last_cost'         => 'decimal:2',
+        'min_stock'         => 'decimal:2',
+        'conversion_factor' => 'decimal:2',
         'is_active'         => 'boolean',
     ];
     protected $appends = ['is_low_stock'];
@@ -53,7 +60,7 @@ class RawMaterial extends Model
         return $this->stock_qty <= $this->min_stock;
     }
 
-    public function scopeActive($query)
+    public function scopeActive(Builder $query)
     {
         return $query->where('is_active', true);
     }

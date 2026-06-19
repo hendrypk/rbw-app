@@ -116,64 +116,64 @@ const bulkDelete = async () => {
 
         <div v-else-if="materials.length > 0" class="table-container mt-8">
             <div class="overflow-hidden rounded-xl border border-border bg-card shadow-sm">
-<table class="w-full text-sm text-left">
-    <thead class="bg-muted/50 text-muted-foreground">
-        <tr>
-            <th class="px-6 py-4 w-12">
-                <Input type="checkbox" 
-                    :checked="selectedIds.length === materials.length && materials.length > 0" 
-                    @change="toggleSelectAll" />
-            </th>
-            <th class="px-6 py-4 font-medium">#</th>
-            <th class="px-6 py-4 font-medium">Nama Material</th>
-            <th class="px-6 py-4 font-medium">Stok</th>
-            <th class="px-6 py-4 font-medium">Min. Stok</th>
-            <th class="px-6 py-4 font-medium">Avg. Cost</th> <th class="px-6 py-4 font-medium">Last Cost</th> <th class="px-6 py-4 font-medium">Status</th>
-            <th class="px-6 py-4 font-medium text-right">Aksi</th>
-        </tr>
-    </thead>
-    
-    <tbody class="divide-y divide-border/50">
-        <tr v-for="(m, index) in materials" :key="m.id" class="group hover:bg-muted/30 transition-colors">
-            <td class="px-6 py-4">
-                <input type="checkbox" v-model="selectedIds" :value="m.id" class="rounded border-border" />
-            </td>
-            <td class="px-6 py-4 text-muted-foreground">
-                {{ index + 1 }}
-            </td>
-            <td class="px-6 py-4 font-medium text-foreground">{{ m.name }}</td>
-            <td class="px-6 py-4 text-muted-foreground">
-                {{ formatNumber(m.stock_qty) }} {{ m.base_unit }}
-            </td>
-            <td class="px-6 py-4 text-muted-foreground">
-                {{ formatNumber(m.min_stock) }} {{ m.base_unit }}
-            </td>
-            <td class="px-6 py-4 text-muted-foreground">
-                {{ formatNumber(m.avg_cost) }}
-            </td>
-            <td class="px-6 py-4 text-muted-foreground">
-                {{ formatNumber(m.last_cost) }}
-            </td>
-            <td class="px-6 py-4">
-                <span :class="[
-                    'inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium',
-                    m.is_active 
-                        ? 'bg-green-100 text-green-700 dark:bg-green-500/10 dark:text-green-400' 
-                        : 'bg-red-100 text-red-700 dark:bg-red-500/10 dark:text-red-400'
-                ]">
-                    {{ m.is_active ? 'Aktif' : 'Nonaktif' }}
-                </span>
-            </td>
-            <td class="px-6 py-4 text-right">
-                <div class="flex justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                    <Button variant="ghost" size="sm" @click="openEdit(m)" class="text-xs font-medium text-primary hover:underline">Edit</Button>
-                    <span class="text-border">|</span>
-                    <button @click="remove(m.id)" class="text-xs font-medium text-destructive hover:underline">Hapus</button>
-                </div>
-            </td>
-        </tr>
-    </tbody>
-</table>
+                <table class="w-full text-sm text-left">
+                    <thead class="bg-muted/50 text-muted-foreground">
+                        <tr>
+                            <th class="px-6 py-4 w-12">
+                                <Input type="checkbox" 
+                                    :checked="selectedIds.length === materials.length && materials.length > 0" 
+                                    @change="toggleSelectAll" />
+                            </th>
+                            <th class="px-6 py-4 font-medium">#</th>
+                            <th class="px-6 py-4 font-medium">Nama Material</th>
+                            <th class="px-6 py-4 font-medium">Stok</th>
+                            <th class="px-6 py-4 font-medium">Min. Stok</th>
+                            <th class="px-6 py-4 font-medium">Avg. Cost</th> <th class="px-6 py-4 font-medium">Last Cost</th> <th class="px-6 py-4 font-medium">Status</th>
+                            <th class="px-6 py-4 font-medium text-right">Aksi</th>
+                        </tr>
+                    </thead>
+                    
+                    <tbody class="divide-y divide-border/50">
+                        <tr v-for="(m, index) in materials" :key="m.id" class="group hover:bg-muted/30 transition-colors">
+                            <td class="px-6 py-4">
+                                <input type="checkbox" v-model="selectedIds" :value="m.id" class="rounded border-border" />
+                            </td>
+                            <td class="px-6 py-4 text-muted-foreground">
+                                {{ index + 1 }}
+                            </td>
+                            <td class="px-6 py-4 font-medium text-foreground">{{ m.name }}</td>
+                            <td class="px-6 py-4 text-muted-foreground">
+                                {{ formatNumber(m.stock_qty) }} {{ m.base_unit }}
+                            </td>
+                            <td class="px-6 py-4 text-muted-foreground">
+                                {{ formatNumber(m.min_stock) }} {{ m.base_unit }}
+                            </td>
+                            <td class="px-6 py-4 text-muted-foreground">
+                                {{ formatNumber(m.avg_cost) }}
+                            </td>
+                            <td class="px-6 py-4 text-muted-foreground">
+                                {{ formatNumber(m.last_cost) }}
+                            </td>
+                            <td class="px-6 py-4">
+                                <span :class="[
+                                    'inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium',
+                                    m.is_active 
+                                        ? 'bg-green-100 text-green-700 dark:bg-green-500/10 dark:text-green-400' 
+                                        : 'bg-red-100 text-red-700 dark:bg-red-500/10 dark:text-red-400'
+                                ]">
+                                    {{ m.is_active ? 'Aktif' : 'Nonaktif' }}
+                                </span>
+                            </td>
+                            <td class="px-6 py-4 text-right">
+                                <div class="flex justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                                    <Button variant="ghost" size="sm" @click="openEdit(m)" class="text-xs font-medium text-primary hover:underline">Edit</Button>
+                                    <span class="text-border">|</span>
+                                    <button @click="remove(m.id)" class="text-xs font-medium text-destructive hover:underline">Hapus</button>
+                                </div>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
             </div>
         </div>
 

@@ -29,6 +29,7 @@ const form = ref({
     base_unit: '',
     purchase_unit: '',
     conversion_factor: 1,
+    stock_qty: 0,
     min_stock: 0,
     is_active: true,
 });
@@ -47,6 +48,7 @@ watch(() => props.show, (newVal) => {
                 base_unit: 'ml', 
                 purchase_unit: 'L', 
                 conversion_factor: 1.00, 
+                stock_qty: 0,
                 min_stock: 0.00, 
                 is_active: true
             };
@@ -112,9 +114,9 @@ const submit = async () => {
                         <InputError :message="errors.conversion_factor" />
                     </div>
                     <div class="grid gap-2">
-                        <Label for="min_stock">Stok Minimum</Label>
-                        <Input id="min_stock" type="text" step="0.01" v-model="form.min_stock" />
-                        <InputError :message="errors.min_stock" />
+                        <Label for="stock_qty">Stok Minimum</Label>
+                        <Input id="stock_qty" type="text" step="0.01" v-model="form.stock_qty" />
+                        <InputError :message="errors.stock_qty" />
                     </div>
                 </div>
 

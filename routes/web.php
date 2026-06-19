@@ -6,9 +6,9 @@ use App\Http\Controllers\RawMaterialController;
 use App\Http\Controllers\SupplierController;
 use Illuminate\Support\Facades\Route;
 
-Route::inertia('/', 'Welcome')->name('home');
 
 Route::middleware(['auth', 'verified'])->group(function () {
+Route::inertia('/', 'Dashboard')->name('home');
     Route::inertia('dashboard', 'Dashboard')->name('dashboard');
     Route::resource('menus', MenuController::class);
     Route::resource('suppliers', SupplierController::class);

@@ -61,6 +61,13 @@ class RawMaterialController extends Controller
 
     public function destroy(RawMaterial $rawMaterial): JsonResponse
     {
+        // Cek apakah bahan baku sudah digunakan di resep menu
+        if ($rawMaterial->menuRecipes()->exists()) {
+            return response()->json([
+                'message' => 'Bahan baku tidak bisa dihapus karena masih digunakan dalam resep menu.'
+            ], 422); // Status code 422 Unprocessable Entity
+        }
+
         $rawMaterial->delete();
 
         return response()->json(['message' => 'Bahan baku dihapus.']);
@@ -82,8 +89,27 @@ class RawMaterialController extends Controller
             'ids.*' => 'required|uuid|exists:raw_materials,id',
         ]);
 
-        RawMaterial::whereIn('id', $request->ids)->delete();
+        // Cari ID yang sedang digunakan dalam resep
+        $usedMaterials = \App\Models\MenuRecipe::whereIn('raw_material_id', $request->ids)
+            ->pluck('raw_material_id')
+            ->toArray();
 
-        return response()->json(['message' => 'Material berhasil dihapus.']);
+        // Hapus hanya ID yang tidak ada di daftar $usedMaterials
+        $idsToDelete = array_diff($request->ids, $usedMaterials);
+
+        if (empty($idsToDelete)) {
+            return response()->json([
+                'message' => 'Tidak ada bahan baku yang bisa dihapus karena semuanya masih digunakan dalam resep.'
+            ], 422);
+        }
+
+        RawMaterial::whereIn('id', $idsToDelete)->delete();
+
+        $message = 'Berhasil menghapus ' . count($idsToDelete) . ' bahan baku.';
+        if (count($usedMaterials) > 0) {
+            $message .= ' Beberapa bahan tidak bisa dihapus karena masih digunakan dalam resep.';
+        }
+
+        return response()->json(['message' => $message]);
     }
 }
