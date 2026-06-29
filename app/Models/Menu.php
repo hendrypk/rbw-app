@@ -4,18 +4,21 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
+use Illuminate\Database\Query\Builder;
 
 class Menu extends Model
 {
     use HasUuids, SoftDeletes;
 
     protected $fillable = [
-        'name', 'category', 'description', 'image_path', 'hpp', 'is_active',
+        'name', 'category_id', 'description', 'image_path', 'hpp', 'is_active', 'overhead_cost'
     ];
 
     protected $casts = [
+        'overhead_cost' => 'float',
         'hpp'       => 'decimal:4',
         'is_active' => 'boolean',
     ];
@@ -36,8 +39,13 @@ class Menu extends Model
         $this->save();
     }
 
-    public function scopeActive($query)
+    public function scopeActive(Builder $query): Builder
     {
         return $query->where('is_active', true);
+    }
+
+    public function category(): BelongsTo
+    {
+        return $this->belongsTo(Category::class, 'category_id');
     }
 }

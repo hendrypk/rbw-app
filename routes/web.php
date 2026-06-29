@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\MenuController;
+use App\Http\Controllers\OverheadCostController;
 use App\Http\Controllers\PurchaseOrderController;
 use App\Http\Controllers\RawMaterialController;
 use App\Http\Controllers\SupplierController;
@@ -14,6 +15,7 @@ Route::inertia('/', 'Dashboard')->name('home');
     Route::resource('suppliers', SupplierController::class);
     Route::resource('materials', RawMaterialController::class);
     Route::resource('purchase', PurchaseOrderController::class);
+    Route::resource('overhead', OverheadCostController::class);
 });
 
 require __DIR__.'/settings.php';

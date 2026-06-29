@@ -1,6 +1,8 @@
 <?php
 
+use App\Http\Controllers\Api\CategoryController;
 use App\Http\Controllers\Api\MenuController;
+use App\Http\Controllers\Api\OverheadCostController;
 use App\Http\Controllers\Api\PurchaseOrderController;
 use App\Http\Controllers\Api\RawMaterialController;
 use App\Http\Controllers\Api\SupplierController;
@@ -30,6 +32,13 @@ Route::middleware(['auth', 'verified'])->prefix('api')->name('api.')->group(func
     // Menus
     Route::prefix('menus')->group(function () {
         Route::get('channels', [MenuController::class, 'channels']);
+        Route::get('overhead-sync-status', [MenuController::class, 'checkOverheadSync']);
+        Route::post('overhead-sync', [MenuController::class, 'syncOverhead']);
     });
     Route::apiResource('menus', MenuController::class);
+
+    // Overhead
+    Route::apiResource('overhead-costs', OverheadCostController::class);
+    Route::apiResource('categories', CategoryController::class);
+    
 });

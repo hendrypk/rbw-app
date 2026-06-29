@@ -2,13 +2,26 @@
 import { ref } from 'vue';
 import axios from 'axios';
 
+export interface MenuPrice {
+    id: string;
+    menu_id: string;
+    channel: string;
+    selling_price: number;
+    margin_percent: number;
+}
+
 export interface Menu {
     id: string;
     name: string;
-    category: string;
+    category?: {
+        id: string;
+        name: string;
+        is_visible: boolean;
+    };
     hpp: number;
+    overhead_cost: number;
     is_active: boolean;
-    // Tambahkan field lain jika ada (misal: recipes, prices)
+    prices?: MenuPrice[]; // <-- PASTIKAN baris ini bertipe MenuPrice[] atau any[], bukan number!
 }
 
 export function useMenus() {

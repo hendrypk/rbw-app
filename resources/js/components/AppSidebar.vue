@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { Link } from '@inertiajs/vue3';
-import { BookOpen, Box, FolderGit2, LayoutGrid, ShoppingCart, Truck, Utensils } from '@lucide/vue';
+import { BookOpen, Box, Calculator, FolderGit2, LayoutGrid, ShoppingCart, Truck, Utensils } from '@lucide/vue';
 import AppLogo from '@/components/AppLogo.vue';
 import NavFooter from '@/components/NavFooter.vue';
 import NavMain from '@/components/NavMain.vue';
@@ -20,6 +20,7 @@ import menus from '@/routes/menus';
 import suppliers from '@/routes/suppliers';
 import materials from '@/routes/materials';
 import purchase from '@/routes/purchase';
+import overhead from '@/routes/overhead';
 
 const mainNavItems: NavItem[] = [
     {
@@ -46,6 +47,11 @@ const mainNavItems: NavItem[] = [
         title: 'Purchase',
         href: purchase.index(),
         icon: ShoppingCart,
+    },
+    {
+        title: 'Overhead',
+        href: overhead.index(),
+        icon: Calculator,
     },
 ];
 

@@ -14,9 +14,9 @@ class MenuPrice extends Model
 
     const PLATFORM_FEES = [
         'offline'    => 0,
-        'shopeefood' => 20,
-        'grabfood'   => 20,
-        'gofood'     => 20,
+        'shopeefood' => 30,
+        'grabfood'   => 30,
+        'gofood'     => 30,
     ];
 
     protected $fillable = [
@@ -38,18 +38,28 @@ class MenuPrice extends Model
     }
 
     /**
-     * Hitung selling_price dan nett_price dari hpp + margin
+     * Hitung selling_price dan nett_price dari Modal Dasar (HPP + Overhead) + Margin
      */
-    public static function calculate(float $hpp, float $marginPercent, string $channel): array
+    public static function calculate(float $baseCost, float $marginPercent, string $channel): array
     {
-        $sellingPrice = $hpp * (1 + $marginPercent / 100);
-        $platformFee  = self::PLATFORM_FEES[$channel] ?? 0;
-        $nettPrice    = $sellingPrice * (1 - $platformFee / 100);
+        $platformFee = self::PLATFORM_FEES[$channel] ?? 0;
+        
+        // Target harga setelah margin sebelum potongan aplikasi (Menggunakan Base Cost)
+        $targetPriceBeforeOjol = $baseCost * (1 + $marginPercent / 100);
+
+        if ($platformFee > 0 && $platformFee < 100) {
+            // Formula Reverse Pricing anti-boncos ojol
+            $sellingPrice = $targetPriceBeforeOjol / (1 - ($platformFee / 100));
+        } else {
+            $sellingPrice = $targetPriceBeforeOjol;
+        }
+
+        $nettPrice = $sellingPrice * (1 - $platformFee / 100);
 
         return [
-            'selling_price'        => round($sellingPrice, 2),
+            'selling_price'        => round($sellingPrice, 0),
             'platform_fee_percent' => $platformFee,
-            'nett_price'           => round($nettPrice, 2),
+            'nett_price'           => round($nettPrice, 0),
         ];
     }
 }

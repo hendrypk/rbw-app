@@ -47,12 +47,12 @@ class MenuService
             // 2. Recalculate HPP
             $menu->recalculateHpp();
             $hpp = (float) $menu->hpp;
-
+            $baseCost = (float) $menu->hpp + (float) $menu->overhead_cost;
             // 3. Upsert harga jual per channel
             foreach ($prices as $p) {
                 $channel = $p['channel'];
                 $margin  = (float) $p['margin_percent'];
-                $calc    = MenuPrice::calculate($hpp, $margin, $channel);
+                $calc    = MenuPrice::calculate($baseCost, $margin, $channel);
 
                 MenuPrice::updateOrCreate(
                     ['menu_id' => $menu->id, 'channel' => $channel],
@@ -81,6 +81,6 @@ class MenuService
     public function getAllMenus()
     {
         // Semua logika query di sini
-        return Menu::with(['recipes.rawMaterial', 'prices'])->get();
+        return Menu::with(['recipes.rawMaterial', 'prices', 'category'])->get();
     }
 }
