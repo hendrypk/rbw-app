@@ -14,8 +14,8 @@ class RawMaterialController extends Controller
         $materials = RawMaterial::query()
             ->when($request->search, fn($q) => $q->where('name', 'like', "%{$request->search}%"))
             ->when($request->has('active'), fn($q) => $q->active())
-            ->orderBy('name');
-            // ->paginate($request->per_page ?? 15);
+            ->orderBy('name')
+            ->paginate($request->per_page ?? 15);
 
         return response()->json($materials);
     }
