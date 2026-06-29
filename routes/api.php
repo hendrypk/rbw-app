@@ -23,6 +23,7 @@ Route::middleware(['auth', 'verified'])->prefix('api')->name('api.')->group(func
         Route::post('bulk-delete', [RawMaterialController::class, 'bulkDestroy']);
         Route::get('{rawMaterial}/ledger', [RawMaterialController::class, 'ledger']);
     });
+    Route::get('raw-materials/options', [RawMaterialController::class, 'options']);
     Route::apiResource('raw-materials', RawMaterialController::class);
 
     // Purchase Orders

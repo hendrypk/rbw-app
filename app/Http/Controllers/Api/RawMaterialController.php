@@ -20,6 +20,32 @@ class RawMaterialController extends Controller
         return response()->json($materials);
     }
 
+    // public function options(): JsonResponse
+    // {
+    //     return response()->json(
+    //         RawMaterial::active()
+    //             ->orderBy('name')
+    //             ->get([
+    //                 'id',
+    //                 'name',
+    //                 'base_unit',
+    //                 'avg_cost',
+    //                 'last_cost'
+    //             ])
+    //     );
+    // }
+
+    public function options(): JsonResponse
+{
+    // Mengambil semua data bahan baku yang aktif tanpa di-paginate
+    $materials = RawMaterial::query()
+        ->where('is_active', true) // opsional, sesuaikan dengan scope/kolom Anda
+        ->orderBy('name')
+        ->get(['id', 'name', 'last_cost', 'base_unit']); // select kolom yang dibutuhkan saja agar ringan
+
+    return response()->json($materials);
+}
+
     public function store(Request $request): JsonResponse
     {
         $data = $request->validate([

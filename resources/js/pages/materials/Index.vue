@@ -14,12 +14,29 @@ defineOptions({ layout: AppSidebarLayout });
 const showModal = ref(false);
 const activeMaterial = ref(null); // null = create, object = edit
 const { confirm, success, error } = useSwal();
-const { materials, isLoading, fetchMaterials } = useMaterials();
+const {
+    materials,
+    meta,
+    isLoading,
+    fetchMaterials,
+} = useMaterials();
+
+// Inisialisasi halaman aktif saat ini
+const currentPage = ref(1);
+
+// Fungsi load data dengan parameter halaman
+const loadMaterials = (page = 1) => {
+    currentPage.value = page;
+    fetchMaterials({ page: page });
+};
+
+onMounted(() => {
+    loadMaterials();
+});
+
 // Fungsi untuk memformat angka dengan 2 desimal
 const formatNumber = (value: number | string) => {
-    // Memastikan angka yang masuk adalah number
     const num = Number(value); 
-    
     return new Intl.NumberFormat('id-ID', {
         minimumFractionDigits: 2,
         maximumFractionDigits: 2,
@@ -37,19 +54,15 @@ const openEdit = (material: any) => {
 };
 
 const handleSaved = () => {
-    fetchMaterials();
+    loadMaterials(currentPage.value);
 };
-
-onMounted(() => {
-    fetchMaterials();
-});
 
 const remove = async (id: string) => {
     if (await confirm('Data ini akan dihapus permanen!')) {
         try {
             const response = await axios.delete(`/api/raw-materials/${id}`);
             success('Berhasil', response.data.message);
-            fetchMaterials();
+            loadMaterials(currentPage.value);
         } catch (err: any) {
             error('Gagal', err.response?.data?.message || 'Terjadi kesalahan.');
         }
@@ -76,7 +89,7 @@ const bulkDelete = async () => {
             
             selectedIds.value = [];
             success('Berhasil', response.data.message);
-            fetchMaterials();
+            loadMaterials(currentPage.value);
         } catch (err: any) {
             error('Gagal', err.response?.data?.message || 'Terjadi kesalahan.');
         }
@@ -139,7 +152,7 @@ const bulkDelete = async () => {
                                 <input type="checkbox" v-model="selectedIds" :value="m.id" class="rounded border-border" />
                             </td>
                             <td class="px-6 py-4 text-muted-foreground">
-                                {{ index + 1 }}
+                                {{ (meta?.current_page - 1) * (meta?.per_page || 15) + index + 1 }}
                             </td>
                             <td class="px-6 py-4 font-medium text-foreground">{{ m.name }}</td>
                             <td class="px-6 py-4 text-muted-foreground">
@@ -174,6 +187,67 @@ const bulkDelete = async () => {
                         </tr>
                     </tbody>
                 </table>
+            </div>
+
+            <div v-if="meta && meta.last_page > 1" class="flex items-center justify-between border-t border-border px-4 py-4 sm:px-6 mt-4">
+                <div class="flex flex-1 justify-between sm:hidden">
+                    <Button 
+                        variant="outline" 
+                        size="sm" 
+                        :disabled="meta.current_page === 1" 
+                        @click="loadMaterials(meta.current_page - 1)"
+                    >
+                        Previous
+                    </Button>
+                    <Button 
+                        variant="outline" 
+                        size="sm" 
+                        :disabled="meta.current_page === meta.last_page" 
+                        @click="loadMaterials(meta.current_page + 1)"
+                    >
+                        Next
+                    </Button>
+                </div>
+                <div class="hidden sm:flex sm:flex-1 sm:items-center sm:justify-between">
+                    <div>
+                        <p class="text-sm text-muted-foreground">
+                            Menampilkan
+                            <span class="font-medium">{{ meta.from || 0 }}</span>
+                            sampai
+                            <span class="font-medium">{{ meta.to || 0 }}</span>
+                            dari
+                            <span class="font-medium">{{ meta.total || 0 }}</span>
+                            hasil
+                        </p>
+                    </div>
+                    <div>
+                        <nav class="isolate inline-flex -space-x-px rounded-md shadow-sm gap-1" aria-label="Pagination">
+                            <Button 
+                                variant="outline" 
+                                size="sm"
+                                :disabled="meta.current_page === 1" 
+                                @click="loadMaterials(meta.current_page - 1)"
+                                class="h-9 px-3"
+                            >
+                                &laquo; Prev
+                            </Button>
+
+                            <span class="inline-flex items-center px-4 text-sm font-semibold text-foreground border rounded-md bg-background h-9">
+                                Halaman {{ meta.current_page }} dari {{ meta.last_page }}
+                            </span>
+
+                            <Button 
+                                variant="outline" 
+                                size="sm"
+                                :disabled="meta.current_page === meta.last_page" 
+                                @click="loadMaterials(meta.current_page + 1)"
+                                class="h-9 px-3"
+                            >
+                                Next &raquo;
+                            </Button>
+                        </nav>
+                    </div>
+                </div>
             </div>
         </div>
 
