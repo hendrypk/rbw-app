@@ -1,6 +1,9 @@
 <?php
 
+use App\Http\Controllers\Api\AccountController;
+use App\Http\Controllers\Api\AccountMappingController;
 use App\Http\Controllers\Api\CategoryController;
+use App\Http\Controllers\Api\JournalEntryController;
 use App\Http\Controllers\Api\MenuController;
 use App\Http\Controllers\Api\OverheadCostController;
 use App\Http\Controllers\Api\PurchaseOrderController;
@@ -40,5 +43,10 @@ Route::middleware(['auth', 'verified'])->prefix('api')->name('api.')->group(func
     // Overhead
     Route::apiResource('overhead-costs', OverheadCostController::class);
     Route::apiResource('categories', CategoryController::class);
+    Route::prefix('finance')->group(function() {
+        Route::apiResource('accounts', AccountController::class);
+        Route::apiResource('account-mapping', AccountMappingController::class);
+        Route::apiResource('journal-entry', JournalEntryController::class);
+    });
     
 });

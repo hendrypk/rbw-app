@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { Link } from '@inertiajs/vue3';
-import { BookOpen, Box, Calculator, FolderGit2, LayoutGrid, ShoppingCart, Truck, Utensils } from '@lucide/vue';
+import { ArrowLeftRightIcon, BookOpen, Box, Calculator, FolderGit2, Landmark, LayoutGrid, NotebookPen, ShoppingCart, Truck, Utensils } from '@lucide/vue';
 import AppLogo from '@/components/AppLogo.vue';
 import NavFooter from '@/components/NavFooter.vue';
 import NavMain from '@/components/NavMain.vue';
@@ -21,6 +21,10 @@ import suppliers from '@/routes/suppliers';
 import materials from '@/routes/materials';
 import purchase from '@/routes/purchase';
 import overhead from '@/routes/overhead';
+import account from '@/routes/account';
+import accountMapping from '@/routes/account-mapping';
+import journalEntry from '@/routes/journal';
+import journal from '@/routes/journal';
 
 const mainNavItems: NavItem[] = [
     {
@@ -53,6 +57,27 @@ const mainNavItems: NavItem[] = [
         href: overhead.index(),
         icon: Calculator,
     },
+    {
+    title: 'Finance',
+    icon: Landmark,
+    children: [
+        {
+            title: 'Account',
+            href: account.index(),
+            icon: BookOpen,
+        },
+        {
+            title: 'Mapping',
+            href: accountMapping.index(),
+            icon: ArrowLeftRightIcon,
+        },
+        {
+            title: 'Jurnal',
+            href: journal.index(),
+            icon: NotebookPen,
+        },
+    ],
+}
 ];
 
 const footerNavItems: NavItem[] = [

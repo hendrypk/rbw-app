@@ -8,7 +8,13 @@ export type BreadcrumbItem = {
 
 export type NavItem = {
     title: string;
-    href: NonNullable<InertiaLinkProps['href']>;
+
+    // Parent menu tidak selalu memiliki href
+    href?: NonNullable<InertiaLinkProps['href']>;
+
     icon?: LucideIcon;
+
     isActive?: boolean;
+
+    children?: NavItem[];
 };

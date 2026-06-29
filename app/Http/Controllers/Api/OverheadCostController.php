@@ -9,14 +9,14 @@ use Illuminate\Http\Request;
 
 class OverheadCostController extends Controller
 {
-public function index(Request $request): JsonResponse
-{
-    $overheads = OverheadCost::query()
-        ->orderByDesc('created_at')
-        ->paginate($request->per_page ?? 15);
+    public function index(Request $request): JsonResponse
+    {
+        $overheads = OverheadCost::query()
+            ->orderByDesc('created_at')
+            ->paginate($request->per_page ?? 15);
 
-    return response()->json($overheads);
-}
+        return response()->json($overheads);
+    }
 
     public function store(Request $request): JsonResponse
     {
