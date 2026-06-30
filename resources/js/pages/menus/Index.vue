@@ -353,13 +353,15 @@ onMounted(() => {
                                         :class="['px-2.5 py-1.5 rounded-lg border text-xs flex flex-col justify-between shadow-sm transition-all', getChannelClass(price.channel)]"
                                     >
                                         <div class="flex items-center justify-between border-b border-current/10 pb-0.5">
-                                            <span class="text-[10px] uppercase font-bold tracking-wider opacity-80">{{ price.channel }}</span>
+                                            <span class="text-[10px] uppercase font-bold tracking-wider opacity-80">{{ price.channel }} </span>
+                                            <span class="text-[9px] opacity-60 mt-0.5">{{ price.margin_percent }}%</span>
+
                                         </div>
                                         <div class="flex flex-col mt-1.5">
                                             <span class="font-bold text-sm tracking-tight">
                                                 {{ currency(price.selling_price) }}
                                             </span>
-                                            <span class="text-[9px] opacity-60 mt-0.5">Margin: {{ price.margin_percent }}%</span>
+                                            <span class="text-[9px] opacity-60 mt-0.5">Margin: {{ currency(price.nett_price * (price.margin_percent / 100)) }}</span>
                                         </div>
                                     </div>
                                 </div>
