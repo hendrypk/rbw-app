@@ -111,44 +111,50 @@ import { useMaterials } from '@/composables/useMaterials';
             cleanProfit: Math.round(cleanProfit)
         };
     };
+watch(
+    () => props.show,
+    async (newVal) => {
+        if (!newVal) return;
 
-    watch(() => props.show, (newVal) => {
-        if (newVal) {
-            fetchCategories();
-            fetchMaterialOptions(); // Refresh list kategori dari state global/composable tiap modal dibuka
-            
-            if (props.menu) {
-                form.value = {
-                    name: props.menu.name,
-                    category_id: props.menu.category_id || '',
-                    overhead_cost: Number(props.menu.overhead_cost !== undefined ? props.menu.overhead_cost : (props.masterOverhead || 0)),
-                    recipes: props.menu.recipes.map((r: any) => ({ 
-                        raw_material_id: r.raw_material_id, 
-                        qty_usage: Number(r.qty_usage) 
-                    })),
-                    prices: props.menu.prices.map((p: any) => ({ 
-                        channel: p.channel, 
-                        margin_percent: Number(p.margin_percent) 
-                    }))
-                };
-            } else {
-                form.value = {
-                    name: '',
-                    category_id: '',
-                    overhead_cost: props.masterOverhead || 0,
-                    recipes: [{ raw_material_id: '', qty_usage: 1 }],
-                    prices: [
-                        { channel: 'offline', margin_percent: 30 },
-                        { channel: 'shopeefood', margin_percent: 30 },
-                        { channel: 'grabfood', margin_percent: 30 },
-                        { channel: 'gofood', margin_percent: 30 },
-                    ]
-                };
-            }
-            errors.value = {};
+        await Promise.all([
+            fetchCategories(),
+            fetchMaterialOptions(),
+        ]);
+
+        if (props.menu) {
+            form.value = {
+                name: props.menu.name,
+                category_id: props.menu.category_id || '',
+                overhead_cost: Number(
+                    props.menu.overhead_cost ?? props.masterOverhead ?? 0
+                ),
+                recipes: props.menu.recipes.map((r: any) => ({
+                    raw_material_id: r.raw_material_id,
+                    qty_usage: Number(r.qty_usage),
+                })),
+                prices: props.menu.prices.map((p: any) => ({
+                    channel: p.channel,
+                    margin_percent: Number(p.margin_percent),
+                })),
+            };
+        } else {
+            form.value = {
+                name: '',
+                category_id: '',
+                overhead_cost: props.masterOverhead || 0,
+                recipes: [{ raw_material_id: '', qty_usage: 1 }],
+                prices: [
+                    { channel: 'offline', margin_percent: 30 },
+                    { channel: 'shopeefood', margin_percent: 30 },
+                    { channel: 'grabfood', margin_percent: 30 },
+                    { channel: 'gofood', margin_percent: 30 },
+                ],
+            };
         }
-    });
 
+        errors.value = {};
+    }
+);
     const submit = async () => {
         processing.value = true;
         errors.value = {};
