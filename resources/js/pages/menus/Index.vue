@@ -15,7 +15,7 @@ defineOptions({ layout: AppSidebarLayout });
 
 const { confirm, success, error } = useSwal();
 const { menus, isLoading, fetchMenus } = useMenus();
-const { materials, fetchMaterials } = useMaterials();
+const { materials, fetchMaterialOptions } = useMaterials();
 const { categories, fetchCategories } = useCategories();
 
 // State Fungsionalitas Modal Menu
@@ -184,7 +184,7 @@ const getChannelClass = (channel: string) => {
 
 onMounted(() => {
     fetchMenus();
-    fetchMaterials();
+    fetchMaterialOptions();
     fetchCategories();
     checkSyncStatus();
 });
@@ -393,7 +393,6 @@ onMounted(() => {
     <MenuModal 
         :show="showModal" 
         :menu="activeMenu" 
-        :rawMaterials="materials" 
         :masterOverhead="masterOverheadTotal"
         @close="showModal = false"
         @saved="handleSaved" 

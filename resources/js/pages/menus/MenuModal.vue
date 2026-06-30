@@ -6,13 +6,14 @@
     import { Label } from '@/components/ui/label';
     import InputError from '@/components/InputError.vue';
     import { useCategories } from '@/composables/useCategories';
+import { useMaterials } from '@/composables/useMaterials';
 
     const props = defineProps<{ 
         show: boolean, 
         menu?: any | null, 
-        rawMaterials: any[],
         masterOverhead?: number 
     }>();
+    
     const emit = defineEmits(['close', 'saved']);
 
     const processing = ref(false);
@@ -21,6 +22,7 @@
 
     // Inject Composable Kategori
     const { categories, fetchCategories } = useCategories();
+    const { materialOptions, fetchMaterialOptions} = useMaterials();
 
     // Filter kategori yang tidak di-hide (is_visible === true) oleh user
     const userCategories = computed(() => {
@@ -28,7 +30,12 @@
     });
 
     const materialMap = computed(() => {
-        return Object.fromEntries(props.rawMaterials.map(m => [m.id, m]));
+        // Membuat Object dengan ID sebagai key: { 1: {id: 1, name: '...', ...}, 2: {...} }
+        return Object.fromEntries(
+            materialOptions.value
+                // .filter((m: any) => m.is_active) // pastikan gunakan properti yang benar
+                .map(m => [m.id, m])
+        );
     });
 
     const currency = (n: number) => new Intl.NumberFormat('id-ID', { 
@@ -47,11 +54,16 @@
         gofood: 30
     };
 
+    interface Recipe {
+        raw_material_id: string | number;
+        qty_usage: number;
+    }
+
     const form = ref({
         name: '',
         category_id: '',
         overhead_cost: 0,
-        recipes: [{ raw_material_id: '', qty_usage: 1 }],
+        recipes: [{ raw_material_id: '', qty_usage: 1 }] as Recipe[],
         prices: [
             { channel: 'offline', margin_percent: 30 },
             { channel: 'shopeefood', margin_percent: 30 },
@@ -102,7 +114,8 @@
 
     watch(() => props.show, (newVal) => {
         if (newVal) {
-            fetchCategories(); // Refresh list kategori dari state global/composable tiap modal dibuka
+            fetchCategories();
+            fetchMaterialOptions(); // Refresh list kategori dari state global/composable tiap modal dibuka
             
             if (props.menu) {
                 form.value = {
@@ -205,7 +218,7 @@
                                 <select v-model="rec.raw_material_id" class="col-span-5 rounded-md border p-1.5 text-xs bg-background">
                                     <option value="" disabled>Pilih Bahan</option>
                                     <option 
-                                        v-for="mat in rawMaterials" 
+                                        v-for="mat in materialOptions" 
                                         :key="mat.id" 
                                         :value="mat.id"
                                         :disabled="form.recipes.some((r: any) => r.raw_material_id === mat.id && r !== rec)"
