@@ -24,7 +24,7 @@ class MenuController extends Controller
     {
         $data = $request->validate([
             'name'        => 'required|string|max:255',
-            'category'    => 'nullable|string|max:100',
+            'category_id'    => 'nullable|string|max:100',
             'description' => 'nullable|string',
             'recipes'     => 'required|array|min:1',
             'overhead_cost' => 'sometimes|required|numeric|min:0',
