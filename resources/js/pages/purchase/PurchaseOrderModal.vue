@@ -12,7 +12,7 @@ const props = defineProps<{ show: boolean, po?: any }>();
 const emit = defineEmits(['close', 'saved']);
 
 const { suppliers, fetchSuppliers } = useSuppliers();
-const { materials, fetchMaterials } = useMaterials(); // Pastikan composable ini mengembalikan array
+const { materialOptions, fetchMaterialOptions } = useMaterials(); // Pastikan composable ini mengembalikan array
 
 const processing = ref(false);
 const errors = ref<Record<string, string>>({});
@@ -41,7 +41,7 @@ watch(() => props.show, async (newVal) => {
         // Ambil data terbaru
         await Promise.all([
             fetchSuppliers({ active: true }),
-            fetchMaterials({ active: true })
+            fetchMaterialOptions()
         ]);
 
         if (props.po) {
@@ -119,7 +119,7 @@ const submit = async (status: string) => {
                         <div class="col-span-5">
                             <select v-model="item.raw_material_id" class="w-full rounded-md border border-input bg-background px-3 py-2 text-sm">
                                 <option value="">Pilih Material</option>
-                                <option v-for="m in materials" :key="m.id" :value="m.id">{{ m.name }}</option>
+                                <option v-for="m in materialOptions" :key="m.id" :value="m.id">{{ m.name }}</option>
                             </select>
                         </div>
                         <div class="col-span-2">
