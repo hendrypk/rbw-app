@@ -37,7 +37,7 @@ class MenuController extends Controller
 
         $menu = Menu::create([
             'name'        => $data['name'],
-            'category_id'    => $data['category'] ?? null,
+            'category_id'    => $data['category_id'] ?? null,
             'description' => $data['description'] ?? null,
             'overhead_cost' => $data['overhead_cost'] ?? 0
         ]);
