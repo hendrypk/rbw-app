@@ -93,24 +93,29 @@ import { useMaterials } from '@/composables/useMaterials';
         }
     };
 
-    const calculateChannelPricing = (marginPercent: number, channel: string) => {
-        const baseCost = totalBaseCost.value;
-        const targetPriceBeforeOjol = baseCost * (1 + marginPercent / 100);
-        const feePercent = PLATFORM_FEES[channel] ?? 0;
+const calculateChannelPricing = (marginPercent: number, channel: string) => {
+    const baseCost = totalBaseCost.value;
+    const feePercent = PLATFORM_FEES[channel] ?? 0;
 
-        let sellingPrice = targetPriceBeforeOjol;
-        if (channel !== 'offline' && feePercent > 0) {
-            sellingPrice = targetPriceBeforeOjol / (1 - feePercent / 100);
-        }
+    // Margin dihitung dari harga jual (gross margin)
+    const targetPriceBeforeOjol = baseCost / (1 - marginPercent / 100);
 
-        const nettPrice = sellingPrice * (1 - feePercent / 100);
-        const cleanProfit = nettPrice - baseCost;
+    let sellingPrice = targetPriceBeforeOjol;
 
-        return {
-            sellingPrice: Math.round(sellingPrice),
-            cleanProfit: Math.round(cleanProfit)
-        };
+    // Naikkan harga agar setelah dipotong fee marketplace,
+    // margin tetap sesuai yang diinginkan.
+    if (channel !== 'offline' && feePercent > 0) {
+        sellingPrice = targetPriceBeforeOjol / (1 - feePercent / 100);
+    }
+
+    const nettPrice = sellingPrice * (1 - feePercent / 100);
+    const cleanProfit = nettPrice - baseCost;
+
+    return {
+        sellingPrice: Math.round(sellingPrice),
+        cleanProfit: Math.round(cleanProfit),
     };
+};
 watch(
     () => props.show,
     async (newVal) => {

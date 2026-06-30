@@ -43,23 +43,25 @@ class MenuPrice extends Model
     public static function calculate(float $baseCost, float $marginPercent, string $channel): array
     {
         $platformFee = self::PLATFORM_FEES[$channel] ?? 0;
-        
-        // Target harga setelah margin sebelum potongan aplikasi (Menggunakan Base Cost)
-        $targetPriceBeforeOjol = $baseCost * (1 + $marginPercent / 100);
+
+        // Margin dihitung dari harga jual (gross margin)
+        $targetPriceBeforeOjol = $baseCost / (1 - ($marginPercent / 100));
 
         if ($platformFee > 0 && $platformFee < 100) {
-            // Formula Reverse Pricing anti-boncos ojol
+            // Naikkan harga agar setelah dipotong fee marketplace,
+            // margin tetap sesuai target.
             $sellingPrice = $targetPriceBeforeOjol / (1 - ($platformFee / 100));
         } else {
             $sellingPrice = $targetPriceBeforeOjol;
         }
 
-        $nettPrice = $sellingPrice * (1 - $platformFee / 100);
+        $nettPrice = $sellingPrice * (1 - ($platformFee / 100));
 
         return [
-            'selling_price'        => round($sellingPrice, 0),
+            'selling_price'        => round($sellingPrice),
             'platform_fee_percent' => $platformFee,
-            'nett_price'           => round($nettPrice, 0),
+            'nett_price'           => round($nettPrice),
+            'clean_profit'         => round($nettPrice - $baseCost),
         ];
     }
 }
