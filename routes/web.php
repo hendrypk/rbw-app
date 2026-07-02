@@ -5,6 +5,7 @@ use App\Http\Controllers\AccountMappingController;
 use App\Http\Controllers\JournalEntryController;
 use App\Http\Controllers\MenuController;
 use App\Http\Controllers\OverheadCostController;
+use App\Http\Controllers\PosController;
 use App\Http\Controllers\PurchaseOrderController;
 use App\Http\Controllers\RawMaterialController;
 use App\Http\Controllers\SupplierController;
@@ -22,6 +23,10 @@ Route::inertia('/', 'Dashboard')->name('home');
     Route::resource('account', AccountController::class);
     Route::resource('account-mapping', AccountMappingController::class);
     Route::resource('journal', JournalEntryController::class);
+    Route::get('web-pos/orders', [PosController::class, 'orders'])->name('web-pos.orders');
+    Route::get('web-pos/invoices', [PosController::class, 'invoices'])->name('web-pos.invoices');
+    Route::get('web-pos/transactions', [PosController::class, 'transactions'])->name('web-pos.transactions');
+    Route::resource('web-pos', PosController::class);
 ;});
 
 require __DIR__.'/settings.php';

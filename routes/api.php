@@ -5,6 +5,7 @@ use App\Http\Controllers\Api\AccountMappingController;
 use App\Http\Controllers\Api\CategoryController;
 use App\Http\Controllers\Api\JournalEntryController;
 use App\Http\Controllers\Api\MenuController;
+use App\Http\Controllers\Api\OrderController;
 use App\Http\Controllers\Api\OverheadCostController;
 use App\Http\Controllers\Api\PurchaseOrderController;
 use App\Http\Controllers\Api\RawMaterialController;
@@ -48,6 +49,14 @@ Route::middleware(['auth', 'verified'])->prefix('api')->name('api.')->group(func
         Route::apiResource('accounts', AccountController::class);
         Route::apiResource('account-mapping', AccountMappingController::class);
         Route::apiResource('journal-entry', JournalEntryController::class);
+    });
+
+    //Order
+    Route::prefix('pos')->group(function () {
+        Route::post('checkout', [OrderController::class, 'checkout']);
+        Route::get('/orders', [OrderController::class, 'getOrdersData']);
+        Route::get('/orders-unpaid', [OrderController::class, 'getUnpaidOrders']);
+        Route::get('/invoices-paid', [OrderController::class, 'getPaidInvoices']);
     });
     
 });

@@ -25,12 +25,18 @@ import account from '@/routes/account';
 import accountMapping from '@/routes/account-mapping';
 import journalEntry from '@/routes/journal';
 import journal from '@/routes/journal';
+import webPos from '@/routes/web-pos';
 
 const mainNavItems: NavItem[] = [
     {
         title: 'Dashboard',
         href: dashboard(),
         icon: LayoutGrid,
+    },
+    {
+        title: 'POS',
+        href: webPos.index(),
+        icon: Utensils,
     },
     {
         title: 'Menu',
