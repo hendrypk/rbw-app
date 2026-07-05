@@ -8,6 +8,7 @@ use App\Http\Controllers\Api\MenuController;
 use App\Http\Controllers\Api\OrderController;
 use App\Http\Controllers\Api\OverheadCostController;
 use App\Http\Controllers\Api\PurchaseOrderController;
+use App\Http\Controllers\Api\QrisController;
 use App\Http\Controllers\Api\RawMaterialController;
 use App\Http\Controllers\Api\SupplierController;
 use Illuminate\Support\Facades\Route;
@@ -59,4 +60,11 @@ Route::middleware(['auth', 'verified'])->prefix('api')->name('api.')->group(func
         Route::get('/invoices-paid', [OrderController::class, 'getPaidInvoices']);
     });
     
+    //qris
+    Route::prefix('payment')->group(function () {
+    Route::prefix('qris')->group(function () {
+        Route::post('/generate', [QrisController::class, 'generate']);
+        Route::post('/check-status', [QrisController::class, 'checkStatus']);
+    });
+});
 });
