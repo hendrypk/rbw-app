@@ -292,7 +292,51 @@ onBeforeUnmount(() => {
 
 </script>
 
-<template>
+// Fungsi pembantu untuk memformat teks nota ke printer (ESC/POS)
+const printReceiptData = async (characteristic: any, orderData: any) => {
+    const encoder = new EscPosEncoder();
+    
+    // Susun template teks nota
+    let receipt = encoder
+        .initialize()
+        .align('center')
+        .line('=== TOKO RBW POS ===')
+        .line('PWA POS System')
+        .line('--------------------------------') // 32 Karakter untuk ukuran kertas 58mm
+        .align('left')
+        .line(`Pelanggan : ${orderData.customerName || 'Umum'}`)
+        .line(`Metode    : ${orderData.paymentMethod.toUpperCase()}`)
+        .line('--------------------------------');
+
+    // Perulangan untuk item keranjang (Sesuaikan dengan nama variabel keranjang Anda, misal: cart)
+    // Di sini diasumsikan data diambil dari state komponen Anda
+    orderData.items.forEach((item: any) => {
+        receipt.line(`${item.name}`);
+        receipt.line(`  ${item.qty} x Rp${item.price.toLocaleString('id-ID')} -> Rp${(item.qty * item.price).toLocaleString('id-ID')}`);
+    });
+
+    receipt
+        .line('--------------------------------')
+        .align('right')
+        .line(`Diskon: Rp${orderData.discount.toLocaleString('id-ID')}`)
+        .line(`Biaya Lain: Rp${orderData.fee.toLocaleString('id-ID')}`)
+        .line(`TOTAL: Rp${orderData.total.toLocaleString('id-ID')}`)
+        .line('--------------------------------')
+        .align('center')
+        .line('Terima Kasih Banyak')
+        .line('\n\n\n') // Spasi potong kertas
+        .encode();
+
+    // Kirim chunk data per 20 bytes agar printer tidak lag
+    const dataNota = receipt.encode();
+    const chunkSize = 20;
+    for (let i = 0; i < dataNota.length; i += chunkSize) {
+        const chunk = dataNota.slice(i, i + chunkSize);
+        await characteristic.writeValue(chunk);
+    }
+};
+
+</script><template>
     <Head title="Aplikasi Kasir (POS)" />
 
     <!-- Perubahan: Ditambahkan pembungkus background utama bg-slate-50 dark:bg-zinc-950 -->
