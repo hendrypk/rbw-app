@@ -11,10 +11,10 @@ class AccountMapping extends Model
     use HasUuids;
 
     protected $fillable = [
-        'transaction_event',
+        'transaction_event',   // Sesuai seeder & data dummy
         'debit_account_id',
         'credit_account_id',
-        'description_template'
+        'template'             // Ganti description_template menjadi template agar match ke DB
     ];
 
     public function debitAccount(): BelongsTo
@@ -29,11 +29,11 @@ class AccountMapping extends Model
 
     /**
      * Helper untuk membuat deskripsi teks dinamis dari template
-     * Contoh: mengubah "POS #{{no}}" menjadi "POS #20260001"
      */
     public function parseDescription(array $replacements): string
     {
-        $template = $this->description_template ?? 'Transaksi Otomatis: ' . $this->transaction_event;
+        // Gunakan $this->template sesuai nama kolom fisik MySQL
+        $template = $this->template ?? 'Transaksi Otomatis: ' . $this->transaction_event;
         
         foreach ($replacements as $key => $value) {
             $template = str_replace('{{' . $key . '}}', $value, $template);

@@ -37,8 +37,8 @@ class JournalEntry extends Model
         if (!$mapping) throw new Exception("Mapping untuk tipe '{$type}' belum terdaftar.");
 
         // Tentukan akun riil yang dipakai (Gunakan pilihan user jika di mapping bernilai null)
-        $debitAccountJ1 = $mapping->j1_debit_account_id ?? $customDebitAccountId;
-        $creditAccountJ1 = $mapping->j1_credit_account_id ?? $customCreditAccountId;
+        $debitAccountJ1 = $mapping->debit_account_id ?? $customDebitAccountId;
+        $creditAccountJ1 = $mapping->credit_account_id ?? $customCreditAccountId;
 
         if (!$debitAccountJ1) {
             throw new Exception("Gagal menjurnal: Transaksi '{$type}' membutuhkan input pilihan akun Debet dari user.");
@@ -51,7 +51,7 @@ class JournalEntry extends Model
             
             // --- AYAT JURNAL 1 ---
             if ($j1Amount > 0) {
-                $desc1 = self::parseTemplate($mapping->j1_description_template ?? 'Transaksi', $replacements);
+                $desc1 = self::parseTemplate($mapping->description_template ?? 'Transaksi', $replacements);
                 $entry1 = self::create([
                     'entry_date' => now(),
                     'reference_type' => $reference ? get_class($reference) : null,

@@ -31,4 +31,19 @@ class JournalItem extends Model
     {
         return $this->belongsTo(Account::class, 'account_id');
     }
+
+    protected static function booted(): void
+    {
+        // 1. Saat item jurnal baru tercipta (Debit / Credit)
+        static::created(function ($item) {
+            $item->account->updateBalance($item->type, (float) $item->amount);
+        });
+
+        // 2. Saat terjadi Reversal / Soft Delete / Hard Delete pada jurnal lama
+        static::deleted(function ($item) {
+            // Balik arah mutasi untuk mengembalikan saldo ke posisi semula
+            $reverseType = $item->type === 'debit' ? 'credit' : 'debit';
+            $item->account->updateBalance($reverseType, (float) $item->amount);
+        });
+    }
 }

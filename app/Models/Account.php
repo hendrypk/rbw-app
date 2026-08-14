@@ -16,6 +16,7 @@ class Account extends Model
         'code', 
         'name', 
         'normal_balance', 
+        'balance',
         'is_active'
     ];
 
@@ -52,5 +53,20 @@ class Account extends Model
     public function getCategoryLabelAttribute(): string
     {
         return self::CATEGORIES[$this->category] ?? '-';
+    }
+
+    public function updateBalance(string $mutationType, float $amount): void
+    {
+        $mutationType = strtolower($mutationType);
+        $normalBalance = strtolower($this->normal_balance);
+
+        // Tentukan apakah mutasi ini sifatnya menambah atau mengurangi saldo normal
+        if ($normalBalance === $mutationType) {
+            // Jika Saldo Normal DEBIT bertemu DEBIT, atau KREDIT bertemu KREDIT -> Bertambah
+            $this->increment('balance', $amount);
+        } else {
+            // Jika berbeda (misal Saldo Normal DEBIT bertemu KREDIT) -> Berkurang
+            $this->decrement('balance', $amount);
+        }
     }
 }

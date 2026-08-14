@@ -162,10 +162,16 @@ const getInitials = (name: string) => {
 };
 
 // ==========================================
-// PROSES CHECKOUT TO BACKEND
+// PROSES CHECKOUT TO BACKEND (VUE LAYER)
 // ==========================================
 const submitCheckout = async (type: 'save' | 'pay') => {
     if (cart.value.length === 0) return;
+
+    // Intersepsi: Jika kasir klik bayar pakai QRIS, arahkan ke alur generator khusus
+    if (paymentMethod.value === 'qris' && type === 'pay') {
+        await handleQrisCheckout();
+        return;
+    }
 
     try {
         const payload = {
@@ -183,81 +189,65 @@ const submitCheckout = async (type: 'save' | 'pay') => {
         };
 
         const response = await axios.post('/api/pos/checkout', payload);
-        const printer = await initPrinterConnection();
         
-        if (printer) {
-            // Bungkus data yang dibutuhkan untuk nota
-            const payloadNota = {
-                customerName: customerName.value,
-                paymentMethod: paymentMethod.value,
-                discount: discountInput.value || 0,
-                fee: transactionFee.value || 0,
-                total: finalTotal.value,
-                items: cart.value // <--- Ganti dengan variabel array keranjang belanja Anda
-            };
-
-            await printReceiptData(printer, payloadNota);
-        }
         toast.success(`Transaksi ${response.data.data.order_number} berhasil diproses!`);
-
-        // ==========================================
-        // AUTO CLOSE MODAL JIKA BERHASIL BAYAR/SIMPAN
-        // ==========================================
-        isPaymentModalOpen.value = false;
-
-        // Reset semua state keranjang belanjaan
-        cart.value = [];
-        orderNote.value = '';
-        discountInput.value = 0;
-        transactionFee.value = 0;
-        customerName.value = '';
-        amountPaidInput.value = 0;
+        resetPosState();
 
     } catch (error: any) {
-        const errMsg = error.response?.data?.message || 'Gagal memproses transaksi';
-        toast.error(errMsg);
+        toast.error(error.response?.data?.message || 'Gagal memproses transaksi');
     }
 };
+
 /**
- * Pemicu saat Kasir Memilih Metode Pembayaran QRIS dan Klik Eksekusi
+ * Handle Pembayaran QRIS Dinamis
  */
 const handleQrisCheckout = async () => {
     try {
-        // Ambil variabel total belanja akhir dari POS state Anda
-        const totalBelanja = finalTotal.value; 
+        // Langkah 1: Kunci pendaftaran order ke db sebagai pending 'save' agar stok aman terpotong
+        const registerPayload = {
+            customer_name: customerName.value,
+            payment_method: 'qris',
+            discount: discountInput.value,
+            transaction_fee: transactionFee.value,
+            notes: orderNote.value,
+            items: cart.value.map(item => ({ menu_id: item.menu_id, quantity: item.quantity })),
+            action_type: 'save', 
+            amount_paid: 0
+        };
 
-        // Kirim request ke backend Laravel
-        const response = await axios.post('/api/payment/qris/generate', {
-            amount: totalBelanja
+        const registerResponse = await axios.post('/api/pos/checkout', registerPayload);
+        const registeredOrder = registerResponse.data.data;
+
+        // Langkah 2: Tembak payload order_id valid ke payment gateway QRIS
+        const qrisResponse = await axios.post('/api/payment/qris/generate', {
+            order_id: registeredOrder.order_id,
+            amount: registeredOrder.final_total
         });
 
-        if (response.data.success) {
-            // Pasang data respon QRIS ke state
-            qrisData.value.invoiceNo = response.data.invoice_no;
-            qrisData.value.referenceNo = response.data.reference_no;
-            qrisData.value.qrContent = response.data.qr_content;
+        if (qrisResponse.data.success) {
+            qrisData.value.invoiceNo = registeredOrder.order_number;
+            qrisData.value.referenceNo = qrisResponse.data.reference_no;
+            qrisData.value.qrContent = qrisResponse.data.qr_content;
             
-            // Buka Modal QRIS khusus untuk pelanggan
             isQrisModalOpen.value = true;
             qrisPaymentStatus.value = 'PENDING';
 
-            // Mulai lakukan POLLING otomatis setiap 4 detik untuk cek status pembayaran
-            startPollingStatus();
-            const printer = await initPrinterConnection();
-            if (printer) {
-                await printReceiptData(printer, {
-                    customerName: customerName.value,
-                    paymentMethod: 'QRIS',
-                    discount: discountInput.value || 0,
-                    fee: transactionFee.value || 0,
-                    total: finalTotal.value,
-                    items: cart.value
-                });
-            }
+            // Mulai polling real-time status lunas
+            startPollingStatus(registeredOrder.order_id);
         }
     } catch (error: any) {
-        alert(error.response?.data?.message || 'Gagal memproses pembayaran QRIS');
+        toast.error(error.response?.data?.message || 'Gagal menyiapkan QRIS');
     }
+};
+
+const resetPosState = () => {
+    isPaymentModalOpen.value = false;
+    cart.value = [];
+    orderNote.value = '';
+    discountInput.value = 0;
+    transactionFee.value = 0;
+    customerName.value = '';
+    amountPaidInput.value = 0;
 };
 
 /**
@@ -300,42 +290,7 @@ onBeforeUnmount(() => {
     if (statusInterval) clearInterval(statusInterval);
 });
 
-// State global untuk menyimpan sesi printer
-const bluetoothCharacteristic = ref<any>(null);
-
-// Fungsi utama untuk melakukan pairing & simpan koneksi bluetooth
-const initPrinterConnection = async () => {
-    if (bluetoothCharacteristic.value) return bluetoothCharacteristic.value;
-
-    try {
-        const device = await (navigator as any).bluetooth.requestDevice({
-            acceptAllDevices: true,
-            optionalServices: [
-                '000018f0-0000-1000-8000-00805f9b34fb',
-                '00001101-0000-1000-8000-00805f9b34fb'
-            ]
-        });
-
-        const server = await device.gatt.connect();
-        let service;
-        try {
-            service = await server.getPrimaryService('000018f0-0000-1000-8000-00805f9b34fb');
-        } catch (e) {
-            service = await server.getPrimaryService('00001101-0000-1000-8000-00805f9b34fb');
-        }
-
-        const characteristics = await service.getCharacteristics();
-        const characteristic = characteristics.find((c: any) => c.properties.write || c.properties.writeWithoutResponse);
-
-        if (!characteristic) throw new Error("Karakteristik printer tidak ditemukan.");
-        
-        bluetoothCharacteristic.value = characteristic;
-        return characteristic;
-    } catch (error: any) {
-        alert("Gagal koneksi printer: " + error.message);
-        return null;
-    }
-};
+</script>
 
 // Fungsi pembantu untuk memformat teks nota ke printer (ESC/POS)
 const printReceiptData = async (characteristic: any, orderData: any) => {
