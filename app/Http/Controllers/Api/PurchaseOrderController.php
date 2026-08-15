@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Models\JournalEntry;
 use App\Models\PurchaseOrder;
 use App\Services\StockService;
 use Illuminate\Http\JsonResponse;
@@ -24,44 +25,102 @@ class PurchaseOrderController extends Controller
         return response()->json($orders);
     }
 
-    public function store(Request $request, StockService $stockService): JsonResponse
-    {
-        $data = $request->validate([
-            'supplier_id'             => 'required|uuid|exists:suppliers,id',
-            'order_date'              => 'required|date',
-            'notes'                   => 'nullable|string',
-            'items'                   => 'required|array|min:1',
-            'items.*.raw_material_id' => 'required|uuid|exists:raw_materials,id',
-            'items.*.qty'             => 'required|numeric|min:0.0001',
-            'items.*.unit_price'      => 'required|numeric|min:0',
-            'status'                  => 'required|in:draft,received',
+public function store(Request $request, StockService $stockService): JsonResponse
+{
+    $data = $request->validate([
+        'supplier_id'             => 'required|uuid|exists:suppliers,id',
+        'order_date'              => 'required|date',
+        'notes'                   => 'nullable|string',
+        'items'                   => 'required|array|min:1',
+        'items.*.raw_material_id' => 'required|uuid|exists:raw_materials,id',
+        'items.*.qty'             => 'required|numeric|min:0.0001',
+        'items.*.unit_price'      => 'required|numeric|min:0',
+        'status'                  => 'required|in:draft,received',
+        
+        // Menangkap request dari form modal vue
+        'payment_account_id'      => 'nullable|uuid|exists:accounts,id',
+        'amount_paid'             => 'nullable|required_with:payment_account_id|numeric|min:0',
+    ]);
+
+    $po = DB::transaction(function () use ($data, $stockService) {
+        // 1. Buat Header PO (Map dari request form ke field asli DB)
+        $po = PurchaseOrder::create([
+            'supplier_id'        => $data['supplier_id'],
+            'order_date'         => $data['order_date'],
+            'notes'              => $data['notes'] ?? null,
+            'status'             => $data['status'],
+            'payment_account_id' => $data['payment_account_id'] ?? null,
+            'total_payment'      => $data['payment_account_id'] ? (float) $data['amount_paid'] : 0, // Set ke total_payment
         ]);
 
-        $po = DB::transaction(function () use ($data, $stockService) {
-            $po = PurchaseOrder::create([
-                'supplier_id' => $data['supplier_id'],
-                'order_date'  => $data['order_date'],
-                'notes'       => $data['notes'] ?? null,
-                'status'      => $data['status'],
-            ]);
+        // 2. Insert detail items
+        foreach ($data['items'] as $item) {
+            $subtotal = (float) $item['qty'] * (float) $item['unit_price'];
+            $po->items()->create(array_merge($item, ['subtotal' => $subtotal]));
+        }
 
-            foreach ($data['items'] as $item) {
-                $po->items()->create($item);
+        // 3. Kalkulasi Total Bruto PO
+        $totalAmount = (float) $po->items()->sum('subtotal');
+        $po->total_amount = $totalAmount;
+
+        // 4. LOGIKA OTOMATIS: Bandingkan total_payment vs total_amount
+        $paid = $po->total_payment;
+        
+        if ($paid <= 0) {
+            $po->payment_status = 'unpaid';
+            $po->total_payment = 0;
+            $po->payment_account_id = null; 
+        } elseif ($paid >= $totalAmount) {
+            $po->payment_status = 'paid';
+            $po->total_payment = $totalAmount; // Cegah overpayment tak sengaja
+        } else {
+            $po->payment_status = 'partial';
+        }
+
+        $po->save();
+        
+        // 5. Jika status operasional langsung 'received' (Barang Masuk Gudang)
+        if ($data['status'] === 'received') {
+            $po->load('items.rawMaterial');
+            $stockService->receivePurchaseOrder($po);
+
+            // 6. OTOMATISASI JURNAL AKUNTANSI (Double-Entry)
+            if ($po->payment_status === 'paid') {
+                // Lunas Direct: Persediaan (D) vs Kas/Bank User (K)
+                JournalEntry::createEntryFromMapping(
+                    type: 'purchase_received_cash',
+                    j1Amount: $totalAmount,
+                    reference: $po,
+                    replacements: ['po_number' => $po->po_number ?? $po->id],
+                    customCreditAccountId: $po->payment_account_id
+                );
+            } else {
+                // Unpaid / Partial masuk skema tempo dulu: Persediaan (D) vs Utang Dagang (K)
+                JournalEntry::createEntryFromMapping(
+                    type: 'purchase_received_credit',
+                    j1Amount: $totalAmount,
+                    reference: $po,
+                    replacements: ['po_number' => $po->po_number ?? $po->id]
+                );
+
+                // Jika STATUS PARTIAL: Tambahkan potongan jurnal Clearance tunai untuk DP-nya
+                if ($po->payment_status === 'partial') {
+                    JournalEntry::createEntryFromMapping(
+                        type: 'purchase_payment_clearance',
+                        j1Amount: $po->total_payment, // Ambil dari kolom database total_payment
+                        reference: $po,
+                        replacements: ['po_number' => $po->po_number ?? $po->id],
+                        customCreditAccountId: $po->payment_account_id
+                    );
+                }
             }
+        }
 
-            $po->recalculateTotal();
-            
-            // Jika status awal langsung received
-            if ($data['status'] === 'received') {
-                $po->load('items.rawMaterial'); // WAJIB: memuat relasi agar conversion_factor terbaca
-                $stockService->receivePurchaseOrder($po);
-            }
+        return $po;
+    });
 
-            return $po;
-        });
-
-        return response()->json($po->load(['supplier', 'items.rawMaterial']), 201);
-    }
+    return response()->json($po->load(['supplier', 'items.rawMaterial']), 201);
+}
 
     public function show(PurchaseOrder $purchaseOrder): JsonResponse
     {
@@ -113,6 +172,53 @@ class PurchaseOrderController extends Controller
         });
 
         return response()->json($purchaseOrder->fresh(['supplier', 'items.rawMaterial']));
+    }
+
+    public function payOrder(Request $request, $id): JsonResponse
+    {
+        $request->validate([
+            'payment_account_id' => 'required|uuid|exists:accounts,id',
+            'amount'             => 'required|numeric|min:0',
+        ]);
+
+        $po = PurchaseOrder::findOrFail($id);
+        
+        // Hitung sisa utang maksimal yang bisa dibayar
+        $currentDebt = (float)$po->total_amount - (float)$po->total_payment;
+
+        if ((float)$request->amount > $currentDebt) {
+            return response()->json([
+                'errors' => ['amount' => ['Nominal pembayaran melebihi sisa utang (Sisa: Rp ' . number_format($currentDebt) . ')']]
+            ], 422);
+        }
+
+        DB::transaction(function () use ($po, $request, $currentDebt) {
+            // 1. Update akumulasi pembayaran pada PO
+            $newTotalPayment = (float)$po->total_payment + (float)$request->amount;
+            
+            // 2. Tentukan status pembayaran baru otomatis
+            $newPaymentStatus = ($newTotalPayment >= (float)$po->total_amount) ? 'paid' : 'partial';
+
+            $po->update([
+                'total_payment'  => $newTotalPayment,
+                'payment_status' => $newPaymentStatus,
+            ]);
+
+            // 3. CETAK JURNAL: Utang Dagang (D) vs Kas/Bank Pilihan (K)
+            JournalEntry::createEntryFromMapping(
+                type: 'purchase_payment_clearance',
+                j1Amount: (float)$request->amount,
+                reference: $po,
+                replacements: ['po_number' => $po->po_number ?? $po->id],
+                customCreditAccountId: $request->payment_account_id
+            );
+        });
+
+        return response()->json([
+            'success' => true, 
+            'message' => 'Pembayaran cicilan utang berhasil dicatat.',
+            'data'    => $po->load(['supplier', 'items.rawMaterial'])
+        ]);
     }
 
     /**

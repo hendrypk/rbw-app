@@ -6,7 +6,7 @@
     import { Label } from '@/components/ui/label';
     import InputError from '@/components/InputError.vue';
     import { useCategories } from '@/composables/useCategories';
-import { useMaterials } from '@/composables/useMaterials';
+    import { useMaterials } from '@/composables/useMaterials';
 
     const props = defineProps<{ 
         show: boolean, 
@@ -20,21 +20,16 @@ import { useMaterials } from '@/composables/useMaterials';
     const errors = ref<Record<string, string>>({});
     const isEdit = computed(() => !!props.menu);
 
-    // Inject Composable Kategori
     const { categories, fetchCategories } = useCategories();
-    const { materialOptions, fetchMaterialOptions} = useMaterials();
+    const { materialOptions, fetchMaterialOptions } = useMaterials();
 
-    // Filter kategori yang tidak di-hide (is_visible === true) oleh user
     const userCategories = computed(() => {
         return categories.value.filter((c: any) => c.is_visible);
     });
 
     const materialMap = computed(() => {
-        // Membuat Object dengan ID sebagai key: { 1: {id: 1, name: '...', ...}, 2: {...} }
         return Object.fromEntries(
-            materialOptions.value
-                // .filter((m: any) => m.is_active) // pastikan gunakan properti yang benar
-                .map(m => [m.id, m])
+            materialOptions.value.map(m => [m.id, m])
         );
     });
 
@@ -59,6 +54,11 @@ import { useMaterials } from '@/composables/useMaterials';
         qty_usage: number;
     }
 
+    interface PriceChannel {
+        channel: string;
+        margin_percent: number;
+    }
+
     const form = ref({
         name: '',
         category_id: '',
@@ -69,13 +69,13 @@ import { useMaterials } from '@/composables/useMaterials';
             { channel: 'shopeefood', margin_percent: 30 },
             { channel: 'grabfood', margin_percent: 30 },
             { channel: 'gofood', margin_percent: 30 },
-        ]
+        ] as PriceChannel[]
     });
 
     const totalHpp = computed<number>(() => {
         return form.value.recipes.reduce((sum: number, rec: any) => {
             const material = materialMap.value[rec.raw_material_id];
-            const cost = material ? Number(material.last_cost) : 0; 
+            const cost = material ? Number(material.avg_cost) : 0; // Diubah ke avg_cost
             const qty = Number(rec.qty_usage);
             return sum + (cost * qty);
         }, 0);
@@ -93,73 +93,94 @@ import { useMaterials } from '@/composables/useMaterials';
         }
     };
 
-const calculateChannelPricing = (marginPercent: number, channel: string) => {
-    const baseCost = totalBaseCost.value;
-    const feePercent = PLATFORM_FEES[channel] ?? 0;
+    const calculateChannelPricing = (marginPercent: number, channel: string) => {
+        const baseCost = totalBaseCost.value;
+        const feePercent = PLATFORM_FEES[channel] ?? 0;
+        const marginDecimal = (Number(marginPercent) || 0) / 100;
 
-    // Margin dihitung dari harga jual (gross margin)
-    const targetPriceBeforeOjol = baseCost / (1 - marginPercent / 100);
+        const targetPriceBeforeOjol = baseCost * (1 + marginDecimal);
+        let sellingPrice = targetPriceBeforeOjol;
 
-    let sellingPrice = targetPriceBeforeOjol;
-
-    // Naikkan harga agar setelah dipotong fee marketplace,
-    // margin tetap sesuai yang diinginkan.
-    if (channel !== 'offline' && feePercent > 0) {
-        sellingPrice = targetPriceBeforeOjol / (1 - feePercent / 100);
-    }
-
-    const nettPrice = sellingPrice * (1 - feePercent / 100);
-    const cleanProfit = nettPrice - baseCost;
-
-    return {
-        sellingPrice: Math.round(sellingPrice),
-        cleanProfit: Math.round(cleanProfit),
-    };
-};
-watch(
-    () => props.show,
-    async (newVal) => {
-        if (!newVal) return;
-
-        await Promise.all([
-            fetchCategories(),
-            fetchMaterialOptions(),
-        ]);
-
-        if (props.menu) {
-            form.value = {
-                name: props.menu.name,
-                category_id: props.menu.category_id || '',
-                overhead_cost: Number(
-                    props.menu.overhead_cost ?? props.masterOverhead ?? 0
-                ),
-                recipes: props.menu.recipes.map((r: any) => ({
-                    raw_material_id: r.raw_material_id,
-                    qty_usage: Number(r.qty_usage),
-                })),
-                prices: props.menu.prices.map((p: any) => ({
-                    channel: p.channel,
-                    margin_percent: Number(p.margin_percent),
-                })),
-            };
-        } else {
-            form.value = {
-                name: '',
-                category_id: '',
-                overhead_cost: props.masterOverhead || 0,
-                recipes: [{ raw_material_id: '', qty_usage: 1 }],
-                prices: [
-                    { channel: 'offline', margin_percent: 30 },
-                    { channel: 'shopeefood', margin_percent: 30 },
-                    { channel: 'grabfood', margin_percent: 30 },
-                    { channel: 'gofood', margin_percent: 30 },
-                ],
-            };
+        if (channel !== 'offline' && feePercent > 0) {
+            sellingPrice = targetPriceBeforeOjol / (1 - feePercent / 100);
         }
 
-        errors.value = {};
-    }
-);
+        const nettPrice = sellingPrice * (1 - feePercent / 100);
+        const cleanProfit = nettPrice - baseCost;
+
+        return {
+            sellingPrice: Math.round(sellingPrice),
+            cleanProfit: Math.round(cleanProfit),
+        };
+    };
+
+    const updateMarginFromPrice = (priceObj: PriceChannel, newSellingPrice: number) => {
+        const baseCost = totalBaseCost.value;
+        const feePercent = PLATFORM_FEES[priceObj.channel] ?? 0;
+        
+        if (!newSellingPrice || isNaN(newSellingPrice) || !baseCost || baseCost <= 0) {
+            return; 
+        }
+
+        let targetPriceBeforeOjol = newSellingPrice;
+        if (priceObj.channel !== 'offline' && feePercent > 0) {
+            targetPriceBeforeOjol = newSellingPrice * (1 - feePercent / 100);
+        }
+
+        if (targetPriceBeforeOjol < baseCost) {
+            priceObj.margin_percent = 0;
+            return;
+        }
+
+        const calculatedMargin = ((targetPriceBeforeOjol - baseCost) / baseCost) * 100;
+        priceObj.margin_percent = Number(calculatedMargin.toFixed(2));
+    };
+
+    watch(
+        () => props.show,
+        async (newVal) => {
+            if (!newVal) return;
+
+            await Promise.all([
+                fetchCategories(),
+                fetchMaterialOptions(),
+            ]);
+
+            if (props.menu) {
+                form.value = {
+                    name: props.menu.name,
+                    category_id: props.menu.category_id || '',
+                    overhead_cost: Number(
+                        props.menu.overhead_cost ?? props.masterOverhead ?? 0
+                    ),
+                    recipes: props.menu.recipes.map((r: any) => ({
+                        raw_material_id: r.raw_material_id,
+                        qty_usage: Number(r.qty_usage),
+                    })),
+                    prices: props.menu.prices.map((p: any) => ({
+                        channel: p.channel,
+                        margin_percent: Number(p.margin_percent),
+                    })),
+                };
+            } else {
+                form.value = {
+                    name: '',
+                    category_id: '',
+                    overhead_cost: props.masterOverhead || 0,
+                    recipes: [{ raw_material_id: '', qty_usage: 1 }],
+                    prices: [
+                        { channel: 'offline', margin_percent: 30 },
+                        { channel: 'shopeefood', margin_percent: 30 },
+                        { channel: 'grabfood', margin_percent: 30 },
+                        { channel: 'gofood', margin_percent: 30 },
+                    ],
+                };
+            }
+
+            errors.value = {};
+        }
+    );
+
     const submit = async () => {
         processing.value = true;
         errors.value = {};
@@ -203,7 +224,7 @@ watch(
                         <Label class="mb-1 block text-xs font-semibold uppercase tracking-wider text-muted-foreground">Kategori</Label>
                         <select 
                             v-model="form.category_id" 
-                            class="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                            class="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                         >
                             <option value="">-- Pilih Kategori Menu --</option>
                             <option v-for="cat in userCategories" :key="cat.id" :value="cat.id">
@@ -224,7 +245,6 @@ watch(
                         </div>
                 
                         <div class="space-y-2 max-h-80 overflow-y-auto pr-1">
-                            <!-- BARIS RESEP -->
                             <div v-for="(rec, index) in form.recipes" :key="index" class="grid grid-cols-12 gap-2 items-center bg-muted/20 p-1.5 rounded-lg border border-border/40">
                                 <select v-model="rec.raw_material_id" class="col-span-5 rounded-md border p-1.5 text-xs bg-background">
                                     <option value="" disabled>Pilih Bahan</option>
@@ -239,23 +259,21 @@ watch(
                                 </select>
                                 
                                 <div class="col-span-3 text-[11px] text-muted-foreground text-center leading-tight">
-                                    {{ formatNumber(materialMap[rec.raw_material_id]?.last_cost || 0) }}<br/>
+                                    {{ formatNumber(materialMap[rec.raw_material_id]?.avg_cost || 0) }}<br/>
                                     <span class="opacity-60">/ {{ materialMap[rec.raw_material_id]?.base_unit || '-' }}</span>
                                 </div>
                                 
                                 <Input v-model="rec.qty_usage" type="number" step="0.0001" class="col-span-2 h-8 text-xs text-center px-1" placeholder="Qty" />
                                 
                                 <div class="col-span-1.5 font-semibold text-right text-xs pr-1">
-                                    {{ currency((Number(materialMap[rec.raw_material_id]?.last_cost) || 0) * Number(rec.qty_usage)) }}
+                                    {{ currency((Number(materialMap[rec.raw_material_id]?.avg_cost) || 0) * Number(rec.qty_usage)) }}
                                 </div>
                                 
-                                <!-- ACTION HAPUS DI KANAN -->
                                 <div class="col-span-0.5 text-right">
                                     <button type="button" class="text-muted-foreground hover:text-destructive font-bold text-sm p-1" @click="removeRecipe(index)">&times;</button>
                                 </div>
                             </div>
 
-                            <!-- TOMBOL TAMBAH BAHAN DI BAWAH -->
                             <div class="pt-1">
                                 <Button type="button" variant="outline" size="sm" class="w-full h-8 text-xs border-dashed" @click="addRecipe">
                                     + Tambah Bahan Lain
@@ -263,7 +281,7 @@ watch(
                             </div>
                         </div>
 
-                        <!-- SUMMARY COST AREA DENGAN ACTION TOGGLE OVERHEAD -->
+                        <!-- SUMMARY COST -->
                         <div class="pt-2 border-t space-y-2">
                             <div class="flex justify-between items-center text-xs">
                                 <span class="text-muted-foreground">Total HPP Bahan (Food Cost):</span>
@@ -277,8 +295,8 @@ watch(
                                         type="button" 
                                         @click="toggleOverhead"
                                         :class="form.overhead_cost > 0 
-                                            ? 'text-red-500 hover:text-red-700 bg-red-50 dark:bg-red-950/20 px-2 py-0.5 rounded text-[10px] font-medium border border-red-200/40' 
-                                            : 'text-blue-500 hover:text-blue-700 bg-blue-50 dark:bg-blue-950/20 px-2 py-0.5 rounded text-[10px] font-medium border border-blue-200/40'"
+                                            ? 'text-red-500 bg-red-50 dark:bg-red-950/20 px-2 py-0.5 rounded text-[10px] font-medium border border-red-200/40' 
+                                            : 'text-blue-500 bg-blue-50 dark:bg-blue-950/20 px-2 py-0.5 rounded text-[10px] font-medium border border-blue-200/40'"
                                     >
                                         {{ form.overhead_cost > 0 ? '✕ Remove Overhead' : '✓ Apply Master Overhead' }}
                                     </button>
@@ -297,42 +315,55 @@ watch(
                         </div>
                     </div>
 
-                    <!-- KELOMPOK KANAN: PRICING PER CHANNEL -->
+                    <!-- KELOMPOK KANAN: PRICING PER CHANNEL (Dinamis Dua Arah) -->
                     <div class="lg:col-span-5 space-y-3 border rounded-xl p-4 bg-background shadow-sm">
                         <div class="border-b pb-2">
                             <h3 class="font-bold text-sm tracking-tight text-foreground">Pricing per Channel</h3>
                         </div>
                         
-                        <div class="space-y-2">
-                            <div v-for="price in form.prices" :key="price.channel" class="flex flex-col p-2.5 bg-muted/40 rounded-xl border border-border/60">
-                                <div class="flex items-center justify-between border-b border-border/40 pb-1.5 mb-1.5">
-                                    <span class="font-bold text-xs capitalize text-foreground flex items-center gap-1">
-                                        <span class="w-1 h-2 rounded bg-primary/50"></span>
-                                        {{ price.channel }}
-                                    </span>
-                                    <div class="flex items-center gap-1">
-                                        <span class="text-[10px] text-muted-foreground">Margin:</span>
-                                        <Input v-model="price.margin_percent" type="number" class="w-12 h-6 text-center font-semibold text-xs p-0" />
-                                        <span class="text-[10px] font-semibold">%</span>
-                                    </div>
-                                </div>
-                                
-                                <div class="flex items-center justify-between text-xs">
-                                    <div>
-                                        <span class="text-[10px] text-muted-foreground block">Harga Jual</span>
-                                        <span class="font-bold text-foreground text-sm">
-                                            {{ currency(calculateChannelPricing(Number(price.margin_percent), price.channel).sellingPrice) }}
-                                        </span>
-                                    </div>
-                                    <div class="text-right">
-                                        <span class="text-[10px] text-muted-foreground block">Nett Profit</span>
-                                        <span class="font-bold text-green-600 dark:text-green-400">
-                                            +{{ currency(calculateChannelPricing(Number(price.margin_percent), price.channel).cleanProfit) }}
-                                        </span>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
+<div class="space-y-2">
+    <div v-for="price in form.prices" :key="price.channel" class="flex flex-col p-2.5 bg-muted/40 rounded-xl border border-border/60">
+        <div class="flex items-center justify-between border-b border-border/40 pb-1.5 mb-1.5">
+            <span class="font-bold text-xs capitalize text-foreground flex items-center gap-1">
+                <span class="w-1 h-2 rounded bg-primary/50"></span>
+                {{ price.channel }}
+            </span>
+            <div class="flex items-center gap-1">
+                <span class="text-[10px] text-muted-foreground">Margin:</span>
+                <Input 
+                    :model-value="price.margin_percent" 
+                    @input="(e: any) => price.margin_percent = Number(e.target.value)"
+                    type="number" 
+                    step="0.01" 
+                    class="w-14 h-6 text-center font-semibold text-xs p-0" 
+                />
+                <span class="text-[10px] font-semibold">%</span>
+            </div>
+        </div>
+        
+<div class="flex items-center justify-between text-xs gap-2">
+    <div class="flex-1">
+        <span class="text-[10px] text-muted-foreground block mb-0.5">Harga Jual</span>
+        <div class="relative flex items-center">
+            <span class="absolute left-2 text-[10px] font-bold text-muted-foreground">Rp</span>
+            <Input 
+                :model-value="calculateChannelPricing(price.margin_percent, price.channel).sellingPrice"
+                @input="(e: any) => updateMarginFromPrice(price, Number(e.target.value))"
+                type="number" 
+                :min="totalBaseCost"
+                class="h-7 pl-6 pr-1 text-left text-xs font-bold text-foreground bg-background" 
+            />
+        </div>
+    </div>
+    <div class="text-right">
+        <span class="text-[10px] text-muted-foreground block">Nett Profit</span>
+        <span class="font-bold text-green-600 dark:text-green-400">
+            +{{ currency(calculateChannelPricing(price.margin_percent, price.channel).cleanProfit) }}
+        </span>
+    </div>
+</div>
+    </div>
+</div>
                     </div>
 
                 </div>

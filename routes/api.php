@@ -3,6 +3,7 @@
 use App\Http\Controllers\Api\AccountController;
 use App\Http\Controllers\Api\AccountMappingController;
 use App\Http\Controllers\Api\CategoryController;
+use App\Http\Controllers\Api\CustomerAuthController;
 use App\Http\Controllers\Api\JournalEntryController;
 use App\Http\Controllers\Api\MenuController;
 use App\Http\Controllers\Api\OrderController;
@@ -13,10 +14,28 @@ use App\Http\Controllers\Api\RawMaterialController;
 use App\Http\Controllers\Api\SupplierController;
 use Illuminate\Support\Facades\Route;
 
-// Gunakan middleware yang sesuai: 'auth' (untuk session) atau 'auth:sanctum' (untuk token)
+Route::get('/test-doku-token', [QrisController::class, 'testGetToken']);
+Route::prefix('api/v1/user')->group(function () {
+    
+    Route::post('/register', [CustomerAuthController::class, 'register']);
+    Route::post('/login', [CustomerAuthController::class, 'login']);
+    
+
+    Route::middleware(['auth:sanctum,customer'])->group(function () {
+        Route::get('/profile', [CustomerAuthController::class, 'profile']);
+        Route::post('/logout', [CustomerAuthController::class, 'logout']);
+        
+    Route::get('/categories', [CategoryController::class, 'index']);
+    Route::get('/menus', [MenuController::class, 'userIndex']);
+        Route::post('/checkout', [OrderController::class, 'userCheckout']);
+        Route::get('/my-orders', [OrderController::class, 'getUserOrders']);
+        Route::post('/payment/qris/generate', [QrisController::class, 'generate']);
+        Route::get('/payment/qris/debug', [QrisController::class, 'debugGenerate']);
+        Route::post('/payment/qris/check-status', [QrisController::class, 'checkStatus']);
+    });
+});
 Route::middleware(['auth', 'verified'])->prefix('api')->name('api.')->group(function () {
 
-    // Suppliers (Gunakan group jika ingin menambahkan middleware khusus per resource)
     Route::apiResource('suppliers', SupplierController::class);
     Route::post('/suppliers/bulk-delete', [SupplierController::class, 'bulkDestroy']);
 
@@ -34,12 +53,17 @@ Route::middleware(['auth', 'verified'])->prefix('api')->name('api.')->group(func
         Route::post('{purchaseOrder}/receive', [PurchaseOrderController::class, 'receive']);
     });
     Route::apiResource('purchase-orders', PurchaseOrderController::class);
+    Route::prefix('purchase-orders')->group(function () {
+        Route::post('{id}/payments', [PurchaseOrderController::class, 'payOrder'])->name('po.payOrder');
+    });
 
     // Menus
     Route::prefix('menus')->group(function () {
         Route::get('channels', [MenuController::class, 'channels']);
         Route::get('overhead-sync-status', [MenuController::class, 'checkOverheadSync']);
         Route::post('overhead-sync', [MenuController::class, 'syncOverhead']);
+        Route::get('recipe-sync-status', [MenuController::class, 'checkRecipeSync']);
+        Route::post('sync-recipes', [MenuController::class, 'syncRecipes']);
     });
     Route::apiResource('menus', MenuController::class);
 
@@ -48,7 +72,7 @@ Route::middleware(['auth', 'verified'])->prefix('api')->name('api.')->group(func
     Route::apiResource('categories', CategoryController::class);
     Route::prefix('finance')->group(function() {
         Route::apiResource('accounts', AccountController::class);
-        Route::apiResource('account-mapping', AccountMappingController::class);
+        Route::apiResource('account-mappings', AccountMappingController::class);
         Route::apiResource('journal-entry', JournalEntryController::class);
     });
 
@@ -62,9 +86,10 @@ Route::middleware(['auth', 'verified'])->prefix('api')->name('api.')->group(func
     
     //qris
     Route::prefix('payment')->group(function () {
-    Route::prefix('qris')->group(function () {
-        Route::post('/generate', [QrisController::class, 'generate']);
-        Route::post('/check-status', [QrisController::class, 'checkStatus']);
+        Route::prefix('qris')->group(function () {
+            Route::post('/generate', [QrisController::class, 'generate']);
+            Route::post('/check-status', [QrisController::class, 'checkStatus']);
+        });
     });
-});
+
 });

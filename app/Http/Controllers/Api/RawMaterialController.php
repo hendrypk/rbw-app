@@ -41,7 +41,7 @@ class RawMaterialController extends Controller
     $materials = RawMaterial::query()
         ->where('is_active', true) // opsional, sesuaikan dengan scope/kolom Anda
         ->orderBy('name')
-        ->get(['id', 'name', 'last_cost', 'base_unit']); // select kolom yang dibutuhkan saja agar ringan
+        ->get(['id', 'name', 'last_cost', 'base_unit', 'avg_cost']); // select kolom yang dibutuhkan saja agar ringan
 
     return response()->json($materials);
 }

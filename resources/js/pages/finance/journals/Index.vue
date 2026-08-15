@@ -1,45 +1,14 @@
 <script setup lang="ts">
-import { ref } from 'vue';
+import { useJournal } from '@/composables/useJournal'; // Sesuaikan path folder composable Anda
 
-interface JournalItem {
-    account_code: string;
-    account_name: string;
-    type: 'debit' | 'credit';
-    amount: number;
-}
-
-interface JournalEntry {
-    id: string;
-    entry_date: string;
-    description: string;
-    total_amount: number;
-    items: JournalItem[];
-}
-
-const journals = ref<JournalEntry[]>([
-    {
-        id: 'j1',
-        entry_date: '2026-06-29',
-        description: 'Pendapatan penjualan POS #ORD-20260629-A76F',
-        total_amount: 150000,
-        items: [
-            { account_code: '1-1000', account_name: 'Kas Utama / POS', type: 'debit', amount: 150000 },
-            { account_code: '2-1000', account_name: 'Pendapatan Penjualan POS', type: 'credit', amount: 150000 },
-        ]
-    },
-    {
-        id: 'j2',
-        entry_date: '2026-06-29',
-        description: 'Alokasi HPP bahan baku terpakai untuk POS #ORD-20260629-A76F',
-        total_amount: 45000,
-        items: [
-            { account_code: '5-1000', account_name: 'Harga Pokok Penjualan (HPP)', type: 'debit', amount: 45000 },
-            { account_code: '1-2000', account_name: 'Persediaan Bahan Baku', type: 'credit', amount: 45000 },
-        ]
-    }
-]);
-
-const formatCurrency = (val: number) => 'Rp ' + val.toLocaleString('id-ID');
+const { 
+    journals, 
+    isLoading, 
+    startDate, 
+    endDate, 
+    handleFilterChange, 
+    formatCurrency 
+} = useJournal();
 </script>
 
 <template>
@@ -51,11 +20,29 @@ const formatCurrency = (val: number) => 'Rp ' + val.toLocaleString('id-ID');
             </p>
         </div>
 
-        <div class="flex items-center gap-2.5 p-3 bg-muted/20 rounded-xl border border-border/60 text-xs shadow-sm">
+        <div class="flex items-center gap-2.5 p-3 bg-muted/20 rounded-xl border border-border/60 text-xs shadow-sm w-fit">
             <span class="font-bold text-muted-foreground">Periode Buku:</span>
-            <input type="date" class="bg-background border rounded px-2 py-1 focus:outline-none h-8 font-medium" />
+            <input 
+                v-model="startDate" 
+                @change="handleFilterChange"
+                type="date" 
+                class="bg-background border rounded px-2 py-1 focus:outline-none h-8 font-medium" 
+            />
             <span class="text-muted-foreground font-semibold">s/d</span>
-            <input type="date" class="bg-background border rounded px-2 py-1 focus:outline-none h-8 font-medium" />
+            <input 
+                v-model="endDate" 
+                @change="handleFilterChange"
+                type="date" 
+                class="bg-background border rounded px-2 py-1 focus:outline-none h-8 font-medium" 
+            />
+            
+            <span v-if="isLoading" class="text-muted-foreground italic ml-2 flex items-center gap-1">
+                <svg class="animate-spin h-3.5 w-3.5 text-blue-600" viewBox="0 0 24 24" fill="none">
+                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                </svg>
+                Sinkronisasi data...
+            </span>
         </div>
 
         <div class="rounded-xl border border-border/60 overflow-hidden bg-card shadow-sm">
@@ -99,8 +86,11 @@ const formatCurrency = (val: number) => 'Rp ' + val.toLocaleString('id-ID');
                             </td>
                         </tr>
                     </template>
-                    <tr v-if="journals.length === 0">
-                        <td colspan="5" class="px-4 py-8 text-center text-muted-foreground italic">Belum ada aktivitas jurnal masuk untuk periode ini.</td>
+                    
+                    <tr v-if="journals.length === 0 && !isLoading">
+                        <td colspan="5" class="px-4 py-8 text-center text-muted-foreground italic">
+                            Belum ada aktivitas jurnal masuk untuk periode ini.
+                        </td>
                     </tr>
                 </tbody>
             </table>

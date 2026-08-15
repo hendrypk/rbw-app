@@ -3,173 +3,169 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Models\JournalEntry;
 use App\Models\Order;
 use App\Models\Menu;
+use App\Models\OrderItem;
+use App\Services\PosService;
 use Illuminate\Http\Request;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Str;
 use Carbon\Carbon;
 
 class OrderController extends Controller
 {
-    public function checkout(Request $request)
+    // Suntikkan PosService ke dalam Controller
+    public function __construct(private PosService $posService) {}
+
+    public function checkout(Request $request): JsonResponse
     {
-        // 1. Validasi Request dari POS Frontend
         $request->validate([
-            'customer_name'  => 'nullable|string|max:100',
-            'payment_method' => 'required|string|in:cash,qris,edc',
-            'discount'       => 'nullable|numeric|min:0',
-            'transaction_fee'=> 'nullable|numeric|min:0',
-            'notes'          => 'nullable|string',
-            'items'          => 'required|array|min:1',
-            'items.*.menu_id'=> 'required|uuid|exists:menus,id',
+            'customer_name'   => 'nullable|string|max:100',
+            'payment_method'  => 'required|string|in:cash,qris,edc,pending',
+            'discount'        => 'nullable|numeric|min:0',
+            'transaction_fee' => 'nullable|numeric|min:0',
+            'notes'           => 'nullable|string',
+            'items'           => 'required|array|min:1',
+            'items.*.menu_id' => 'required|uuid|exists:menus,id',
             'items.*.quantity'=> 'required|integer|min:1',
-            
-            // Tambahan untuk fitur tombol "Bayar" (Lunas / Sebagian)
-            'action_type'    => 'required|string|in:save,pay', // save = Simpan, pay = Bayar
-            'amount_paid'    => 'nullable|numeric|min:0',      // Nominal uang yang dibayarkan kasir
+            'action_type'     => 'required|string|in:save,pay', 
+            'amount_paid'     => 'nullable|numeric|min:0',
         ]);
 
         try {
-            DB::beginTransaction();
-
-            // 2. Generate Nomor Order Unik Otomatis (Format: INV-YYYYMMDD-XXXX)
+            // Generate Invoice unik (INV-YYYYMMDD-XXXX)
             $today = Carbon::today()->format('Ymd');
-            $latestOrder = Order::whereDate('created_at', Carbon::today())
-                ->orderBy('created_at', 'desc')
-                ->first();
-
-            $nextNumber = 1;
-            if ($latestOrder) {
-                $lastSequence = substr($latestOrder->order_number, -4);
-                $nextNumber = intval($lastSequence) + 1;
-            }
+            $latestOrder = Order::whereDate('created_at', Carbon::today())->orderBy('created_at', 'desc')->first();
+            $nextNumber = $latestOrder ? intval(substr($latestOrder->order_number, -4)) + 1 : 1;
             $orderNumber = 'INV-' . $today . '-' . str_pad($nextNumber, 4, '0', STR_PAD_LEFT);
 
-            // 3. Inisialisasi Hitungan Keuangan Seluruh Transaksi
+            // Pengumpulan data item pesanan
             $totalSubtotal = 0;
-            $totalHppAll = 0;
-            $totalOverheadAll = 0;
-            $orderItemsData = [];
+            $itemsData = [];
 
-            // Loop semua item yang dikirim dari Cart POS
             foreach ($request->items as $cartItem) {
-                // Ambil data menu beserta resepnya untuk menghitung HPP real-time saat ini
-                $menu = Menu::with(['recipes.rawMaterial', 'prices' => function($query) {
+                $menu = Menu::with(['prices' => function($query) {
                     $query->where('channel', 'offline')->where('is_active', true);
                 }])->findOrFail($cartItem['menu_id']);
 
-                // Ambil harga offline
                 $priceOffline = $menu->prices->first();
                 $sellingPrice = $priceOffline ? floatval($priceOffline->selling_price) : 0;
 
                 if ($sellingPrice <= 0) {
-                    return response()->json([
-                        'success' => false,
-                        'message' => "Menu '{$menu->name}' belum memiliki harga offline yang aktif."
-                    ], 422);
+                    return response()->json(['success' => false, 'message' => "Menu '{$menu->name}' belum memiliki harga offline aktif."], 422);
                 }
-
-                // Hitung total modal dasar (HPP bahan baku + overhead) untuk menu ini
-                $menuHpp = 0;
-                $menuOverhead = 0;
-                
-                if ($menu->recipes) {
-                    foreach ($menu->recipes as $recipe) {
-                        if ($recipe->rawMaterial) {
-                            // Kalkulasi HPP: Pemakaian bahan baku * harga beli bahan baku terkini
-                            $menuHpp += floatval($recipe->quantity) * floatval($recipe->rawMaterial->buy_price ?? 0);
-                        }
-                    }
-                }
-                
-                // Jika Anda punya margin overhead tetap di model, bisa diambil dari sana atau default 0
-                // Sebagai contoh, diambil dari selisih nett_price model kalkulasi Anda jika ada.
 
                 $qty = intval($cartItem['quantity']);
                 $itemSubtotal = $sellingPrice * $qty;
-
-                // Akumulasi total keseluruhan nota
                 $totalSubtotal += $itemSubtotal;
-                $totalHppAll += ($menuHpp * $qty);
-                $totalOverheadAll += ($menuOverhead * $qty);
 
-                // Siapkan data array untuk insert bulk/banyak ke order_items
-                $orderItemsData[] = [
-                    'id'            => Str::uuid()->toString(),
-                    'menu_id'       => $menu->id,
-                    'quantity'      => $qty,
-                    'price'         => $sellingPrice,
-                    'hpp'           => $menuHpp,
-                    'overhead_cost' => $menuOverhead,
-                    'subtotal'      => $itemSubtotal,
-                    'created_at'    => now(),
-                    'updated_at'    => now(),
+                $itemsData[] = [
+                    'menu_id'  => $menu->id,
+                    'quantity' => $qty,
+                    'price'    => $sellingPrice,
+                    'subtotal' => $itemSubtotal
                 ];
             }
 
-            // 4. Kalkulasi Nilai Akhir Nota (Subtotal + Biaya - Diskon)
+            // Hitung nilai bersih
             $discount = floatval($request->discount ?? 0);
             $fee = floatval($request->transaction_fee ?? 0);
-            $finalTotal = ($totalSubtotal + $fee) - $discount;
-            if ($finalTotal < 0) $finalTotal = 0;
+            $finalTotal = max(0, ($totalSubtotal + $fee) - $discount);
 
-            // 5. Penentuan Status Order (Sesuai Tombol yang Ditekan)
-            $status = 'unpaid'; // Default awal
+            // Sinkronisasi status
+            $status = 'unpaid';
+            $journalType = 'pos_pending'; 
 
             if ($request->action_type === 'pay') {
                 $amountPaid = floatval($request->amount_paid ?? 0);
-                
-                // Jika uang yang dibayar kasir >= total tagihan, set Lunas (paid)
                 if ($amountPaid >= $finalTotal) {
-                    $status = 'paid';
-                } else {
-                    // Jika dibayar kurang dari total / dibayar sebagian, tetap unpaid
-                    $status = 'unpaid';
+                    $status = 'completed';
+                    $journalType = 'pos_revenue_' . $request->payment_method; 
                 }
             }
 
-            // 6. Simpan Data ke Tabel Orders
-            $order = Order::create([
+            $orderData = [
                 'order_number'   => $orderNumber,
-                'customer_name'  => $request->customer_name,
-                'total_hpp'      => $totalHppAll,
-                'total_overhead' => $totalOverheadAll,
+                'customer_name'  => $request->customer_name ?? 'Pelanggan POS',
                 'subtotal'       => $totalSubtotal,
+                // 'tax'            => $fee,
                 'discount'       => $discount,
                 'final_total'    => $finalTotal,
                 'payment_method' => $request->payment_method,
                 'status'         => $status,
-                'notes'          => $request->notes, // Jika kolom notes masuk di migration orders Anda
-            ]);
+                'notes'          => $request->notes
+            ];
 
-            // 7. Simpan Seluruh Item Belanjaan ke Tabel OrderItems dengan Relasi HasMany
-            $order->items()->createMany($orderItemsData);
+            // 1. Jalankan core engine POS service (pengurangan stok resep & buat record order)
+            $order = $this->posService->completeOrder($orderData, $itemsData);
 
-            DB::commit();
+            // 2. Eksekusi Akuntansi Otomatis via Account Mapping
+            $replacements = ['order_number' => $order->order_number];
+
+            if ($order->status === 'completed') {
+                // Jurnal Ayat 1: Sisi Finansial Penerimaan Uang
+                JournalEntry::createEntryFromMapping(
+                    type: $journalType, 
+                    j1Amount: (float) $order->final_total,
+                    reference: $order,
+                    replacements: $replacements
+                );
+
+                // Jurnal Ayat 2: Sisi Pengurangan Inventaris Dapur (HPP)
+                if ($order->total_hpp > 0) {
+                    JournalEntry::createEntryFromMapping(
+                        type: 'pos_sales_hpp',
+                        j1Amount: (float) $order->total_hpp,
+                        reference: $order,
+                        replacements: $replacements
+                    );
+                }
+            } else {
+                // Jurnal Kasus Pending / Piutang
+                JournalEntry::createEntryFromMapping(
+                    type: 'pos_pending',
+                    j1Amount: (float) $order->final_total,
+                    reference: $order,
+                    replacements: $replacements
+                );
+            }
 
             return response()->json([
                 'success' => true,
-                'message' => 'Transaksi berhasil diproses!',
-                'data'    => [
-                    'order_id'     => $order->id,
-                    'order_number' => $order->order_number,
-                    'status'       => $order->status,
-                    'final_total'  => $order->final_total
-                ]
+                'message' => 'Checkout berhasil diproses, stok berkurang, dan jurnal tercatat.',
+                'data'    => ['order_id' => $order->id, 'order_number' => $order->order_number, 'final_total' => $order->final_total]
             ], 201);
 
         } catch (\Exception $e) {
-            DB::rollBack();
-            return response()->json([
-                'success' => false,
-                'message' => 'Gagal memproses checkout transaksi.',
-                'error'   => $e->getMessage()
-            ], 500);
+            return response()->json(['success' => false, 'error' => $e->getMessage()], 500);
         }
     }
 
-    public function getUnpaidOrders()
+    /**
+     * Membatalkan / Void Transaksi POS (Mengembalikan Stok & Membalik Jurnal)
+     */
+    public function void(string $id, Request $request): JsonResponse
+    {
+        $request->validate(['reason' => 'nullable|string|max:255']);
+        
+        try {
+            $reason = $request->input('reason', 'Pembatalan/Void oleh Kasir');
+            $this->posService->voidOrder($id, $reason);
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Transaksi berhasil di-void. Stok dikembalikan dan jurnal keuangan telah dibalik.'
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => $e->getMessage()
+            ], 422);
+        }
+    }
+
+    public function getUnpaidOrders(): JsonResponse
     {
         $orders = Order::with('items')
             ->where('status', 'unpaid')
@@ -178,25 +174,25 @@ class OrderController extends Controller
 
         return response()->json([
             'success' => true,
-            'data' => $orders
+            'data'    => $orders
         ]);
     }
 
-    public function getPaidInvoices()
+    public function getPaidInvoices(): JsonResponse
     {
         $invoices = Order::with('items')
-            ->where('status', 'paid')
+            ->where('status', 'completed') // Sesuaikan ke 'completed'
             ->orderBy('created_at', 'desc')
-            ->limit(50) // Batasi 50 riwayat terakhir agar load API kencang
+            ->limit(50)
             ->get();
 
         return response()->json([
             'success' => true,
-            'data' => $invoices
+            'data'    => $invoices
         ]);
     }
 
-    public function getOrdersData()
+    public function getOrdersData(): JsonResponse
     {
         try {
             $orders = Order::with('items.menu')
@@ -205,15 +201,125 @@ class OrderController extends Controller
 
             return response()->json([
                 'success' => true,
-                'data' => $orders
+                'data'    => $orders
             ], 200);
             
         } catch (\Exception $e) {
             return response()->json([
                 'success' => false,
                 'message' => 'Gagal mengambil data transaksi',
-                'error' => $e->getMessage()
+                'error'   => $e->getMessage()
             ], 500);
         }
+    }
+
+//For User
+public function userCheckout(Request $request): JsonResponse
+    {
+        // 1. Validasi Input (Pastikan menu_id berupa UUID sesuai relasi sistem)
+        $request->validate([
+            'items' => 'required|array|min:1',
+            'items.*.menu_id' => 'required|uuid|exists:menus,id',
+            'items.*.quantity' => 'required|integer|min:1',
+            'customer_name' => 'required|string|max:255',
+            'customer_phone' => 'required|string|max:20',
+            'shipping_address' => 'required|string',
+            'notes' => 'nullable|string'
+        ]);
+
+        try {
+            DB::beginTransaction();
+
+            $user = $request->user(); 
+
+            // 2. Generate Nomor Invoice Unik
+            $today = Carbon::now()->format('Ymd');
+            $timeHash = Carbon::now()->format('His') . '-' . strtoupper(substr(uniqid(), -4));
+            $orderNumber = 'INV-OL-' . $today . '-' . $timeHash;
+            
+            $totalSubtotal = 0;
+            $itemsData = [];
+
+            // 3. Looping Item: Validasi Menu Aktif & Ambil Harga Asli
+            foreach ($request->items as $itemData) {
+                // Hanya izinkan menu yang is_active = true dan punya harga channel offline/gofood
+                $menu = Menu::active()->with(['prices' => function($query) {
+                    $query->where('channel', 'offline')->where('is_active', true); 
+                }])->findOrFail($itemData['menu_id']);
+
+                // Tarik harga dari MenuPrice, BUKAN dari tabel Menu yang tidak punya kolom selling_price
+                $priceOffline = $menu->prices->first();
+                $sellingPrice = $priceOffline ? floatval($priceOffline->selling_price) : 0;
+
+                if ($sellingPrice <= 0) {
+                    return response()->json([
+                        'status' => 'error', 
+                        'message' => "Menu '{$menu->name}' belum memiliki harga aktif."
+                    ], 422);
+                }
+
+                $qty = intval($itemData['quantity']);
+                $itemSubtotal = $sellingPrice * $qty;
+                $totalSubtotal += $itemSubtotal;
+
+                $itemsData[] = [
+                    'menu_id'  => $menu->id,
+                    'quantity' => $qty,
+                    'price'    => $sellingPrice,
+                    'subtotal' => $itemSubtotal
+                ];
+            }
+
+            // 4. Susun Format Data Sesuai Kebutuhan PosService
+            $orderData = [
+                'order_number'     => $orderNumber,
+                'customer_name'    => $request->customer_name,
+                'customer_phone'   => $request->customer_phone,
+                'shipping_address' => $request->shipping_address,
+                'user_id'          => $user->id ?? null,
+                'subtotal'         => $totalSubtotal,
+                'discount'         => 0, 
+                'final_total'      => $totalSubtotal,
+                'payment_method'   => 'pending', // Menunggu user bayar via QRIS/Gateway
+                'status'           => 'unpaid',
+                'notes'            => $request->notes
+            ];
+
+            // 5. Eksekusi Core Engine! 
+            // PosService akan otomatis menghitung HPP, memotong stok bahan baku, 
+            // membuat OrderItem, dan mencatat Jurnal Akuntansi Pending.
+            $order = $this->posService->completeOrder($orderData, $itemsData);
+
+            DB::commit();
+
+            return response()->json([
+                'status' => 'success',
+                'message' => 'Pesanan berhasil dibuat!',
+                'data' => $order->load('items.menu')
+            ], 201);
+
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Gagal memproses pesanan: ' . $e->getMessage()
+            ], 500);
+        }
+    }
+
+    public function getUserOrders(Request $request)
+    {
+        $user = $request->user();
+
+        // Ambil riwayat pesanan milik kustomer yang sedang login
+        $orders = Order::with('items.menu')
+            ->where('user_id', $user->id)
+            ->latest()
+            ->get();
+
+        return response()->json([
+            'status' => 'success',
+            'data' => $orders
+        ]);
     }
 }

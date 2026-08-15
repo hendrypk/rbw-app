@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Models\Category;
 use App\Models\Menu;
 use App\Models\MenuPrice;
 use App\Models\OverheadCost;
@@ -144,6 +145,88 @@ class MenuController extends Controller
 
         return response()->json([
             'message' => 'Berhasil menyinkronkan overhead cost ke seluruh menu produksi.'
+        ]);
+    }
+
+    public function checkRecipeSync(): JsonResponse
+    {
+        $isOutofSync = Menu::where('menus.is_active', true)
+            ->join('menu_recipes', 'menus.id', '=', 'menu_recipes.menu_id')
+            ->join('raw_materials', 'menu_recipes.raw_material_id', '=', 'raw_materials.id')
+            ->whereColumn('menu_recipes.unit_cost_snapshot', '!=', 'raw_materials.avg_cost')
+            ->exists();
+
+        return response()->json([
+            'is_out_of_sync' => $isOutofSync // Pastikan key-nya konsisten snake_case
+        ]);
+    }
+
+    public function syncRecipes(): JsonResponse
+    {
+        $menusToUpdate = Menu::where('is_active', true)->with(['recipes.rawMaterial', 'prices'])->get();
+
+        foreach ($menusToUpdate as $menu) {
+            $recipesData = $menu->recipes->map(function ($recipe) {
+                return [
+                    'raw_material_id' => $recipe->raw_material_id,
+                    // Update qty dengan mengambil ulang dari relasi atau nilai aslinya
+                    'qty_usage'       => $recipe->qty_usage, 
+                ];
+            })->toArray();
+
+            $pricesData = $menu->prices->map(function ($price) {
+                return [
+                    'channel'        => $price->channel,
+                    'margin_percent' => $price->margin_percent,
+                ];
+            })->toArray();
+
+            // Gunakan service yang sudah ada untuk kalkulasi ulang total HPP & harga jual
+            $this->menuService->saveRecipesAndPrices($menu, $recipesData, $pricesData);
+        }
+
+        return response()->json([
+            'message' => 'Berhasil menyinkronkan HPP bahan baku ke seluruh menu produksi.'
+        ]);
+    }
+
+public function userIndex(Request $request)
+    {
+        $menus = Menu::active()
+            ->with(['category', 'prices' => function ($query) {
+                $query->where('channel', 'offline')->where('is_active', true);
+            }])
+            ->when($request->filled('category_id'), function ($query) use ($request) {
+                $query->where('category_id', $request->category_id);
+            })
+            ->get()
+            ->map(function ($menu) {
+                // Ambil harga offline
+                $priceOffline = $menu->prices->first();
+                
+                // Return sebagai Array murni agar 100% aman dari error 500 serialisasi JSON
+                return [
+                    'id'          => $menu->id,
+                    'name'        => $menu->name,
+                    'description' => $menu->description,
+                    'image'       => $menu->image_path,
+                    'category_id' => $menu->category_id,
+                    'category'    => $menu->category ? [
+                        'id'   => $menu->category->id,
+                        'name' => $menu->category->name,
+                    ] : null,
+                    'price'       => $priceOffline ? (float) $priceOffline->selling_price : 0,
+                ];
+            });
+
+        $categories = Category::all();
+
+        return response()->json([
+            'status' => 'success',
+            'data' => [
+                'categories' => $categories,
+                'menus'      => $menus,
+            ]
         ]);
     }
 }
