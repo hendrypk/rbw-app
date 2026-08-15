@@ -290,8 +290,6 @@ onBeforeUnmount(() => {
     if (statusInterval) clearInterval(statusInterval);
 });
 
-</script>
-
 // Fungsi pembantu untuk memformat teks nota ke printer (ESC/POS)
 const printReceiptData = async (characteristic: any, orderData: any) => {
     const encoder = new EscPosEncoder();
