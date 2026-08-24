@@ -307,10 +307,11 @@ public function userCheckout(Request $request): JsonResponse
         }
     }
 
-public function getUserOrders(Request $request): JsonResponse
+    public function getUserOrders(Request $request): JsonResponse
     {
         try {
             $customer = $request->user();
+            dd($customer);
             $orders = Order::with(['items.menu'])
                 ->where('customer_id', $customer->id)
                 ->orderBy('created_at', 'desc')
