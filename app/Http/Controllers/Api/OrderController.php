@@ -307,19 +307,25 @@ public function userCheckout(Request $request): JsonResponse
         }
     }
 
-    public function getUserOrders(Request $request)
+public function getUserOrders(Request $request): JsonResponse
     {
-        $user = $request->user();
+        try {
+            $customer = $request->user();
+            $orders = Order::with(['items.menu'])
+                ->where('customer_id', $customer->id)
+                ->orderBy('created_at', 'desc')
+                ->get();
 
-        // Ambil riwayat pesanan milik kustomer yang sedang login
-        $orders = Order::with('items.menu')
-            ->where('user_id', $user->id)
-            ->latest()
-            ->get();
+            return response()->json([
+                'status' => 'success',
+                'data' => $orders
+            ], 200);
 
-        return response()->json([
-            'status' => 'success',
-            'data' => $orders
-        ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Gagal mengambil riwayat pesanan: ' . $e->getMessage()
+            ], 500);
+        }
     }
 }
