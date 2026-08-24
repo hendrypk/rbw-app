@@ -12,6 +12,7 @@ use App\Http\Controllers\Api\PurchaseOrderController;
 use App\Http\Controllers\Api\QrisController;
 use App\Http\Controllers\Api\RawMaterialController;
 use App\Http\Controllers\Api\SupplierController;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/test-doku-token', [QrisController::class, 'testGetToken']);
@@ -22,6 +23,12 @@ Route::prefix('api/v1/user')->group(function () {
     
 
     Route::middleware(['auth:sanctum,customer'])->group(function () {
+        Route::get('/check', function (Request $request) {
+            return response()->json([
+                'authenticated' => true, 
+                'user' => $request->user()
+            ]);
+        });
         Route::get('/profile', [CustomerAuthController::class, 'profile']);
         Route::post('/logout', [CustomerAuthController::class, 'logout']);
         
