@@ -4,11 +4,9 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Services\DokuQrisService;
-use App\Services\DokuAuthService;
 use App\Models\Order;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Http;
-use Illuminate\Support\Carbon;
 
 class QrisController extends Controller
 {
@@ -20,25 +18,24 @@ class QrisController extends Controller
     }
 
     /**
-     * Endpoint khusus untuk dump full request & response DOKU (Debugging)
+     * Endpoint khusus untuk dump full request & response DOKU
      */
     public function debugGenerate(Request $request)
     {
         $orderNumber = $request->input('order_number', 'INV-TEST-' . time());
-        $amount      = $request->input('amount', 10000);
+        $amount = $request->input('amount', 10000);
 
         try {
             // 1. Ambil Auth Token
-            $auth = app(DokuAuthService::class)->getToken();
-            $token = is_array($auth) ? $auth['accessToken'] : $auth;
+            $auth = app(\App\Services\DokuAuthService::class)->getToken();
+            $token = $auth['accessToken'] ?? null;
 
-            // 2. Persiapkan Data Request (Menggunakan config() agar aman dari config:cache)
-            $timestamp  = Carbon::now('UTC')->toIso8601ZuluString(); 
-            $endpoint   = "/snap-adapter/b2b/v1.0/qr/qr-mpm-generate";
-            $clientId   = config('services.doku.client_id', env('DOKU_CLIENT_ID'));
-            $secretKey  = config('services.doku.secret_key', env('DOKU_SECRET_KEY'));
-            $merchantId = config('services.doku.merchant_id', env('DOKU_MERCHANT_ID'));
-            $baseUrl    = rtrim(config('services.doku.base_url', env('DOKU_BASE_URL', 'https://api.doku.com')), '/');
+            // 2. Persiapkan Data Request
+            $timestamp = date('c'); 
+            $endpoint = "/snap-adapter/b2b/v1.0/qr/qr-mpm-generate";
+            $clientId = env('DOKU_CLIENT_ID');
+            $secretKey = env('DOKU_SECRET_KEY');
+            $merchantId = env('DOKU_MERCHANT_ID', '2115');
 
             $body = [
                 "partnerReferenceNo" => (string) $orderNumber,
@@ -54,15 +51,16 @@ class QrisController extends Controller
                 ]
             ];
 
-            // 3. Hitung Symmetric Signature (HMAC-SHA512)
-            $bodyJson     = json_encode($body, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
-            $digest       = strtolower(hash('sha256', $bodyJson)); 
+            // 3. Hitung Signature
+            $bodyJson = json_encode($body, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+            $digest = strtolower(hash('sha256', $bodyJson)); 
             $stringToSign = "POST:" . $endpoint . ":" . $token . ":" . $digest . ":" . $timestamp;
             $signatureRaw = hash_hmac('sha512', $stringToSign, $secretKey, true);
-            $signature    = base64_encode($signatureRaw);
+            $signature = base64_encode($signatureRaw);
 
             // 4. Hit API DOKU
-            $response = Http::withHeaders([
+            $baseUrl = rtrim(env('DOKU_BASE_URL', 'https://api-sandbox.doku.com'), '/');
+            $response = \Illuminate\Support\Facades\Http::withHeaders([
                 'Authorization' => 'Bearer ' . $token,
                 'X-PARTNER-ID'  => $clientId,
                 'X-EXTERNAL-ID' => (string) rand(100000, 999999) . time(),
@@ -74,15 +72,16 @@ class QrisController extends Controller
             ->timeout(15)
             ->post($baseUrl . $endpoint, $body);
 
+            // Dump Hasil Lengkap
             return response()->json([
                 'debug_info' => [
-                    'client_id_used'      => $clientId,
-                    'merchant_id_used'    => $merchantId,
-                    'base_url'            => $baseUrl,
-                    'timestamp'           => $timestamp,
-                    'string_to_sign'      => $stringToSign,
+                    'client_id_used'    => $clientId,
+                    'merchant_id_used'  => $merchantId,
+                    'base_url'          => $baseUrl,
+                    'timestamp'         => $timestamp,
+                    'string_to_sign'    => $stringToSign,
                     'generated_signature' => $signature,
-                    'payload_sent'        => $body,
+                    'payload_sent'      => $body,
                 ],
                 'doku_http_status' => $response->status(),
                 'doku_response'    => $response->json() ?? $response->body()
@@ -97,9 +96,9 @@ class QrisController extends Controller
     }
 
     /**
-     * Generate QRIS String / URL dari DOKU berdasarkan order_number
+     * Generate QRIS String / URL dari DOKU berdasarkan order_number yang ada
      */
-    public function generate(Request $request)
+public function generate(Request $request)
     {
         $request->validate([
             'order_number' => 'required|string',
@@ -110,14 +109,8 @@ class QrisController extends Controller
 
         $dokuResponse = $this->qrisService->generate($order->order_number, $order->final_total);
 
-        // KODE SUKSES QRIS DOKU ADALAH 2004700 (Atau 2000000)
+        // KODE SUKSES QRIS DOKU ADALAH 2004700 (Bukan 2000000)
         if (isset($dokuResponse['responseCode']) && in_array($dokuResponse['responseCode'], ['2004700', '2000000'])) {
-            
-            // Simpan reference_no dari DOKU ke DB jika ada
-            if (isset($dokuResponse['referenceNo'])) {
-                $order->update(['doku_reference_no' => $dokuResponse['referenceNo']]);
-            }
-
             return response()->json([
                 'status' => 'success',
                 'data' => [
@@ -128,6 +121,7 @@ class QrisController extends Controller
             ]);
         }
 
+        // Tampilkan respons ASLI dari DOKU ke frontend agar kita tahu persis salahnya di mana
         return response()->json([
             'status' => 'error',
             'message' => 'DOKU Error: ' . json_encode($dokuResponse)
@@ -145,10 +139,13 @@ class QrisController extends Controller
 
         $order = Order::where('order_number', $request->order_number)->firstOrFail();
 
+        // Panggil service query status DOKU
+        // (Pastikan method queryStatus di DokuQrisService Anda sudah disesuaikan menerima order_number)
         $status = $this->qrisService->queryStatus($order->order_number, $order->doku_reference_no ?? '');
 
         $isPaid = isset($status['latestTransactionStatus']) && $status['latestTransactionStatus'] === 'SUCCESS';
 
+        // Update status order jika sudah terkonfirmasi bayar oleh DOKU
         if ($isPaid && $order->status !== 'paid') {
             $order->update([
                 'status' => 'paid', 
@@ -160,25 +157,77 @@ class QrisController extends Controller
             'status' => 'success',
             'paid'   => $isPaid,
             'payment_status' => $isPaid ? 'completed' : 'pending',
-            'message'        => $status['transactionStatusDesc'] ?? 'Menunggu pembayaran'
+            'message' => $status['transactionStatusDesc'] ?? 'Menunggu pembayaran'
         ]);
     }
 
-    /**
-     * Test B2B Access Token
-     */
-    public function testGetToken()
+        public function testGetToken()
     {
-        try {
-            $tokenData = app(DokuAuthService::class)->getToken();
+        // 1. Konfigurasi kredensial (Sesuaikan dengan .env Anda)
+        $clientId = config('services.doku.client_id'); // contoh: MCH-0008-...
+        $privateKeyPath = storage_path('app/doku/private.key'); // Path ke private key Anda
+        $baseUrl = config('services.doku.sandbox_mode', true) 
+            ? 'https://api-sandbox.doku.com' 
+            : 'https://api.doku.com';
+
+        $endpoint = '/authorization/v1/access-token/b2b';
+
+        // 2. Format Timestamp ke UTC (ISO8601 UTC+0 / Z)
+        // Kurangi 7 jam jika waktu server/lokal Anda WIB (UTC+7)
+        $timestamp = gmdate('Y-m-d\TH:i:s\Z');
+
+        // 3. Buat StringToSign untuk Asymmetric Signature (SHA256withRSA)
+        // Formula: client_ID + "|" + X-TIMESTAMP
+        $stringToSign = $clientId . '|' . $timestamp;
+
+        // 4. Generate Signature menggunakan Private Key
+        $signature = '';
+        if (file_exists($privateKeyPath)) {
+            $privateKey = file_get_contents($privateKeyPath);
+            openssl_sign($stringToSign, $signature, $privateKey, OPENSSL_ALGO_SHA256);
+            $signature = base64_encode($signature);
+        } else {
             return response()->json([
-                'status' => 'success',
-                'data'   => $tokenData
-            ]);
+                'error' => 'Private key file not found at: ' . $privateKeyPath
+            ], 500);
+        }
+
+        // 5. Susun Request Body
+        $body = [
+            'grantType' => 'client_credentials'
+        ];
+
+        // 6. Hit API DOKU
+        try {
+            $response = Http::withHeaders([
+                'X-TIMESTAMP'  => $timestamp,
+                'X-CLIENT-KEY' => $clientId,
+                'X-SIGNATURE'  => $signature,
+                'Content-Type' => 'application/json',
+            ])->post($baseUrl . $endpoint, $body);
+
+            // 7. Ambil hasil response body
+            $responseBody = $response->json();
+            $statusCode = $response->status();
+
+            // Debugging langsung di browser/API client
+            return response()->json([
+                'http_status'     => $statusCode,
+                'is_success'      => $response->successful(),
+                'string_to_sign'  => $stringToSign,
+                'request_headers' => [
+                    'X-TIMESTAMP'  => $timestamp,
+                    'X-CLIENT-KEY' => $clientId,
+                    'X-SIGNATURE'  => $signature,
+                ],
+                'response_body'   => $responseBody,
+            ], $statusCode);
+
         } catch (\Exception $e) {
             return response()->json([
-                'status'  => 'error',
-                'message' => $e->getMessage()
+                'error_message' => $e->getMessage(),
+                'file'          => $e->getFile(),
+                'line'          => $e->getLine(),
             ], 500);
         }
     }
