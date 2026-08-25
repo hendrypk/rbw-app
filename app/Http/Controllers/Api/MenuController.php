@@ -20,26 +20,26 @@ class MenuController extends Controller
     {
         return response()->json($this->menuService->getAllMenus());
     }
-
-    public function store(Request $request): JsonResponse
+public function store(Request $request): JsonResponse
     {
         $data = $request->validate([
-            'name'        => 'required|string|max:255',
-            'category_id'    => 'nullable|string|max:100',
-            'description' => 'nullable|string',
-            'recipes'     => 'required|array|min:1',
-            'overhead_cost' => 'sometimes|required|numeric|min:0',
+            'name'                      => 'required|string|max:255',
+            'category_id'               => 'nullable|string|max:100',
+            'description'               => 'nullable|string',
+            'recipes'                   => 'required|array|min:1',
+            'overhead_cost'             => 'sometimes|required|numeric|min:0',
             'recipes.*.raw_material_id' => 'required|uuid|exists:raw_materials,id',
             'recipes.*.qty_usage'       => 'required|numeric|min:0.0001',
-            'prices'      => 'required|array|min:1',
-            'prices.*.channel'         => 'required|in:offline,shopeefood,grabfood,gofood',
-            'prices.*.margin_percent'  => 'required|numeric|min:0',
+            'prices'                    => 'required|array|min:1',
+            'prices.*.channel'          => 'required|in:offline,shopeefood,grabfood,gofood',
+            'prices.*.selling_price'    => 'required|numeric|min:0', // Wajib ada input harga jual final
+            'prices.*.margin_percent'   => 'nullable|numeric', 
         ]);
 
         $menu = Menu::create([
-            'name'        => $data['name'],
-            'category_id'    => $data['category_id'] ?? null,
-            'description' => $data['description'] ?? null,
+            'name'          => $data['name'],
+            'category_id'   => $data['category_id'] ?? null,
+            'description'   => $data['description'] ?? null,
             'overhead_cost' => $data['overhead_cost'] ?? 0
         ]);
 
@@ -48,43 +48,47 @@ class MenuController extends Controller
         return response()->json($result, 201);
     }
 
-    public function show(Menu $menu): JsonResponse
-    {
-        return response()->json(
-            $menu->load(['recipes.rawMaterial', 'prices'])
-        );
-    }
-
     public function update(Request $request, Menu $menu): JsonResponse
     {
         $data = $request->validate([
-            'name'        => 'sometimes|required|string|max:255',
-            'category_id'    => 'nullable|string|max:100',
-            'description' => 'nullable|string',
-            'is_active'   => 'boolean',
-            'recipes'     => 'sometimes|array|min:1',
+            'name'                      => 'sometimes|required|string|max:255',
+            'category_id'               => 'nullable|string|max:100',
+            'description'               => 'nullable|string',
+            'is_active'                 => 'boolean',
+            'recipes'                   => 'sometimes|array|min:1',
             'recipes.*.raw_material_id' => 'required_with:recipes|uuid|exists:raw_materials,id',
             'recipes.*.qty_usage'       => 'required_with:recipes|numeric|min:0.0001',
-            'prices'      => 'sometimes|array|min:1',
-            'prices.*.channel'         => 'required_with:prices|in:offline,shopeefood,grabfood,gofood',
-            'prices.*.margin_percent'  => 'required_with:prices|numeric|min:0',
+            'prices'                    => 'sometimes|array|min:1',
+            'prices.*.channel'          => 'required_with:prices|in:offline,shopeefood,grabfood,gofood',
+            'prices.*.selling_price'    => 'sometimes|required_with:prices|numeric|min:0',
+            'prices.*.margin_percent'   => 'nullable|numeric', 
         ]);
 
         $menu->update($data);
 
-        if (isset($data['recipes'])) {
+        if (isset($data['recipes']) || isset($data['prices'])) {
             $result = $this->menuService->saveRecipesAndPrices(
                 $menu,
-                $data['recipes'],
+                $data['recipes'] ?? $menu->recipes->map(fn($r) => [
+                    'raw_material_id' => $r->raw_material_id,
+                    'qty_usage'       => $r->qty_usage
+                ])->toArray(),
                 $data['prices'] ?? $menu->prices->map(fn($p) => [
-                    'channel'        => $p->channel,
-                    'margin_percent' => $p->margin_percent,
+                    'channel'       => $p->channel,
+                    'selling_price' => $p->selling_price,
+                    'margin_percent'=> $p->margin_percent,
                 ])->toArray()
             );
             return response()->json($result);
         }
 
-        return response()->json($menu->fresh(['recipes.rawMaterial', 'prices']));
+        return response()->json($menu->load(['recipes.rawMaterial', 'prices']));
+    }
+    public function show(Menu $menu): JsonResponse
+    {
+        return response()->json(
+            $menu->load(['recipes.rawMaterial', 'prices'])
+        );
     }
 
     public function destroy(Menu $menu): JsonResponse

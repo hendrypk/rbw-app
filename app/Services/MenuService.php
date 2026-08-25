@@ -10,20 +10,6 @@ use Illuminate\Support\Facades\DB;
 
 class MenuService
 {
-    /**
-     * Simpan/update resep menu dan recalculate HPP + semua harga jual.
-     *
-     * $recipes = [
-     *   ['raw_material_id' => uuid, 'qty_usage' => 50],
-     *   ...
-     * ]
-     *
-     * $prices = [
-     *   ['channel' => 'offline',    'margin_percent' => 40],
-     *   ['channel' => 'shopeefood', 'margin_percent' => 55],
-     *   ...
-     * ]
-     */
     public function saveRecipesAndPrices(Menu $menu, array $recipes, array $prices): Menu
     {
         DB::transaction(function () use ($menu, $recipes, $prices) {
@@ -46,17 +32,26 @@ class MenuService
 
             // 2. Recalculate HPP
             $menu->recalculateHpp();
-            $hpp = (float) $menu->hpp;
             $baseCost = (float) $menu->hpp + (float) $menu->overhead_cost;
-            // 3. Upsert harga jual per channel
+
+            // 3. Upsert harga jual per channel berbasis Harga Jual Manual Bulat
             foreach ($prices as $p) {
                 $channel = $p['channel'];
-                $margin  = (float) $p['margin_percent'];
-                $calc    = MenuPrice::calculate($baseCost, $margin, $channel);
+                
+                // Pastikan selling_price diambil secara bulat
+                if (isset($p['selling_price'])) {
+                    $sellingPrice = round((float) $p['selling_price']);
+                    
+                    // Panggil fungsi pembantu di model MenuPrice untuk hitung margin & nett price
+                    $calc = MenuPrice::calculateFromSellingPrice($baseCost, $sellingPrice, $channel);
+                } else {
+                    $margin = (float) ($p['margin_percent'] ?? 30);
+                    $calc   = MenuPrice::calculate($baseCost, $margin, $channel);
+                }
 
                 MenuPrice::updateOrCreate(
                     ['menu_id' => $menu->id, 'channel' => $channel],
-                    array_merge(['margin_percent' => $margin], $calc, ['is_active' => true])
+                    array_merge($calc, ['is_active' => true])
                 );
             }
         });
@@ -64,23 +59,25 @@ class MenuService
         return $menu->fresh(['recipes.rawMaterial', 'prices']);
     }
 
-    /**
-     * Recalculate semua harga jual ketika HPP berubah (misal avg_cost bahan naik).
-     */
     public function recalculatePrices(Menu $menu): void
     {
         $hpp = (float) $menu->hpp;
+        $baseCost = $hpp + (float) $menu->overhead_cost;
 
         foreach ($menu->prices as $price) {
-            $calc = MenuPrice::calculate($hpp, (float) $price->margin_percent, $price->channel);
-            $price->update($calc);
+            // Jika ingin mempertahankan harga jual manual saat recalculate HPP massal:
+            if ($price->selling_price > 0) {
+                $calc = MenuPrice::calculateFromSellingPrice($baseCost, (float) $price->selling_price, $price->channel);
+                $price->update($calc);
+            } else {
+                $calc = MenuPrice::calculate($baseCost, (float) $price->margin_percent, $price->channel);
+                $price->update($calc);
+            }
         }
     }
-
     
     public function getAllMenus()
     {
-        // Semua logika query di sini
         return Menu::with(['recipes.rawMaterial', 'prices', 'category'])->get();
     }
 }

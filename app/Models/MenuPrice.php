@@ -38,7 +38,7 @@ class MenuPrice extends Model
     }
 
     /**
-     * Hitung selling_price dan nett_price dari Modal Dasar (HPP + Overhead) + Margin
+     * Hitung selling_price dan nett_price dari Modal Dasar (HPP + Overhead) + Margin (%)
      */
     public static function calculate(float $baseCost, float $marginPercent, string $channel): array
     {
@@ -48,8 +48,6 @@ class MenuPrice extends Model
         $targetPriceBeforeOjol = $baseCost / (1 - ($marginPercent / 100));
 
         if ($platformFee > 0 && $platformFee < 100) {
-            // Naikkan harga agar setelah dipotong fee marketplace,
-            // margin tetap sesuai target.
             $sellingPrice = $targetPriceBeforeOjol / (1 - ($platformFee / 100));
         } else {
             $sellingPrice = $targetPriceBeforeOjol;
@@ -58,6 +56,35 @@ class MenuPrice extends Model
         $nettPrice = $sellingPrice * (1 - ($platformFee / 100));
 
         return [
+            'selling_price'        => round($sellingPrice),
+            'platform_fee_percent' => $platformFee,
+            'nett_price'           => round($nettPrice),
+            'clean_profit'         => round($nettPrice - $baseCost),
+        ];
+    }
+
+    /**
+     * Hitung balik margin_percent dan nett_price dari Harga Jual Manual yang diinput user
+     */
+    public static function calculateFromSellingPrice(float $baseCost, float $sellingPrice, string $channel): array
+    {
+        $platformFee = self::PLATFORM_FEES[$channel] ?? 0;
+
+        // Hitung harga sebelum ojol (setelah dikurangi platform fee)
+        $targetPriceBeforeOjol = ($platformFee > 0 && $platformFee < 100)
+            ? $sellingPrice * (1 - ($platformFee / 100))
+            : $sellingPrice;
+
+        // Hitung persentase gross margin berdasarkan harga sebelum ojol vs modal dasar
+        $marginPercent = 0;
+        if ($targetPriceBeforeOjol > 0 && $targetPriceBeforeOjol > $baseCost) {
+            $marginPercent = (1 - ($baseCost / $targetPriceBeforeOjol)) * 100;
+        }
+
+        $nettPrice = $sellingPrice * (1 - ($platformFee / 100));
+
+        return [
+            'margin_percent'       => round($marginPercent, 2),
             'selling_price'        => round($sellingPrice),
             'platform_fee_percent' => $platformFee,
             'nett_price'           => round($nettPrice),

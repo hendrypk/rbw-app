@@ -57,8 +57,9 @@
     interface PriceChannel {
         channel: string;
         margin_percent: number;
+        selling_price: number;
     }
-
+    
     const form = ref({
         name: '',
         category_id: '',
@@ -93,48 +94,44 @@
         }
     };
 
-    const calculateChannelPricing = (marginPercent: number, channel: string) => {
-        const baseCost = totalBaseCost.value;
-        const feePercent = PLATFORM_FEES[channel] ?? 0;
-        const marginDecimal = (Number(marginPercent) || 0) / 100;
+// Fungsi untuk menghitung Nett Profit secara murni tanpa menimpa harga jual
+const calculateCleanProfit = (priceObj: PriceChannel) => {
+    const baseCost = totalBaseCost.value;
+    const feePercent = PLATFORM_FEES[priceObj.channel] ?? 0;
+    const sellingPrice = Number(priceObj.selling_price) || 0;
 
-        const targetPriceBeforeOjol = baseCost * (1 + marginDecimal);
-        let sellingPrice = targetPriceBeforeOjol;
+    if (!sellingPrice || !baseCost) return 0;
 
-        if (channel !== 'offline' && feePercent > 0) {
-            sellingPrice = targetPriceBeforeOjol / (1 - feePercent / 100);
-        }
+    const nettPrice = sellingPrice * (1 - feePercent / 100);
+    const cleanProfit = nettPrice - baseCost;
 
-        const nettPrice = sellingPrice * (1 - feePercent / 100);
-        const cleanProfit = nettPrice - baseCost;
+    return Number(cleanProfit.toFixed(2));
+};
 
-        return {
-            sellingPrice: Math.round(sellingPrice),
-            cleanProfit: Math.round(cleanProfit),
-        };
-    };
+// Fungsi update margin saat user mengetik harga jual
+const updateMarginFromPrice = (priceObj: PriceChannel) => {
+    const baseCost = totalBaseCost.value;
+    const feePercent = PLATFORM_FEES[priceObj.channel] ?? 0;
+    const newSellingPrice = Number(priceObj.selling_price) || 0;
+    
+    if (!newSellingPrice || !baseCost || baseCost <= 0) {
+        priceObj.margin_percent = 0;
+        return; 
+    }
 
-    const updateMarginFromPrice = (priceObj: PriceChannel, newSellingPrice: number) => {
-        const baseCost = totalBaseCost.value;
-        const feePercent = PLATFORM_FEES[priceObj.channel] ?? 0;
-        
-        if (!newSellingPrice || isNaN(newSellingPrice) || !baseCost || baseCost <= 0) {
-            return; 
-        }
+    let targetPriceBeforeOjol = newSellingPrice;
+    if (priceObj.channel !== 'offline' && feePercent > 0) {
+        targetPriceBeforeOjol = newSellingPrice * (1 - feePercent / 100);
+    }
 
-        let targetPriceBeforeOjol = newSellingPrice;
-        if (priceObj.channel !== 'offline' && feePercent > 0) {
-            targetPriceBeforeOjol = newSellingPrice * (1 - feePercent / 100);
-        }
+    if (targetPriceBeforeOjol < baseCost) {
+        priceObj.margin_percent = 0;
+        return;
+    }
 
-        if (targetPriceBeforeOjol < baseCost) {
-            priceObj.margin_percent = 0;
-            return;
-        }
-
-        const calculatedMargin = ((targetPriceBeforeOjol - baseCost) / baseCost) * 100;
-        priceObj.margin_percent = Number(calculatedMargin.toFixed(2));
-    };
+    const calculatedMargin = ((targetPriceBeforeOjol - baseCost) / baseCost) * 100;
+    priceObj.margin_percent = Number(calculatedMargin.toFixed(2));
+};
 
     watch(
         () => props.show,
@@ -150,9 +147,7 @@
                 form.value = {
                     name: props.menu.name,
                     category_id: props.menu.category_id || '',
-                    overhead_cost: Number(
-                        props.menu.overhead_cost ?? props.masterOverhead ?? 0
-                    ),
+                    overhead_cost: Number(props.menu.overhead_cost ?? props.masterOverhead ?? 0),
                     recipes: props.menu.recipes.map((r: any) => ({
                         raw_material_id: r.raw_material_id,
                         qty_usage: Number(r.qty_usage),
@@ -160,6 +155,7 @@
                     prices: props.menu.prices.map((p: any) => ({
                         channel: p.channel,
                         margin_percent: Number(p.margin_percent),
+                        selling_price: Math.round(Number(p.selling_price || 0)),
                     })),
                 };
             } else {
@@ -169,10 +165,10 @@
                     overhead_cost: props.masterOverhead || 0,
                     recipes: [{ raw_material_id: '', qty_usage: 1 }],
                     prices: [
-                        { channel: 'offline', margin_percent: 30 },
-                        { channel: 'shopeefood', margin_percent: 30 },
-                        { channel: 'grabfood', margin_percent: 30 },
-                        { channel: 'gofood', margin_percent: 30 },
+                        { channel: 'offline', margin_percent: 30, selling_price: 0 },
+                        { channel: 'shopeefood', margin_percent: 30, selling_price: 0 },
+                        { channel: 'grabfood', margin_percent: 30, selling_price: 0 },
+                        { channel: 'gofood', margin_percent: 30, selling_price: 0 },
                     ],
                 };
             }
@@ -316,56 +312,56 @@
                     </div>
 
                     <!-- KELOMPOK KANAN: PRICING PER CHANNEL (Dinamis Dua Arah) -->
-                    <div class="lg:col-span-5 space-y-3 border rounded-xl p-4 bg-background shadow-sm">
-                        <div class="border-b pb-2">
-                            <h3 class="font-bold text-sm tracking-tight text-foreground">Pricing per Channel</h3>
-                        </div>
-                        
-<div class="space-y-2">
-    <div v-for="price in form.prices" :key="price.channel" class="flex flex-col p-2.5 bg-muted/40 rounded-xl border border-border/60">
-        <div class="flex items-center justify-between border-b border-border/40 pb-1.5 mb-1.5">
-            <span class="font-bold text-xs capitalize text-foreground flex items-center gap-1">
-                <span class="w-1 h-2 rounded bg-primary/50"></span>
-                {{ price.channel }}
-            </span>
-            <div class="flex items-center gap-1">
-                <span class="text-[10px] text-muted-foreground">Margin:</span>
-                <Input 
-                    :model-value="price.margin_percent" 
-                    @input="(e: any) => price.margin_percent = Number(e.target.value)"
-                    type="number" 
-                    step="0.01" 
-                    class="w-14 h-6 text-center font-semibold text-xs p-0" 
-                />
-                <span class="text-[10px] font-semibold">%</span>
+<!-- KELOMPOK KANAN: PRICING PER CHANNEL -->
+<div class="lg:col-span-5 space-y-3 border rounded-xl p-4 bg-background shadow-sm">
+    <div class="border-b pb-2">
+        <h3 class="font-bold text-sm tracking-tight text-foreground">Pricing per Channel</h3>
+    </div>
+    
+    <div class="space-y-2">
+        <div v-for="price in form.prices" :key="price.channel" class="flex flex-col p-2.5 bg-muted/40 rounded-xl border border-border/60">
+            <div class="flex items-center justify-between border-b border-border/40 pb-1.5 mb-1.5">
+                <span class="font-bold text-xs capitalize text-foreground flex items-center gap-1">
+                    <span class="w-1 h-2 rounded bg-primary/50"></span>
+                    {{ price.channel }}
+                </span>
+                <div class="flex items-center gap-1">
+                    <span class="text-[10px] text-muted-foreground">Margin:</span>
+                    <!-- Input margin didisable agar otomatis terhitung dari harga jual -->
+                    <Input 
+                        :model-value="price.margin_percent" 
+                        type="number" 
+                        disabled 
+                        class="w-16 h-6 text-center font-semibold text-xs p-0 bg-muted text-muted-foreground cursor-not-allowed opacity-100" 
+                    />
+                    <span class="text-[10px] font-semibold text-muted-foreground">%</span>
+                </div>
+            </div>
+            
+            <div class="flex items-center justify-between text-xs gap-2">
+                <div class="flex-1">
+                    <span class="text-[10px] text-muted-foreground block mb-0.5">Harga Jual (Manual)</span>
+                    <div class="relative flex items-center">
+                        <span class="absolute left-2 text-[10px] font-bold text-muted-foreground">Rp</span>
+                        <Input 
+                            v-model.number="price.selling_price"
+                            @input="updateMarginFromPrice(price)"
+                            type="number" 
+                            step="1"
+                            class="h-7 pl-6 pr-1 text-left text-xs font-bold text-foreground bg-background" 
+                        />
+                    </div>
+                </div>
+                <div class="text-right">
+                    <span class="text-[10px] text-muted-foreground block">Nett Profit</span>
+                    <span class="font-bold text-green-600 dark:text-green-400">
+                        +{{ currency(calculateCleanProfit(price)) }}
+                    </span>
+                </div>
             </div>
         </div>
-        
-<div class="flex items-center justify-between text-xs gap-2">
-    <div class="flex-1">
-        <span class="text-[10px] text-muted-foreground block mb-0.5">Harga Jual</span>
-        <div class="relative flex items-center">
-            <span class="absolute left-2 text-[10px] font-bold text-muted-foreground">Rp</span>
-            <Input 
-                :model-value="calculateChannelPricing(price.margin_percent, price.channel).sellingPrice"
-                @input="(e: any) => updateMarginFromPrice(price, Number(e.target.value))"
-                type="number" 
-                :min="totalBaseCost"
-                class="h-7 pl-6 pr-1 text-left text-xs font-bold text-foreground bg-background" 
-            />
-        </div>
-    </div>
-    <div class="text-right">
-        <span class="text-[10px] text-muted-foreground block">Nett Profit</span>
-        <span class="font-bold text-green-600 dark:text-green-400">
-            +{{ currency(calculateChannelPricing(price.margin_percent, price.channel).cleanProfit) }}
-        </span>
     </div>
 </div>
-    </div>
-</div>
-                    </div>
-
                 </div>
 
                 <!-- BUTTON FOOTER -->
