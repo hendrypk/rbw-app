@@ -14,10 +14,11 @@ class DokuQrisService
 
     public function __construct()
     {
-        $this->clientId = env('DOKU_CLIENT_ID');
-        $this->secretKey = env('DOKU_SECRET_KEY');
-        $this->merchantId = env('DOKU_MERCHANT_ID', '2115'); // Fallback ke 2115 jika env kosong
-        $this->baseUrl = rtrim(env('DOKU_BASE_URL', 'https://api-sandbox.doku.com'), '/');
+        // Gunakan config() agar aman saat 'php artisan config:cache'
+        $this->clientId   = config('services.doku.client_id', env('DOKU_CLIENT_ID'));
+        $this->secretKey  = config('services.doku.secret_key', env('DOKU_SECRET_KEY'));
+        $this->merchantId = config('services.doku.merchant_id', env('DOKU_MERCHANT_ID'));
+        $this->baseUrl    = rtrim(config('services.doku.base_url', env('DOKU_BASE_URL', 'https://api.doku.com')), '/');
     }
 
     /**
@@ -27,13 +28,16 @@ class DokuQrisService
     {
         $clientSecret = $this->secretKey;
 
-        // JSON_UNESCAPED_SLASHES wajib agar hash cocok dengan server DOKU
+        // Minify JSON Body
         $bodyJson = json_encode($bodyArray, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
 
+        // SHA256 Digest
         $digest = strtolower(hash('sha256', $bodyJson)); 
         
+        // String to Sign
         $stringToSign = strtoupper($method) . ":" . $endpoint . ":" . $accessToken . ":" . $digest . ":" . $timestamp;
 
+        // HMAC-SHA512
         $signatureRaw = hash_hmac('sha512', $stringToSign, $clientSecret, true);
 
         return base64_encode($signatureRaw);
@@ -44,11 +48,11 @@ class DokuQrisService
      */
     public function generate($invoiceNo, $amount)
     {
-        $auth = app(DokuAuthService::class)->getToken();
-        $token = $auth['accessToken'];
+        $auth  = app(DokuAuthService::class)->getToken();
+        $token = is_array($auth) ? $auth['accessToken'] : $auth;
 
-        // Format waktu ISO8601 lokal (+07:00)
-        $timestamp = date('c'); 
+        // Format ISO8601 UTC Zulu Wajib SNAP DOKU
+        $timestamp = Carbon::now('UTC')->toIso8601ZuluString(); 
 
         $body = [
             "partnerReferenceNo" => (string) $invoiceNo,
@@ -58,10 +62,8 @@ class DokuQrisService
             ],
             "merchantId" => $this->merchantId,
             "terminalId" => "K45", 
-            
-            // --- INI WAJIB ADA AGAR SERVER DOKU TIDAK CRASH 500 ---
             "additionalInfo" => [
-                "postalCode" => "55183", // Kode pos Bantul, atau sesuaikan
+                "postalCode" => "55183",
                 "feeType"    => "1"
             ]
         ];
@@ -90,18 +92,18 @@ class DokuQrisService
      */
     public function queryStatus($invoiceNo, $dokuReferenceNo)
     {
-        $path = '/snap-adapter/b2b/v1.0/qr/qr-mpm-query';
-        $timestamp = date('c'); 
+        $path       = '/snap-adapter/b2b/v1.0/qr/qr-mpm-query';
+        $timestamp  = Carbon::now('UTC')->toIso8601ZuluString(); 
         $externalId = (string) rand(100000, 999999) . time();
         
-        $auth = app(DokuAuthService::class)->getToken();
-        $token = $auth['accessToken'];
+        $auth  = app(DokuAuthService::class)->getToken();
+        $token = is_array($auth) ? $auth['accessToken'] : $auth;
 
         $body = [
-            "originalReferenceNo" => $dokuReferenceNo,
+            "originalReferenceNo"        => $dokuReferenceNo,
             "originalPartnerReferenceNo" => $invoiceNo,
-            "serviceCode" => "47",
-            "merchantId" => $this->merchantId
+            "serviceCode"                => "47",
+            "merchantId"                 => $this->merchantId
         ];
 
         $signature = $this->generateSymmetricSignature('POST', $path, $token, $body, $timestamp);
@@ -114,7 +116,9 @@ class DokuQrisService
             'Authorization' => 'Bearer ' . $token,
             'CHANNEL-ID'    => 'H2H',
             'Content-Type'  => 'application/json'
-        ])->post($this->baseUrl . $path, $body);
+        ])
+        ->timeout(15)
+        ->post($this->baseUrl . $path, $body);
 
         return $response->json();
     }
