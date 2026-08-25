@@ -181,7 +181,7 @@ class OrderController extends Controller
     public function getPaidInvoices(): JsonResponse
     {
         $invoices = Order::with('items')
-            ->where('status', 'completed') // Sesuaikan ke 'completed'
+            ->where('status', 'completed') 
             ->orderBy('created_at', 'desc')
             ->limit(50)
             ->get();
@@ -213,10 +213,8 @@ class OrderController extends Controller
         }
     }
 
-//For User
-public function userCheckout(Request $request): JsonResponse
+    public function userCheckout(Request $request): JsonResponse
     {
-        // 1. Validasi Input (Pastikan menu_id berupa UUID sesuai relasi sistem)
         $request->validate([
             'items' => 'required|array|min:1',
             'items.*.menu_id' => 'required|uuid|exists:menus,id',
@@ -230,9 +228,8 @@ public function userCheckout(Request $request): JsonResponse
         try {
             DB::beginTransaction();
 
-            $user = $request->user(); 
+            $customer = auth('customer')->user();
 
-            // 2. Generate Nomor Invoice Unik
             $today = Carbon::now()->format('Ymd');
             $timeHash = Carbon::now()->format('His') . '-' . strtoupper(substr(uniqid(), -4));
             $orderNumber = 'INV-OL-' . $today . '-' . $timeHash;
@@ -240,14 +237,11 @@ public function userCheckout(Request $request): JsonResponse
             $totalSubtotal = 0;
             $itemsData = [];
 
-            // 3. Looping Item: Validasi Menu Aktif & Ambil Harga Asli
             foreach ($request->items as $itemData) {
-                // Hanya izinkan menu yang is_active = true dan punya harga channel offline/gofood
                 $menu = Menu::active()->with(['prices' => function($query) {
                     $query->where('channel', 'offline')->where('is_active', true); 
                 }])->findOrFail($itemData['menu_id']);
 
-                // Tarik harga dari MenuPrice, BUKAN dari tabel Menu yang tidak punya kolom selling_price
                 $priceOffline = $menu->prices->first();
                 $sellingPrice = $priceOffline ? floatval($priceOffline->selling_price) : 0;
 
@@ -270,24 +264,20 @@ public function userCheckout(Request $request): JsonResponse
                 ];
             }
 
-            // 4. Susun Format Data Sesuai Kebutuhan PosService
             $orderData = [
                 'order_number'     => $orderNumber,
                 'customer_name'    => $request->customer_name,
                 'customer_phone'   => $request->customer_phone,
                 'shipping_address' => $request->shipping_address,
-                'user_id'          => $user->id ?? null,
+                'customer_id'      => $customer ? $customer->id : null, 
                 'subtotal'         => $totalSubtotal,
                 'discount'         => 0, 
                 'final_total'      => $totalSubtotal,
-                'payment_method'   => 'pending', // Menunggu user bayar via QRIS/Gateway
+                'payment_method'   => 'pending', 
                 'status'           => 'unpaid',
                 'notes'            => $request->notes
             ];
 
-            // 5. Eksekusi Core Engine! 
-            // PosService akan otomatis menghitung HPP, memotong stok bahan baku, 
-            // membuat OrderItem, dan mencatat Jurnal Akuntansi Pending.
             $order = $this->posService->completeOrder($orderData, $itemsData);
 
             DB::commit();
@@ -310,13 +300,21 @@ public function userCheckout(Request $request): JsonResponse
     public function getUserOrders(Request $request): JsonResponse
     {
         try {
-            $customer = $request->user();
-            dd($customer);
+            $customer = auth('customer')->user();
+
+            if (!$customer) {
+                return response()->json([
+                    'status' => 'error',
+                    'message' => 'Unauthorized'
+                ], 401);
+            }
+
             $orders = Order::with(['items.menu'])
                 ->where('customer_id', $customer->id)
                 ->orderBy('created_at', 'desc')
                 ->get();
 
+            // PASTIKAN ADA KATA 'return' DI SINI
             return response()->json([
                 'status' => 'success',
                 'data' => $orders
@@ -326,6 +324,44 @@ public function userCheckout(Request $request): JsonResponse
             return response()->json([
                 'status' => 'error',
                 'message' => 'Gagal mengambil riwayat pesanan: ' . $e->getMessage()
+            ], 500);
+        }
+    }
+
+    public function getOrderDetail(Request $request, string $orderNumber): JsonResponse
+    {
+        try {
+            $customer = auth('customer')->user();
+
+            if (!$customer) {
+                return response()->json([
+                    'status' => 'error',
+                    'message' => 'Unauthorized'
+                ], 401);
+            }
+
+            // Cari order berdasarkan order_number dan pastikan milik customer yang sedang login
+            $order = Order::with(['items.menu'])
+                ->where('order_number', $orderNumber)
+                ->where('customer_id', $customer->id)
+                ->first();
+
+            if (!$order) {
+                return response()->json([
+                    'status' => 'error',
+                    'message' => 'Pesanan tidak ditemukan.'
+                ], 404);
+            }
+
+            return response()->json([
+                'status' => 'success',
+                'data' => $order
+            ], 200);
+
+        } catch (\Exception $e) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Gagal memuat detail pesanan: ' . $e->getMessage()
             ], 500);
         }
     }

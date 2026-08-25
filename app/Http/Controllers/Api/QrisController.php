@@ -5,8 +5,13 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Services\DokuQrisService;
 use App\Models\Order;
+use App\Models\DokuTransaction; // <-- Jangan lupa import model DokuTransaction
+use Carbon\Carbon;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\DB; // <-- Jangan lupa import DB transaction
 
 class QrisController extends Controller
 {
@@ -26,11 +31,9 @@ class QrisController extends Controller
         $amount = $request->input('amount', 10000);
 
         try {
-            // 1. Ambil Auth Token
             $auth = app(\App\Services\DokuAuthService::class)->getToken();
             $token = $auth['accessToken'] ?? null;
 
-            // 2. Persiapkan Data Request
             $timestamp = date('c'); 
             $endpoint = "/snap-adapter/b2b/v1.0/qr/qr-mpm-generate";
             $clientId = env('DOKU_CLIENT_ID');
@@ -51,14 +54,12 @@ class QrisController extends Controller
                 ]
             ];
 
-            // 3. Hitung Signature
             $bodyJson = json_encode($body, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
             $digest = strtolower(hash('sha256', $bodyJson)); 
             $stringToSign = "POST:" . $endpoint . ":" . $token . ":" . $digest . ":" . $timestamp;
             $signatureRaw = hash_hmac('sha512', $stringToSign, $secretKey, true);
             $signature = base64_encode($signatureRaw);
 
-            // 4. Hit API DOKU
             $baseUrl = rtrim(env('DOKU_BASE_URL', 'https://api-sandbox.doku.com'), '/');
             $response = \Illuminate\Support\Facades\Http::withHeaders([
                 'Authorization' => 'Bearer ' . $token,
@@ -72,7 +73,6 @@ class QrisController extends Controller
             ->timeout(15)
             ->post($baseUrl . $endpoint, $body);
 
-            // Dump Hasil Lengkap
             return response()->json([
                 'debug_info' => [
                     'client_id_used'    => $clientId,
@@ -98,7 +98,7 @@ class QrisController extends Controller
     /**
      * Generate QRIS String / URL dari DOKU berdasarkan order_number yang ada
      */
-public function generate(Request $request)
+    public function generate(Request $request): JsonResponse
     {
         $request->validate([
             'order_number' => 'required|string',
@@ -107,21 +107,65 @@ public function generate(Request $request)
 
         $order = Order::where('order_number', $request->order_number)->firstOrFail();
 
-        $dokuResponse = $this->qrisService->generate($order->order_number, $order->final_total);
+        // 1. Cek apakah sudah ada transaksi pending yang aktif di tabel doku_transactions
+        $existingTx = DokuTransaction::where('order_number', $order->order_number)
+            ->where('status', 'pending')
+            ->where('expired_at', '>', now())
+            ->first();
 
-        // KODE SUKSES QRIS DOKU ADALAH 2004700 (Bukan 2000000)
-        if (isset($dokuResponse['responseCode']) && in_array($dokuResponse['responseCode'], ['2004700', '2000000'])) {
+        if ($existingTx && !empty($existingTx->qr_content)) {
+            $qrImageUrl = "https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=" . urlencode($existingTx->qr_content);
             return response()->json([
                 'status' => 'success',
                 'data' => [
                     'order_number' => $order->order_number,
-                    'reference_no' => $dokuResponse['referenceNo'] ?? null,
-                    'qr_content'   => $dokuResponse['qrContent'] ?? null,
+                    'reference_no' => $existingTx->original_reference_no,
+                    'qr_content'   => $existingTx->qr_content,
+                    'qr_image_url' => $qrImageUrl, 
+                    'validity_period' => $existingTx->expired_at->toIso8601String(),
                 ]
             ]);
         }
 
-        // Tampilkan respons ASLI dari DOKU ke frontend agar kita tahu persis salahnya di mana
+        // 2. Hit API DOKU menggunakan Service jika belum ada / sudah kedaluwarsa
+        $dokuResponse = $this->qrisService->generate($order->order_number, $order->final_total);
+
+        // 3. Kode sukses QRIS dari DOKU adalah 2004700 atau 2000000
+        if (isset($dokuResponse['responseCode']) && in_array($dokuResponse['responseCode'], ['2004700', '2000000'])) {
+            
+            $qrisString = $dokuResponse['qrContent'] ?? '';
+            $referenceNo = $dokuResponse['referenceNo'] ?? $dokuResponse['originalReferenceNo'] ?? null;
+            $expiredAt = Carbon::now()->addMinutes(15);
+
+            // 4. SIMPAN KE TABEL doku_transactions AGAR BISA DI-QUERY NANTINYA
+            DokuTransaction::updateOrCreate(
+                ['order_number' => $order->order_number],
+                [
+                    'original_reference_no' => $referenceNo,
+                    'amount' => $order->final_total,
+                    'qr_content' => $qrisString,
+                    'status' => 'pending',
+                    'expired_at' => $expiredAt,
+                    'raw_response' => $dokuResponse
+                ]
+            );
+
+            $qrImageUrl = !empty($qrisString) 
+                ? "https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=" . urlencode($qrisString) 
+                : null;
+
+            return response()->json([
+                'status' => 'success',
+                'data' => [
+                    'order_number' => $order->order_number,
+                    'reference_no' => $referenceNo,
+                    'qr_content'   => $qrisString,
+                    'qr_image_url' => $qrImageUrl, 
+                    'validity_period' => $expiredAt->toIso8601String(),
+                ]
+            ]);
+        }
+
         return response()->json([
             'status' => 'error',
             'message' => 'DOKU Error: ' . json_encode($dokuResponse)
@@ -139,18 +183,39 @@ public function generate(Request $request)
 
         $order = Order::where('order_number', $request->order_number)->firstOrFail();
 
-        // Panggil service query status DOKU
-        // (Pastikan method queryStatus di DokuQrisService Anda sudah disesuaikan menerima order_number)
-        $status = $this->qrisService->queryStatus($order->order_number, $order->doku_reference_no ?? '');
+        // Ambil data referensi DOKU dari tabel doku_transactions
+        $dokuTx = DokuTransaction::where('order_number', $order->order_number)->latest()->first();
 
-        $isPaid = isset($status['latestTransactionStatus']) && $status['latestTransactionStatus'] === 'SUCCESS';
+        if (!$dokuTx || empty($dokuTx->original_reference_no)) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Referensi transaksi DOKU tidak ditemukan untuk order ini.'
+            ], 404);
+        }
 
-        // Update status order jika sudah terkonfirmasi bayar oleh DOKU
-        if ($isPaid && $order->status !== 'paid') {
-            $order->update([
-                'status' => 'paid', 
-                'payment_method' => 'qris'
-            ]);
+        // Kirim original_reference_no yang benar ke service queryStatus DOKU
+        $status = $this->qrisService->queryStatus($order->order_number, $dokuTx->original_reference_no);
+
+        Log::info('DOKU Query Status Response:', (array) $status);
+
+        // Sesuaikan pengecekan status sukses dari DOKU
+        $latestStatus = $status['latestTransactionStatus'] ?? $status['transaction_status'] ?? '';
+        $isPaid = strtoupper($latestStatus) === 'SUCCESS' || strtoupper($latestStatus) === '00';
+
+        if ($isPaid) {
+            DB::transaction(function () use ($order, $dokuTx, $status) {
+                if ($order->status !== 'paid') {
+                    $order->update([
+                        'status' => 'paid', 
+                        'payment_method' => 'qris'
+                    ]);
+                }
+
+                $dokuTx->update([
+                    'status' => 'success',
+                    'raw_response' => $status
+                ]);
+            });
         }
 
         return response()->json([
@@ -161,26 +226,18 @@ public function generate(Request $request)
         ]);
     }
 
-        public function testGetToken()
+    public function testGetToken()
     {
-        // 1. Konfigurasi kredensial (Sesuaikan dengan .env Anda)
-        $clientId = config('services.doku.client_id'); // contoh: MCH-0008-...
-        $privateKeyPath = storage_path('app/doku/private.key'); // Path ke private key Anda
+        $clientId = config('services.doku.client_id'); 
+        $privateKeyPath = storage_path('app/doku/private.key'); 
         $baseUrl = config('services.doku.sandbox_mode', true) 
             ? 'https://api-sandbox.doku.com' 
             : 'https://api.doku.com';
 
         $endpoint = '/authorization/v1/access-token/b2b';
-
-        // 2. Format Timestamp ke UTC (ISO8601 UTC+0 / Z)
-        // Kurangi 7 jam jika waktu server/lokal Anda WIB (UTC+7)
         $timestamp = gmdate('Y-m-d\TH:i:s\Z');
-
-        // 3. Buat StringToSign untuk Asymmetric Signature (SHA256withRSA)
-        // Formula: client_ID + "|" + X-TIMESTAMP
         $stringToSign = $clientId . '|' . $timestamp;
 
-        // 4. Generate Signature menggunakan Private Key
         $signature = '';
         if (file_exists($privateKeyPath)) {
             $privateKey = file_get_contents($privateKeyPath);
@@ -192,12 +249,10 @@ public function generate(Request $request)
             ], 500);
         }
 
-        // 5. Susun Request Body
         $body = [
             'grantType' => 'client_credentials'
         ];
 
-        // 6. Hit API DOKU
         try {
             $response = Http::withHeaders([
                 'X-TIMESTAMP'  => $timestamp,
@@ -206,13 +261,8 @@ public function generate(Request $request)
                 'Content-Type' => 'application/json',
             ])->post($baseUrl . $endpoint, $body);
 
-            // 7. Ambil hasil response body
-            $responseBody = $response->json();
-            $statusCode = $response->status();
-
-            // Debugging langsung di browser/API client
             return response()->json([
-                'http_status'     => $statusCode,
+                'http_status'     => $response->status(),
                 'is_success'      => $response->successful(),
                 'string_to_sign'  => $stringToSign,
                 'request_headers' => [
@@ -220,8 +270,8 @@ public function generate(Request $request)
                     'X-CLIENT-KEY' => $clientId,
                     'X-SIGNATURE'  => $signature,
                 ],
-                'response_body'   => $responseBody,
-            ], $statusCode);
+                'response_body'   => $response->json(),
+            ], $response->status());
 
         } catch (\Exception $e) {
             return response()->json([

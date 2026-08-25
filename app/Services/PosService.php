@@ -19,17 +19,18 @@ public function completeOrder(array $orderData, array $itemsData): Order
         return DB::transaction(function () use ($orderData, $itemsData) {
             
             $order = Order::create([
-                'order_number'   => $orderData['order_number'],
-                'customer_name'  => $orderData['customer_name'],
-                'total_hpp'      => 0,
-                'total_overhead' => 0,
-                'subtotal'       => $orderData['subtotal'],
+                'order_number'     => $orderData['order_number'],
+                'customer_id'      => $orderData['customer_id'] ?? null,     // <-- TAMBAHKAN INI
+                'customer_name'    => $orderData['customer_name'],
+                'total_hpp'        => 0,
+                'total_overhead'   => 0,
+                'subtotal'         => $orderData['subtotal'],
                 // 'tax'            => $orderData['tax'],
-                'discount'       => $orderData['discount'],
-                'final_total'    => $orderData['final_total'],
-                'payment_method' => $orderData['payment_method'],
-                'status'         => $orderData['status'],
-                'notes'          => $orderData['notes']
+                'discount'         => $orderData['discount'],
+                'final_total'      => $orderData['final_total'],
+                'payment_method'   => $orderData['payment_method'],
+                'status'           => $orderData['status'],
+                'notes'            => $orderData['notes']
             ]);
 
             $accumulatedTotalHpp = 0;

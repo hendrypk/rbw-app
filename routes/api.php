@@ -31,11 +31,11 @@ Route::prefix('api/v1/user')->group(function () {
         });
         Route::get('/profile', [CustomerAuthController::class, 'profile']);
         Route::post('/logout', [CustomerAuthController::class, 'logout']);
-        
-    Route::get('/categories', [CategoryController::class, 'index']);
-    Route::get('/menus', [MenuController::class, 'userIndex']);
+        Route::get('/categories', [CategoryController::class, 'index']);
+        Route::get('/menus', [MenuController::class, 'userIndex']);
         Route::post('/checkout', [OrderController::class, 'userCheckout']);
         Route::get('/my-orders', [OrderController::class, 'getUserOrders']);
+        Route::get('/my-order/{orderNumber}', [OrderController::class, 'getOrderDetail']);
         Route::post('/payment/qris/generate', [QrisController::class, 'generate']);
         Route::get('/payment/qris/debug', [QrisController::class, 'debugGenerate']);
         Route::post('/payment/qris/check-status', [QrisController::class, 'checkStatus']);
