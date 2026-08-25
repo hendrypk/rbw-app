@@ -47,45 +47,40 @@ class DokuQrisService
         $auth = app(DokuAuthService::class)->getToken();
         $token = $auth['accessToken'];
 
-        // 1. Seragamkan format waktu menjadi UTC (Z) untuk menghindari gagal parse di Prod
-        $timestamp = gmdate('Y-m-d\TH:i:s\Z'); 
+        // Format waktu ISO8601 lokal (+07:00)
+        $timestamp = date('c'); 
 
         $body = [
             "partnerReferenceNo" => (string) $invoiceNo,
             "amount" => [
-                "value"    => number_format((float) $amount, 2, '.', ''),
+                "value"    => number_format($amount, 2, '.', ''),
                 "currency" => "IDR"
             ],
-            "merchantId" => (string) $this->merchantId,
-            "terminalId" => env('DOKU_TERMINAL_ID', 'A01'), // Gunakan env agar fleksibel di Prod
+            "merchantId" => $this->merchantId,
+            "terminalId" => "K45", 
+            
+            // --- INI WAJIB ADA AGAR SERVER DOKU TIDAK CRASH 500 ---
             "additionalInfo" => [
-                "postalCode" => "55183", 
+                "postalCode" => "55183", // Kode pos Bantul, atau sesuaikan
                 "feeType"    => "1"
             ]
         ];
 
         $endpoint = "/snap-adapter/b2b/v1.0/qr/qr-mpm-generate";
 
-        // 2. Hash array menggunakan json_encode spesifik
         $signature = $this->generateSymmetricSignature('POST', $endpoint, $token, $body, $timestamp);
 
-        // Ubah array ke JSON string statis untuk dikirim
-        $bodyJson = json_encode($body, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
-
-        // 3. Gunakan withBody() alih-alih melempar $body langsung ke post()
         $response = Http::withHeaders([
             'Authorization' => 'Bearer ' . $token,
             'X-PARTNER-ID'  => $this->clientId,
-            'X-EXTERNAL-ID' => (string) time() . rand(100, 999), // Pastikan numeric murni
+            'X-EXTERNAL-ID' => (string) rand(100000, 999999) . time(),
             'X-TIMESTAMP'   => $timestamp,
             'X-SIGNATURE'   => $signature,
             'CHANNEL-ID'    => 'H2H',
             'Content-Type'  => 'application/json',
-            'Accept'        => 'application/json',
         ])
         ->timeout(15)
-        ->withBody($bodyJson, 'application/json') 
-        ->post($this->baseUrl . $endpoint);
+        ->post($this->baseUrl . $endpoint, $body);
 
         return $response->json();
     }
@@ -110,12 +105,7 @@ class DokuQrisService
         ];
 
         $signature = $this->generateSymmetricSignature('POST', $path, $token, $body, $timestamp);
-\Log::info('DOKU REQUEST DEBUG', [
-    'token' => $token,
-    'partner_id' => $this->clientId,
-    'timestamp' => $timestamp,
-    'signature' => $signature
-]);
+
         $response = Http::withHeaders([
             'X-PARTNER-ID'  => $this->clientId,
             'X-EXTERNAL-ID' => $externalId,
