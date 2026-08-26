@@ -224,12 +224,17 @@ const startPollingStatus = () => {
                     clearInterval(statusInterval);
 
                     // --- LANGSUNG AMBIL ENDPOINT MARK-PAID DI SINI ---
-                    const currentOrderId = (qrisData.value as any).orderId;
-                    if (currentOrderId) {
-                        await axios.post(`/api/pos/orders/${currentOrderId}/mark-paid`, {
-                            payment_method: 'qris'
-                        });
-                    }
+const currentOrderId = (qrisData.value as any).orderId;
+console.log("ID Order yang mau dilunasi:", currentOrderId); // Cek F12 Console browser
+
+if (currentOrderId) {
+    const res = await axios.post(`/api/pos/orders/${currentOrderId}/mark-paid`, {
+        payment_method: 'qris'
+    });
+    console.log("Respon mark-paid:", res.data);
+} else {
+    console.error("ERROR: orderId kosong/null!");
+}
 
                     // Panggil fungsi untuk memunculkan modal sukses & data struk
                     handleQrisSuccessAction();
