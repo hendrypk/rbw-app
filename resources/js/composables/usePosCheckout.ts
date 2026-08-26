@@ -184,12 +184,17 @@ export function usePosCheckout() {
 
             if (qrisResponse.data.status === 'success') {
                 qrisData.value.invoiceNo = registeredOrder.order_number;
+                
+                // ✅ Simpan order_id (atau id) dari respons backend agar tidak null
+                (qrisData.value as any).orderId = registeredOrder.order_id || registeredOrder.id; 
+
                 qrisData.value.referenceNo = qrisResponse.data.data.reference_no;
                 qrisData.value.qrContent = qrisResponse.data.data.qr_content;
 
                 isQrisModalOpen.value = true;
                 qrisPaymentStatus.value = 'PENDING';
                 startPollingStatus();
+            
             } else {
                 throw new Error(qrisResponse.data.message || 'Gagal meng-generate QRIS DOKU');
             }
@@ -203,7 +208,7 @@ export function usePosCheckout() {
     };
 
     // --- Polling Status Payment Checker ---
-    const startPollingStatus = () => {
+const startPollingStatus = () => {
         if (statusInterval) clearInterval(statusInterval);
 
         statusInterval = setInterval(async () => {
@@ -213,16 +218,22 @@ export function usePosCheckout() {
                     reference_no: qrisData.value.referenceNo
                 });
 
+                // JIKA PEMBAYARAN DARI GATEWAY SUDAH SUKSES/PAID
                 if (response.data.status === 'success' && response.data.paid) {
                     qrisPaymentStatus.value = 'SUCCESS';
                     clearInterval(statusInterval);
+
+                    // --- LANGSUNG AMBIL ENDPOINT MARK-PAID DI SINI ---
                     const currentOrderId = (qrisData.value as any).orderId;
                     if (currentOrderId) {
                         await axios.post(`/api/pos/orders/${currentOrderId}/mark-paid`, {
                             payment_method: 'qris'
                         });
                     }
+
+                    // Panggil fungsi untuk memunculkan modal sukses & data struk
                     handleQrisSuccessAction();
+
                 } else if (response.data.status === 'FAILED') {
                     qrisPaymentStatus.value = 'FAILED';
                     clearInterval(statusInterval);
