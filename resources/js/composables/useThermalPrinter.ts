@@ -167,16 +167,11 @@ export function useThermalPrinter() {
   
   const print = async (rawText: string): Promise<void> => {
     try {
-      // Perbaikan encoding Base64 yang lebih aman untuk RawBT
-      const utf8Bytes = new TextEncoder().encode(rawText);
-      let binaryString = '';
-      for (let i = 0; i < utf8Bytes.length; i++) {
-        binaryString += String.fromCharCode(utf8Bytes[i]);
-      }
-      const base64Data = btoa(binaryString);
+      // Encode teks secara aman untuk URL query
+      const encodedText = encodeURIComponent(rawText);
 
-      // Gunakan format standar intent RawBT
-      const rawbtUrl = `rawbt:data:base64,${base64Data}`;
+      // Format URL intent resmi RawBT untuk teks biasa
+      const rawbtUrl = `rawbt:data?text=${encodedText}`;
 
       const link = document.createElement('a');
       link.href = rawbtUrl;
