@@ -18,11 +18,20 @@ export interface QrisData {
     qrContent: string;
 }
 
+export interface CompletedOrderData {
+    orderNumber: string;
+    customerName: string;
+    finalTotal: number;
+    items: CartItem[];
+    paymentMethod: string;
+}
+
 export function usePosCheckout() {
-    // --- UI States ---
+    // --- UI & Modal States ---
     const isPaymentModalOpen = ref<boolean>(false);
     const isQrisModalOpen = ref<boolean>(false);
     const isGeneratingQris = ref<boolean>(false);
+    const isSuccessModalOpen = ref<boolean>(false); // State untuk modal sukses universal
     const checking = ref<boolean>(false);
 
     // --- Transaction Form States ---
@@ -33,13 +42,23 @@ export function usePosCheckout() {
     const paymentMethod = ref<string>('cash');
     const amountPaidInput = ref<number>(0);
 
-    // --- Cart & QRIS States ---
+    // --- Cart, QRIS & Success Order States ---
     const cart = ref<CartItem[]>([]);
     const qrisData = ref<QrisData>({ invoiceNo: '', referenceNo: '', qrContent: '' });
     const qrisPaymentStatus = ref<'PENDING' | 'SUCCESS' | 'FAILED'>('PENDING');
+    
+    // Menyimpan data pesanan terakhir yang sukses untuk dicetak struk
+    const lastCompletedOrder = ref<CompletedOrderData>({
+        orderNumber: '-',
+        customerName: '',
+        finalTotal: 0,
+        items: [],
+        paymentMethod: 'cash'
+    });
+
     let statusInterval: any = undefined;
 
-    // --- Computed Financials (Explicit Type Parameters Added) ---
+    // --- Computed Financials ---
     const cartSubtotal = computed<number>(() => 
         cart.value.reduce((sum: number, item: CartItem) => sum + item.subtotal, 0)
     );
@@ -68,18 +87,21 @@ export function usePosCheckout() {
 
     const resetPosState = () => {
         isPaymentModalOpen.value = false;
+        isSuccessModalOpen.value = false;
         cart.value = [];
         orderNote.value = '';
         discountInput.value = 0;
         transactionFee.value = 0;
         customerName.value = '';
         amountPaidInput.value = 0;
+        qrisPaymentStatus.value = 'PENDING';
     };
 
     // --- Checkout Actions (Standard Cash/Save) ---
     const submitCheckout = async (type: 'save' | 'pay') => {
         if (cart.value.length === 0) return;
 
+        // Jika metode pembayaran QRIS dan memilih bayar, arahkan ke QRIS Handler
         if (paymentMethod.value === 'qris' && type === 'pay') {
             await handleQrisCheckout();
             return;
@@ -87,7 +109,7 @@ export function usePosCheckout() {
 
         try {
             const payload = {
-                customer_name: customerName.value,
+                customer_name: customerName.value || 'Pelanggan POS',
                 payment_method: paymentMethod.value,
                 discount: discountInput.value,
                 transaction_fee: transactionFee.value,
@@ -101,8 +123,26 @@ export function usePosCheckout() {
             };
 
             const response = await axios.post('/api/pos/checkout', payload);
-            toast.success(`Transaksi ${response.data.data.order_number} berhasil diproses!`);
-            resetPosState();
+            const orderData = response.data.data;
+            
+            toast.success(`Transaksi ${orderData.order_number} berhasil diproses!`);
+
+            // Jika dibayar tunai (pay), simpan data struk dan tampilkan modal sukses universal
+            if (type === 'pay') {
+                lastCompletedOrder.value = {
+                    orderNumber: orderData.order_number,
+                    customerName: customerName.value || 'Pelanggan Umum',
+                    finalTotal: finalTotal.value,
+                    items: [...cart.value],
+                    paymentMethod: paymentMethod.value
+                };
+                
+                closePaymentModal();
+                isSuccessModalOpen.value = true; // Munculkan modal sukses
+            } else {
+                // Jika hanya disimpan (save / unpaid), langsung reset state keranjang
+                resetPosState();
+            }
         } catch (error: any) {
             toast.error(error.response?.data?.message || 'Gagal memproses transaksi');
         }
@@ -176,6 +216,8 @@ export function usePosCheckout() {
                 if (response.data.status === 'success' && response.data.paid) {
                     qrisPaymentStatus.value = 'SUCCESS';
                     clearInterval(statusInterval);
+                    // Otomatis pindah ke action sukses QRIS
+                    handleQrisSuccessAction();
                 } else if (response.data.status === 'FAILED') {
                     qrisPaymentStatus.value = 'FAILED';
                     clearInterval(statusInterval);
@@ -186,16 +228,33 @@ export function usePosCheckout() {
         }, 4000);
     };
 
+    // Dipanggil ketika polling QRIS mendeteksi status SUCCESS dari backend
+    const handleQrisSuccessAction = () => {
+        lastCompletedOrder.value = {
+            orderNumber: qrisData.value.invoiceNo,
+            customerName: customerName.value || 'Pelanggan Umum',
+            finalTotal: finalTotal.value,
+            items: [...cart.value],
+            paymentMethod: 'qris'
+        };
+
+        if (statusInterval) clearInterval(statusInterval);
+        isQrisModalOpen.value = false;
+        
+        // Tampilkan modal sukses universal
+        isSuccessModalOpen.value = true;
+    };
+
     onBeforeUnmount(() => {
         if (statusInterval) clearInterval(statusInterval);
     });
 
     return {
-        isPaymentModalOpen, isQrisModalOpen, isGeneratingQris, checking,
+        isPaymentModalOpen, isQrisModalOpen, isGeneratingQris, isSuccessModalOpen, checking,
         customerName, orderNote, discountInput, transactionFee, paymentMethod, amountPaidInput,
-        cart, qrisData, qrisPaymentStatus,
+        cart, qrisData, qrisPaymentStatus, lastCompletedOrder,
         cartSubtotal, taxAmount, finalTotal,
-        openPaymentModal, closePaymentModal, closeQrisModal,
-        submitCheckout, handleQrisCheckout
+        openPaymentModal, closePaymentModal, closeQrisModal, resetPosState,
+        submitCheckout, handleQrisCheckout, handleQrisSuccessAction
     };
 }

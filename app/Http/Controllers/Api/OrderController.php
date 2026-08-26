@@ -143,6 +143,52 @@ class OrderController extends Controller
     }
 
     /**
+     * Endpoint untuk mengubah status order QRIS yang tadinya pending/unpaid 
+     * menjadi completed (lunas) setelah pembayaran sukses diterima dari gateway.
+     */
+    public function markOrderAsPaid(Request $request, $id): JsonResponse
+    {
+        $request->validate([
+            'payment_method' => 'required|string|in:qris,edc,cash',
+        ]);
+
+        try {
+            $order = Order::findOrFail($id);
+
+            // Jika sudah lunas, cegah duplikasi jurnal
+            if ($order->status === 'completed') {
+                return response()->json(['success' => true, 'message' => 'Order sudah berstatus lunas sebelumnya.']);
+            }
+
+            // 1. Update status order menjadi completed
+            $order->update([
+                'status' => 'completed',
+                'payment_method' => $request->payment_method
+            ]);
+
+            $replacements = ['order_number' => $order->order_number];
+            $journalType = 'pos_revenue_' . $request->payment_method; // Contoh: pos_revenue_qris
+
+            // 2. Catat Jurnal Finansial Pendapatan (Karena saat pending jurnal kas belum masuk)
+            JournalEntry::createEntryFromMapping(
+                type: $journalType, 
+                j1Amount: (float) $order->final_total,
+                reference: $order,
+                replacements: $replacements
+            );
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Status order berhasil diubah menjadi lunas (completed) dan jurnal tercatat.',
+                'data'    => ['order_id' => $order->id, 'order_number' => $order->order_number]
+            ], 200);
+
+        } catch (\Exception $e) {
+            return response()->json(['success' => false, 'error' => $e->getMessage()], 500);
+        }
+    }
+
+    /**
      * Membatalkan / Void Transaksi POS (Mengembalikan Stok & Membalik Jurnal)
      */
     public function void(string $id, Request $request): JsonResponse
