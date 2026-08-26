@@ -87,7 +87,7 @@ Route::middleware(['auth', 'verified'])->prefix('api')->name('api.')->group(func
     Route::prefix('pos')->group(function () {
         Route::post('checkout', [OrderController::class, 'checkout']);
         Route::get('/orders', [OrderController::class, 'getOrdersData']);
-        Route::post('/pos/orders/{id}/mark-paid', [OrderController::class, 'markOrderAsPaid']);
+        Route::post('/orders/{id}/mark-paid', [OrderController::class, 'markOrderAsPaid']);
         Route::get('/orders-unpaid', [OrderController::class, 'getUnpaidOrders']);
         Route::get('/invoices-paid', [OrderController::class, 'getPaidInvoices']);
     });
