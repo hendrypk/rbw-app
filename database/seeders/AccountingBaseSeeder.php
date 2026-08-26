@@ -48,9 +48,29 @@ class AccountingBaseSeeder extends Seeder
             // --- KELOMPOK PENJUALAN POS ---
             [
                 'transaction_type'     => 'pos_sales_revenue',
-                'debit_account_id'     => null, // Pilihan akun kas/bank dinamis saat transaksi checkout
+                'debit_account_id'     => null, 
                 'credit_account_id'    => $accounts['pendapatan'],
                 'description_template' => 'Pendapatan penjualan POS order #{{order_number}}',
+            ],
+            // >>> TAMBAHKAN BARIS INI <<<
+            [
+                'transaction_type'     => 'pos_revenue_cash',
+                'debit_account_id'     => $accounts['kas_utama'], // Masuk ke Kas/Bank utama
+                'credit_account_id'    => $accounts['pendapatan'], // Pendapatan bertambah
+                'description_template' => 'Penerimaan pembayaran kas tunai order POS #{{order_number}}',
+            ],
+            [
+                'transaction_type'     => 'pos_revenue_qris',
+                'debit_account_id'     => $accounts['kas_utama'], // Atau akun khusus Bank/QRIS jika ada
+                'credit_account_id'    => $accounts['pendapatan'],
+                'description_template' => 'Penerimaan pembayaran QRIS order POS #{{order_number}}',
+            ],
+            // ============================
+            [
+                'transaction_type'     => 'pos_sales_hpp',
+                'debit_account_id'     => $accounts['hpp'],        
+                'credit_account_id'    => $accounts['persediaan'], 
+                'description_template' => 'Alokasi pengeluaran bahan baku / HPP otomatis atas POS #{{order_number}}',
             ],
             [
                 'transaction_type'     => 'pos_sales_hpp',
