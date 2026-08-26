@@ -216,7 +216,12 @@ export function usePosCheckout() {
                 if (response.data.status === 'success' && response.data.paid) {
                     qrisPaymentStatus.value = 'SUCCESS';
                     clearInterval(statusInterval);
-                    // Otomatis pindah ke action sukses QRIS
+                    const currentOrderId = (qrisData.value as any).orderId;
+                    if (currentOrderId) {
+                        await axios.post(`/api/pos/orders/${currentOrderId}/mark-paid`, {
+                            payment_method: 'qris'
+                        });
+                    }
                     handleQrisSuccessAction();
                 } else if (response.data.status === 'FAILED') {
                     qrisPaymentStatus.value = 'FAILED';
