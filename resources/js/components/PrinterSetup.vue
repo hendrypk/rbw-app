@@ -157,7 +157,7 @@ const { print } = useThermalPrinter();
 
 const handleTestPrint = async () => {
     try {
-        const testText = "MANUFIX.ID POS - TEST\n--------------------\nCetak Berjalan Normal\nTanpa Konflik Bluetooth\n\n\n";
+        const testText = "TEST CETAK\nKASIR OK\n\n\n";
         await print(testText);
         toast.success("Perintah cetak dikirim ke aplikasi perantara.");
     } catch (error) {

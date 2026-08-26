@@ -175,8 +175,8 @@ const handlePrintReceipt = async () => {
 
     try {
         const transactionData: ReceiptData = {
-            storeName: "MANUFIX.ID POS",
-            storeAddress: "Bantul, Yogyakarta",
+            storeName: "Roti Bakar Wisuda",
+            storeAddress: "Jl Kaliurang km 12.5 UII Yogyakarta",
             cashierName: "Admin",
             items: (selectedTransaction.value.items || []).map((item: Record<string, any>) => ({
                 name: item.menu?.name || item.name || item.product_name || 'Item POS',

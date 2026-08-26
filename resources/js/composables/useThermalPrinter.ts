@@ -169,8 +169,15 @@ export function useThermalPrinter() {
   const print = async (rawText: string): Promise<void> => {
     try {
       const base64Data = btoa(unescape(encodeURIComponent(rawText)));
-      // Melempar ke aplikasi perantara (Contoh: RawBT)
-      window.location.href = `rawbt:data:base64,${base64Data}`;
+      const rawbtUrl = `rawbt:data:base64,${base64Data}`;
+
+      // Buat elemen <a> dinamis agar dianggap sebagai user action murni oleh browser
+      const link = document.createElement('a');
+      link.href = rawbtUrl;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      
     } catch (error) {
       console.warn("Gagal mengirim ke aplikasi cetak, gunakan fallback browser...", error);
       printViaBrowserFallback(rawText);
