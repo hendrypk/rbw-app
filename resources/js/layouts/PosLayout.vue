@@ -1,10 +1,12 @@
 <script setup lang="ts">
 import { Link } from '@inertiajs/vue3';
 import { Toaster } from '@/components/ui/sonner';
-import { LayoutDashboardIcon, LogOut, Moon, Sun, ShoppingBag, ClipboardList, Receipt, ShoppingCart, LayoutGrid } from '@lucide/vue';import { ref, onMounted, onUnmounted } from 'vue';
+import { ShoppingBag, ClipboardList, Receipt, ShoppingCart, LayoutGrid, Settings } from '@lucide/vue';
+import { ref, onMounted, onUnmounted } from 'vue';
 import { NavItem } from '@/types';
 import webPos from '@/routes/web-pos';
 import { dashboard } from '@/routes';
+import PrinterSetup from '@/components/PrinterSetup.vue';
 
 const mainNavItems: NavItem[] = [
     {
@@ -29,13 +31,11 @@ const mainNavItems: NavItem[] = [
     },
 ];
 
-// State untuk menyimpan teks tanggal dan jam
 const currentDateTime = ref('');
 
 const updateTime = () => {
     const now = new Date();
     
-    // Format Tanggal: "Kamis, 2 Juli 2026"
     const dateStr = now.toLocaleDateString('id-ID', { 
         weekday: 'long', 
         year: 'numeric', 
@@ -43,7 +43,6 @@ const updateTime = () => {
         day: 'numeric' 
     });
 
-    // Format Jam: "14:25:07"
     const timeStr = now.toLocaleTimeString('id-ID', {
         hour: '2-digit',
         minute: '2-digit',
@@ -51,15 +50,15 @@ const updateTime = () => {
         hour12: false
     });
 
-    // Gabungkan keduanya dengan pemisah (contoh: "•" atau "pukul")
     currentDateTime.value = `${dateStr}  •  ${timeStr}`;
 };
 
-// Jalankan interval saat komponen dipasang, dan bersihkan saat ditutup
+const isPrinterModalOpen = ref(false);
+
 let timeInterval: any;
 onMounted(() => {
-    updateTime(); // jalankan pertama kali
-    timeInterval = setInterval(updateTime, 1000); // update setiap 1 detik
+    updateTime(); 
+    timeInterval = setInterval(updateTime, 1000); 
 });
 
 onUnmounted(() => {
@@ -104,6 +103,14 @@ defineProps<{
                     <Receipt class="h-4 w-4" />
                     <span class="hidden md:inline">Riwayat Invoice</span>
                 </Link>
+                <button 
+                    @click="isPrinterModalOpen = true"
+                    class="relative p-2 bg-white dark:bg-zinc-800 border border-slate-200 dark:border-zinc-700 rounded-xl text-slate-600 dark:text-zinc-300 hover:bg-slate-100 dark:hover:bg-zinc-700 transition-colors shadow-2xs flex items-center gap-1.5 px-3 text-xs font-bold cursor-pointer"
+                    title="Pengaturan Printer"
+                >
+                    <Settings class="h-4 w-4 text-primary" />
+                    <span class="hidden sm:inline">Printer</span>
+                </button>
 
                 <div class="h-6 w-[1px] bg-slate-200 dark:bg-zinc-800 hidden sm:block"></div>
                
@@ -121,5 +128,9 @@ defineProps<{
         </main>
 
         <Toaster close-button position="top-center" />
+        <PrinterSetup 
+        :is-open="isPrinterModalOpen" 
+        @close="isPrinterModalOpen = false" 
+    />
     </div>
 </template>

@@ -35,11 +35,11 @@ class OrderController extends Controller
 
         try {
             // Generate Invoice unik (INV-YYYYMMDD-XXXX)
-            $today = Carbon::today()->format('Ymd');
-            $latestOrder = Order::whereDate('created_at', Carbon::today())->orderBy('created_at', 'desc')->first();
-            $nextNumber = $latestOrder ? intval(substr($latestOrder->order_number, -4)) + 1 : 1;
-            $orderNumber = 'INV-' . $today . '-' . str_pad($nextNumber, 4, '0', STR_PAD_LEFT);
+            $mmyy = Carbon::now()->format('my'); // 'm' = bulan (08), 'y' = tahun 2 digit (26)
+            $random4Digit = str_pad(mt_rand(0, 9999), 4, '0', STR_PAD_LEFT); // Angka acak 0000 - 9999
 
+            // Hasilnya misal: 08264912
+            $orderNumber = $mmyy . $random4Digit;
             // Pengumpulan data item pesanan
             $totalSubtotal = 0;
             $itemsData = [];

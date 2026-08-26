@@ -19,6 +19,7 @@ class DokuTransaction extends Model
 
     protected $casts = [
         'raw_response' => 'array',
+        'expired_at' => 'datetime',
     ];
     
     public function order(): BelongsTo
