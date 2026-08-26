@@ -1,5 +1,3 @@
-// resources/js/composables/useReceiptBuilder.ts
-
 export interface ItemBelanja {
   name: string;
   qty: number;
@@ -9,14 +7,23 @@ export interface ItemBelanja {
 export interface ReceiptData {
   storeName: string;
   storeAddress: string;
+  phone?: string;
   cashierName?: string;
+  customerName?: string;
+  orderNumber: string;
+  dateStr: string;
   items: ItemBelanja[];
+  subTotal: number;
+  discount?: number;
   total: number;
+  amountPaid?: number;
+  changeAmount?: number;
+  paymentMethod?: string;
   footerMessage?: string;
 }
 
 export function useReceiptBuilder() {
-  const LINE_WIDTH = 32; // Standar lebar karakter printer thermal 58mm
+  const LINE_WIDTH = 32; 
 
   const formatRupiah = (amount: number): string => {
     return new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(amount).replace('Rp', '').trim();
@@ -37,37 +44,59 @@ export function useReceiptBuilder() {
   const generateReceiptText = (data: ReceiptData): string => {
     let receipt = "";
 
-    // Header Toko (Center)
+    // Simbol Logo Toko Teks (Pengganti grafis raster untuk printer thermal teks)
+    receipt += padCenter("[=== T O K O ===]") + "\n";
     receipt += padCenter(data.storeName) + "\n";
     receipt += padCenter(data.storeAddress) + "\n";
-    if (data.cashierName) {
-      receipt += padCenter(`Kasir: ${data.cashierName}`) + "\n";
+    if (data.phone) {
+      receipt += padCenter(`Telp: ${data.phone}`) + "\n";
     }
     receipt += "-".repeat(LINE_WIDTH) + "\n";
 
-    // Daftar Item
-    data.items.forEach((item) => {
-      const itemTitle = `${item.qty}x ${item.name}`;
+    // Info Header Transaksi (Tanggal, Kasir, Pelanggan, No Invoice)
+    receipt += padRightLeft(data.dateStr, data.cashierName ? `Kasir: ${data.cashierName}` : "") + "\n";
+    if (data.customerName) {
+      receipt += padRightLeft(`Pelanggan:`, data.customerName) + "\n";
+    }
+    receipt += `No. Inv: ${data.orderNumber}\n`;
+    receipt += "-".repeat(LINE_WIDTH) + "\n";
+
+    // Daftar Item Belanja (Dengan nomor urut seperti referensi)
+    let totalQtyCount = 0;
+    data.items.forEach((item, index) => {
+      const itemNo = `${index + 1}. ${item.name}`;
+      const itemDetailQty = `   ${item.qty} x ${formatRupiah(item.price)}`;
       const itemSubTotal = formatRupiah(item.price * item.qty);
       
-      // Jika nama item terlalu panjang, turunkan baris
-      if (itemTitle.length > 18) {
-        receipt += itemTitle + "\n";
-        receipt += padRightLeft("  @", itemSubTotal) + "\n";
-      } else {
-        receipt += padRightLeft(itemTitle, itemSubTotal) + "\n";
-      }
+      totalQtyCount += item.qty;
+
+      receipt += itemNo + "\n";
+      receipt += padRightLeft(itemDetailQty, itemSubTotal) + "\n";
     });
 
     receipt += "-".repeat(LINE_WIDTH) + "\n";
 
-    // Total
-    receipt += padRightLeft("TOTAL", formatRupiah(data.total)) + "\n";
+    // Ringkasan Pembayaran
+    receipt += padRightLeft(`Total QTY : ${totalQtyCount}`, "") + "\n";
+    receipt += padRightLeft("Sub Total", formatRupiah(data.subTotal)) + "\n";
+    if (data.discount && data.discount > 0) {
+      receipt += padRightLeft("Diskon", `-${formatRupiah(data.discount)}`) + "\n";
+    }
+    receipt += padRightLeft("Total", formatRupiah(data.total)) + "\n";
+
+    if (data.amountPaid !== undefined) {
+      const paymentMethodLabel = `Bayar (${(data.paymentMethod || 'cash').toUpperCase()})`;
+      receipt += padRightLeft(paymentMethodLabel, formatRupiah(data.amountPaid)) + "\n";
+      receipt += padRightLeft("Kembali", formatRupiah(data.changeAmount || 0)) + "\n";
+    }
+
     receipt += "-".repeat(LINE_WIDTH) + "\n";
 
-    // Footer (Center)
-    const footer = data.footerMessage || "Terima Kasih Telah Berbelanja!";
+    // Footer Pesan & Kritik Saran
+    const footer = data.footerMessage || "Terimakasih Telah Berbelanja";
     receipt += padCenter(footer) + "\n";
+    receipt += padCenter("Layanan Kritik & Saran:") + "\n";
+    receipt += padCenter("bit.ly/e-receipt-pos") + "\n";
 
     return receipt;
   };
