@@ -165,13 +165,19 @@ const connectedDeviceName = ref<string>(localStorage.getItem('connected_printer_
 
 export function useThermalPrinter() {
   
-  // Fungsi cetak langsung melempar data via Intent/Base64 tanpa mengunci Bluetooth fisik
   const print = async (rawText: string): Promise<void> => {
     try {
-      const base64Data = btoa(unescape(encodeURIComponent(rawText)));
+      // Perbaikan encoding Base64 yang lebih aman untuk RawBT
+      const utf8Bytes = new TextEncoder().encode(rawText);
+      let binaryString = '';
+      for (let i = 0; i < utf8Bytes.length; i++) {
+        binaryString += String.fromCharCode(utf8Bytes[i]);
+      }
+      const base64Data = btoa(binaryString);
+
+      // Gunakan format standar intent RawBT
       const rawbtUrl = `rawbt:data:base64,${base64Data}`;
 
-      // Buat elemen <a> dinamis agar dianggap sebagai user action murni oleh browser
       const link = document.createElement('a');
       link.href = rawbtUrl;
       document.body.appendChild(link);
