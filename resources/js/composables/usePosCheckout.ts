@@ -1,6 +1,7 @@
 import { ref, computed, onBeforeUnmount } from 'vue';
 import axios from 'axios';
 import { toast } from 'vue-sonner';
+import { useVoucher } from './useVoucher';
 
 // --- Type Declarations ---
 export interface CartItem {
@@ -21,6 +22,7 @@ export interface QrisData {
 export interface CompletedOrderData {
     orderNumber: string;
     customerName: string;
+    customerId: string | null;
     finalTotal: number;
     items: CartItem[];
     paymentMethod: string;
@@ -29,6 +31,9 @@ export interface CompletedOrderData {
 export function usePosCheckout() {
     // --- UI & Modal States ---
     const isPaymentModalOpen = ref<boolean>(false);
+    const isCustomerAddModalOpen = ref<boolean>(false); // Tambahkan ini
+    const isCustomerModalOpen = ref<boolean>(false);
+    const isDiscountModalOpen = ref<boolean>(false);
     const isQrisModalOpen = ref<boolean>(false);
     const isGeneratingQris = ref<boolean>(false);
     const isSuccessModalOpen = ref<boolean>(false); // State untuk modal sukses universal
@@ -36,6 +41,7 @@ export function usePosCheckout() {
 
     // --- Transaction Form States ---
     const customerName = ref<string>('');
+    const customerId = ref<string>('');
     const orderNote = ref<string>('');
     const discountInput = ref<number>(0);
     const transactionFee = ref<number>(0);
@@ -45,16 +51,27 @@ export function usePosCheckout() {
     // --- Cart, QRIS & Success Order States ---
     const cart = ref<CartItem[]>([]);
     const qrisData = ref<QrisData>({ invoiceNo: '', referenceNo: '', qrContent: '' });
-    const qrisPaymentStatus = ref<'PENDING' | 'SUCCESS' | 'FAILED'>('PENDING');
-    
+    // const paymentStatus = ref<'PENDING' | 'SUCCESS' | 'FAILED'>('PENDING');
+    const paymentStatus = ref<'PENDING' | 'SUCCESS' | 'FAILED'>('PENDING');
+
     // Menyimpan data pesanan terakhir yang sukses untuk dicetak struk
     const lastCompletedOrder = ref<CompletedOrderData>({
         orderNumber: '-',
         customerName: '',
+        customerId: '',
         finalTotal: 0,
         items: [],
         paymentMethod: 'cash'
     });
+
+    const { 
+        vouchers, 
+        appliedVoucher, 
+        isLoadingVouchers, 
+        fetchVouchers, 
+        validateAndApplyVoucher, 
+        removeVoucher 
+    } = useVoucher();
 
     let statusInterval: any = undefined;
 
@@ -65,12 +82,19 @@ export function usePosCheckout() {
     
     const taxAmount = computed<number>(() => cartSubtotal.value * 0.11);
     
-    const finalTotal = computed<number>(() => {
-        const total = (cartSubtotal.value + taxAmount.value + Number(transactionFee.value)) - Number(discountInput.value);
-        return total < 0 ? 0 : total;
+    const totalDiscount = computed<number>(() => {
+        if (appliedVoucher.value) {
+            return appliedVoucher.value.discount_amount;
+        }
+        return Number(discountInput.value) || 0;
+    });
+    
+     const finalTotal = computed<number>(() => {
+        const total = (cartSubtotal.value + taxAmount.value + Number(transactionFee.value)) - Number(totalDiscount.value);
+        const roundedTotal = Math.round(total);
+        return roundedTotal < 0 ? 0 : roundedTotal;
     });
 
-    // --- Modal Controls ---
     const openPaymentModal = () => {
         amountPaidInput.value = finalTotal.value;
         isPaymentModalOpen.value = true;
@@ -85,6 +109,23 @@ export function usePosCheckout() {
         if (statusInterval) clearInterval(statusInterval);
     };
 
+    const closeSuccessModal = () => {
+        isSuccessModalOpen.value = false;
+        resetPosState(); // Reset keranjang setelah modal sukses ditutup user
+    };
+
+    const openCustomerModal = () => {
+        isCustomerModalOpen.value = true;
+    };
+
+    const openCustomerAddModal = () => {
+        isCustomerAddModalOpen.value = true;
+    };
+
+    const openDiscountModal = () => {
+        isDiscountModalOpen.value = true;
+    };
+
     const resetPosState = () => {
         isPaymentModalOpen.value = false;
         isSuccessModalOpen.value = false;
@@ -93,8 +134,17 @@ export function usePosCheckout() {
         discountInput.value = 0;
         transactionFee.value = 0;
         customerName.value = '';
+        customerId.value = '';
         amountPaidInput.value = 0;
-        qrisPaymentStatus.value = 'PENDING';
+        paymentStatus.value = 'PENDING';
+        removeVoucher(); 
+    };
+
+    const getCartValidationItems = () => {
+        return cart.value.map(item => ({
+            menu_id: item.menu_id,
+            subtotal: item.subtotal
+        }));
     };
 
     // --- Checkout Actions (Standard Cash/Save) ---
@@ -110,8 +160,10 @@ export function usePosCheckout() {
         try {
             const payload = {
                 customer_name: customerName.value || 'Pelanggan POS',
+                customer_id: customerId.value || null,
                 payment_method: paymentMethod.value,
-                discount: discountInput.value,
+                discount: totalDiscount.value, // ⬅️ PERBAIKI DARI discountInput.value MENJADI totalDiscount.value
+                voucher_id: appliedVoucher.value?.voucher_id || null, // ⬅️ Pastikan voucher_id terkirim
                 transaction_fee: transactionFee.value,
                 notes: orderNote.value,
                 items: cart.value.map((item: CartItem) => ({ 
@@ -121,7 +173,8 @@ export function usePosCheckout() {
                 action_type: type,
                 amount_paid: type === 'pay' ? amountPaidInput.value : 0
             };
-
+console.log("🚀 PAYLOAD CHECKOUT POS DIKIRIM:", payload);
+            console.log("🏷️ Applied Voucher Object:", appliedVoucher.value);
             const response = await axios.post('/api/pos/checkout', payload);
             const orderData = response.data.data;
             
@@ -132,12 +185,14 @@ export function usePosCheckout() {
                 lastCompletedOrder.value = {
                     orderNumber: orderData.order_number,
                     customerName: customerName.value || 'Pelanggan Umum',
+                    customerId: customerId.value || null,
                     finalTotal: finalTotal.value,
                     items: [...cart.value],
                     paymentMethod: paymentMethod.value
                 };
                 
                 closePaymentModal();
+                paymentStatus.value = 'SUCCESS';
                 isSuccessModalOpen.value = true; // Munculkan modal sukses
             } else {
                 // Jika hanya disimpan (save / unpaid), langsung reset state keranjang
@@ -158,8 +213,10 @@ export function usePosCheckout() {
 
             const registerPayload = {
                 customer_name: customerName.value || 'Pelanggan POS',
+                customer_id: customerId.value || null,
                 payment_method: 'qris',
-                discount: Number(discountInput.value) || 0,
+                discount: totalDiscount.value,
+                voucher_id: appliedVoucher.value?.voucher_id || null, // ⬅️ Kirim voucher_id jika ada
                 transaction_fee: Number(transactionFee.value) || 0,
                 notes: orderNote.value || '',
                 items: cart.value.map((item: CartItem) => ({ 
@@ -192,7 +249,7 @@ export function usePosCheckout() {
                 qrisData.value.qrContent = qrisResponse.data.data.qr_content;
 
                 isQrisModalOpen.value = true;
-                qrisPaymentStatus.value = 'PENDING';
+                paymentStatus.value = 'PENDING';
                 startPollingStatus();
             
             } else {
@@ -220,7 +277,7 @@ const startPollingStatus = () => {
 
                 // JIKA PEMBAYARAN DARI GATEWAY SUDAH SUKSES/PAID
                 if (response.data.status === 'success' && response.data.paid) {
-                    qrisPaymentStatus.value = 'SUCCESS';
+                    paymentStatus.value = 'SUCCESS';
                     clearInterval(statusInterval);
 
                     // --- LANGSUNG AMBIL ENDPOINT MARK-PAID DI SINI ---
@@ -240,7 +297,7 @@ if (currentOrderId) {
                     handleQrisSuccessAction();
 
                 } else if (response.data.status === 'FAILED') {
-                    qrisPaymentStatus.value = 'FAILED';
+                    paymentStatus.value = 'FAILED';
                     clearInterval(statusInterval);
                 }
             } catch (error) {
@@ -254,6 +311,7 @@ if (currentOrderId) {
         lastCompletedOrder.value = {
             orderNumber: qrisData.value.invoiceNo,
             customerName: customerName.value || 'Pelanggan Umum',
+            customerId: customerId.value || null,
             finalTotal: finalTotal.value,
             items: [...cart.value],
             paymentMethod: 'qris'
@@ -269,13 +327,17 @@ if (currentOrderId) {
     onBeforeUnmount(() => {
         if (statusInterval) clearInterval(statusInterval);
     });
+    console.log("Customer Name yang dikirim:", customerName.value);
+console.log("Customer ID yang dikirim:", customerId.value); // <-- Cek F12 Console browser, apakah ini berisi UUID atau string kosong/null?
 
     return {
         isPaymentModalOpen, isQrisModalOpen, isGeneratingQris, isSuccessModalOpen, checking,
-        customerName, orderNote, discountInput, transactionFee, paymentMethod, amountPaidInput,
-        cart, qrisData, qrisPaymentStatus, lastCompletedOrder,
-        cartSubtotal, taxAmount, finalTotal,
-        openPaymentModal, closePaymentModal, closeQrisModal, resetPosState,
+        customerName, customerId, orderNote, discountInput, transactionFee, paymentMethod, amountPaidInput,
+        cart, qrisData, paymentStatus, lastCompletedOrder, isCustomerModalOpen, isDiscountModalOpen, isCustomerAddModalOpen,
+        vouchers, appliedVoucher, isLoadingVouchers, fetchVouchers, validateAndApplyVoucher, removeVoucher, getCartValidationItems,
+        cartSubtotal, taxAmount, finalTotal, closeSuccessModal,
+        openPaymentModal, closePaymentModal, closeQrisModal, openCustomerModal, openDiscountModal, openCustomerAddModal,
+        resetPosState,
         submitCheckout, handleQrisCheckout, handleQrisSuccessAction
     };
 }

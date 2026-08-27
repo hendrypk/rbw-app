@@ -161,16 +161,12 @@
 // resources/js/composables/useThermalPrinter.ts
 import { ref } from 'vue';
 
-const connectedDeviceName = ref<string>(localStorage.getItem('connected_printer_name') || 'Direct Print Bridge');
-
 export function useThermalPrinter() {
-  
+  const connectedDeviceName = ref<string>('Direct Print Bridge');
+
   const print = async (rawText: string): Promise<void> => {
     try {
-      // Encode teks secara aman untuk URL query
       const encodedText = encodeURIComponent(rawText);
-
-      // Format URL intent resmi RawBT untuk teks biasa
       const rawbtUrl = `rawbt:data?text=${encodedText}`;
 
       const link = document.createElement('a');

@@ -19,8 +19,8 @@ public function completeOrder(array $orderData, array $itemsData): Order
         return DB::transaction(function () use ($orderData, $itemsData) {
             
             $order = Order::create([
-                'order_number'     => $orderData['order_number'],
                 'customer_id'      => $orderData['customer_id'] ?? null,     // <-- TAMBAHKAN INI
+                'voucher_id'      => $orderData['voucher_id'] ?? null,     // <-- TAMBAHKAN INI
                 'customer_name'    => $orderData['customer_name'],
                 'total_hpp'        => 0,
                 'total_overhead'   => 0,

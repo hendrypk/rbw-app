@@ -4,6 +4,7 @@ use App\Http\Controllers\Api\AccountController;
 use App\Http\Controllers\Api\AccountMappingController;
 use App\Http\Controllers\Api\CategoryController;
 use App\Http\Controllers\Api\CustomerAuthController;
+use App\Http\Controllers\Api\CustomerController;
 use App\Http\Controllers\Api\JournalEntryController;
 use App\Http\Controllers\Api\MenuController;
 use App\Http\Controllers\Api\OrderController;
@@ -12,6 +13,7 @@ use App\Http\Controllers\Api\PurchaseOrderController;
 use App\Http\Controllers\Api\QrisController;
 use App\Http\Controllers\Api\RawMaterialController;
 use App\Http\Controllers\Api\SupplierController;
+use App\Http\Controllers\Api\VoucherController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 
@@ -33,6 +35,9 @@ Route::prefix('api/v1/user')->group(function () {
         Route::post('/logout', [CustomerAuthController::class, 'logout']);
         Route::get('/categories', [CategoryController::class, 'index']);
         Route::get('/menus', [MenuController::class, 'userIndex']);
+        Route::get('/voucher/index', [VoucherController::class, 'index']);
+        Route::post('/voucher/validate', [VoucherController::class, 'validateVoucher']);
+        Route::get('/menus', [MenuController::class, 'userIndex']);
         Route::post('/checkout', [OrderController::class, 'userCheckout']);
         Route::get('/my-orders', [OrderController::class, 'getUserOrders']);
         Route::get('/my-order/{orderNumber}', [OrderController::class, 'getOrderDetail']);
@@ -45,6 +50,20 @@ Route::middleware(['auth', 'verified'])->prefix('api')->name('api.')->group(func
 
     Route::apiResource('suppliers', SupplierController::class);
     Route::post('/suppliers/bulk-delete', [SupplierController::class, 'bulkDestroy']);
+
+    Route::prefix('customers')->group(function () {
+        Route::post('bulk-delete', [CustomerController::class, 'bulkDestroy']);
+    });
+    Route::apiResource('customers', CustomerController::class);
+
+
+    Route::apiResource('vouchers', VoucherController::class);
+        Route::prefix('vouchers')->group(function () {
+        Route::post('bulk-delete', [VoucherController::class, 'bulkDestroy']);
+        Route::post('validate', [VoucherController::class, 'validateVoucher']);
+    });
+    Route::apiResource('vouchers', VoucherController::class);
+
 
     // Raw Materials
     Route::prefix('raw-materials')->group(function () {

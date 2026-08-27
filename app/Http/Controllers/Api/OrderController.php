@@ -21,6 +21,8 @@ class OrderController extends Controller
     public function checkout(Request $request): JsonResponse
     {
         $request->validate([
+            'customer_id'     => 'nullable|uuid|exists:customers,id', // Validasi customer_id jika dipilih
+            'voucher_id'      => 'nullable|uuid|exists:vouchers,id', // ⬅️ Tambahkan validasi voucher_id
             'customer_name'   => 'nullable|string|max:100',
             'payment_method'  => 'required|string|in:cash,qris,edc,pending',
             'discount'        => 'nullable|numeric|min:0',
@@ -39,7 +41,6 @@ class OrderController extends Controller
             $random4Digit = str_pad(mt_rand(0, 9999), 4, '0', STR_PAD_LEFT); // Angka acak 0000 - 9999
 
             // Hasilnya misal: 08264912
-            $orderNumber = $mmyy . $random4Digit;
             // Pengumpulan data item pesanan
             $totalSubtotal = 0;
             $itemsData = [];
@@ -80,13 +81,14 @@ class OrderController extends Controller
             if ($request->action_type === 'pay') {
                 $amountPaid = floatval($request->amount_paid ?? 0);
                 if ($amountPaid >= $finalTotal) {
-                    $status = 'completed';
+                    $status = 'paid';
                     $journalType = 'pos_revenue_' . $request->payment_method; 
                 }
             }
 
             $orderData = [
-                'order_number'   => $orderNumber,
+                'customer_id' => $request->customer_id ?? null,
+                'voucher_id'     => $request->voucher_id ?? null,
                 'customer_name'  => $request->customer_name ?? 'Pelanggan POS',
                 'subtotal'       => $totalSubtotal,
                 // 'tax'            => $fee,
@@ -100,10 +102,17 @@ class OrderController extends Controller
             // 1. Jalankan core engine POS service (pengurangan stok resep & buat record order)
             $order = $this->posService->completeOrder($orderData, $itemsData);
 
+            if (!empty($request->voucher_id)) {
+                $voucher = \App\Models\Voucher::find($request->voucher_id);
+                if ($voucher) {
+                    $voucher->increment('used_count');
+                }
+            }
+
             // 2. Eksekusi Akuntansi Otomatis via Account Mapping
             $replacements = ['order_number' => $order->order_number];
 
-            if ($order->status === 'completed') {
+            if ($order->status === 'paid') {
                 // Jurnal Ayat 1: Sisi Finansial Penerimaan Uang
                 JournalEntry::createEntryFromMapping(
                     type: $journalType, 
@@ -144,32 +153,34 @@ class OrderController extends Controller
 
     /**
      * Endpoint untuk mengubah status order QRIS yang tadinya pending/unpaid 
-     * menjadi completed (lunas) setelah pembayaran sukses diterima dari gateway.
+     * menjadi paid (lunas) setelah pembayaran sukses diterima dari gateway.
      */
     public function markOrderAsPaid(Request $request, $id): JsonResponse
     {
         $request->validate([
             'payment_method' => 'required|string|in:qris,edc,cash',
+            'customer_id'    => 'nullable|uuid|exists:customers,id', // Tambahkan opsional ini jika ingin diperbarui saat pelunasan
         ]);
 
         try {
             $order = Order::findOrFail($id);
 
             // Jika sudah lunas, cegah duplikasi jurnal
-            if ($order->status === 'completed') {
+            if ($order->status === 'paid') {
                 return response()->json(['success' => true, 'message' => 'Order sudah berstatus lunas sebelumnya.']);
             }
 
-            // 1. Update status order menjadi completed
+            // 1. Update status order menjadi paid
             $order->update([
-                'status' => 'completed',
-                'payment_method' => $request->payment_method
+                'status'         => 'paid',
+                'payment_method' => $request->payment_method,
+                'customer_id'    => $request->customer_id ?? $order->customer_id // Pertahankan atau perbarui jika dikirim
             ]);
 
             $replacements = ['order_number' => $order->order_number];
-            $journalType = 'pos_revenue_' . $request->payment_method; // Contoh: pos_revenue_qris
+            $journalType = 'pos_revenue_' . $request->payment_method; 
 
-            // 2. Catat Jurnal Finansial Pendapatan (Karena saat pending jurnal kas belum masuk)
+            // 2. Catat Jurnal Finansial Pendapatan
             JournalEntry::createEntryFromMapping(
                 type: $journalType, 
                 j1Amount: (float) $order->final_total,
@@ -179,7 +190,7 @@ class OrderController extends Controller
 
             return response()->json([
                 'success' => true,
-                'message' => 'Status order berhasil diubah menjadi lunas (completed) dan jurnal tercatat.',
+                'message' => 'Status order berhasil diubah menjadi lunas (paid) dan jurnal tercatat.',
                 'data'    => ['order_id' => $order->id, 'order_number' => $order->order_number]
             ], 200);
 
@@ -227,7 +238,7 @@ class OrderController extends Controller
     public function getPaidInvoices(): JsonResponse
     {
         $invoices = Order::with('items')
-            ->where('status', 'completed') 
+            ->where('status', 'paid') 
             ->orderBy('created_at', 'desc')
             ->limit(50)
             ->get();
@@ -268,7 +279,9 @@ class OrderController extends Controller
             'customer_name' => 'required|string|max:255',
             'customer_phone' => 'required|string|max:20',
             'shipping_address' => 'required|string',
-            'notes' => 'nullable|string'
+            'notes' => 'nullable|string',
+            'voucher_id'       => 'nullable|uuid|exists:vouchers,id', // ⬅️ Tambahkan validasi voucher_id
+            'discount'         => 'nullable|numeric|min:0',
         ]);
 
         try {
@@ -278,7 +291,6 @@ class OrderController extends Controller
 
             $today = Carbon::now()->format('Ymd');
             $timeHash = Carbon::now()->format('His') . '-' . strtoupper(substr(uniqid(), -4));
-            $orderNumber = 'INV-OL-' . $today . '-' . $timeHash;
             
             $totalSubtotal = 0;
             $itemsData = [];
@@ -310,15 +322,18 @@ class OrderController extends Controller
                 ];
             }
 
+            $discount = floatval($request->discount ?? 0);
+            $finalTotal = max(0, $totalSubtotal - $discount);
+
             $orderData = [
-                'order_number'     => $orderNumber,
                 'customer_name'    => $request->customer_name,
                 'customer_phone'   => $request->customer_phone,
                 'shipping_address' => $request->shipping_address,
                 'customer_id'      => $customer ? $customer->id : null, 
+                'voucher_id'       => $request->voucher_id ?? null, // ⬅️ Simpan voucher_id
                 'subtotal'         => $totalSubtotal,
-                'discount'         => 0, 
-                'final_total'      => $totalSubtotal,
+                'discount'         => $discount,                    // ⬅️ Simpan nominal diskon
+                'final_total'      => $finalTotal,                  // ⬅️ Simpan total bersih setelah diskon
                 'payment_method'   => 'pending', 
                 'status'           => 'unpaid',
                 'notes'            => $request->notes
@@ -326,6 +341,13 @@ class OrderController extends Controller
 
             $order = $this->posService->completeOrder($orderData, $itemsData);
 
+            if (!empty($request->voucher_id)) {
+                $voucher = \App\Models\Voucher::find($request->voucher_id);
+                if ($voucher) {
+                    $voucher->increment('used_count');
+                }
+            }
+            
             DB::commit();
 
             return response()->json([

@@ -35,7 +35,11 @@ defineOptions({
 
 // Inisialisasi Composable Printer & Builder
 const { print } = useThermalPrinter();
-const { generateReceiptText } = useReceiptBuilder();
+import { 
+    mapTransactionToReceiptData, 
+    formatCashierReceipt, 
+    formatKitchenReceipt 
+} from '@/composables/useReceiptFormatter';
 
 // Interface TypeScript untuk Data Transaksi
 interface TransactionItem {
@@ -168,49 +172,19 @@ const selectTransaction = (trx: Transaction) => {
 // =========================================================
 // HANDLER CETAK STRUK BLUETOOTH / FALLBACK
 // =========================================================
-const handlePrintReceipt = async () => {
-    if (!selectedTransaction.value) {
-        toast.error("Tidak ada transaksi yang dipilih untuk dicetak.");
-        return;
-    }
+const handlePrintCashierReceipt = async (transactionObj: any) => {
+    const formattedData = mapTransactionToReceiptData(transactionObj);
+    const textStruk = formatCashierReceipt(formattedData);
+    await print(textStruk);
+    toast.success("Struk kasir dicetak.");
+};
 
-    try {
-        const itemsList = (selectedTransaction.value.items || []).map((item: Record<string, any>) => ({
-            name: item.menu?.name || item.name || item.product_name || 'Item POS',
-            qty: Number(item.quantity || item.qty || 1),
-            price: Number(item.price || 0)
-        }));
-
-        const subTotalAmount = itemsList.reduce((acc, curr) => acc + (curr.price * curr.qty), 0);
-        const finalTotalAmount = Number(selectedTransaction.value.final_total || selectedTransaction.value.total || 0);
-        const paidAmount = Number(selectedTransaction.value.amount_paid || finalTotalAmount); // Sesuaikan jika ada field amount_paid di DB
-        const changeVal = paidAmount > finalTotalAmount ? paidAmount - finalTotalAmount : 0;
-
-        const transactionData: ReceiptData = {
-            storeName: "Roti Bakar Wisuda",
-            storeAddress: "Jl Kaliurang km 12.5 UII Yogyakarta",
-            phone: "08123456789",
-            cashierName: "Admin POS",
-            customerName: selectedTransaction.value.customer_name || 'Pelanggan Umum',
-            orderNumber: selectedTransaction.value.order_number,
-            dateStr: new Date(selectedTransaction.value.created_at || Date.now()).toLocaleDateString('id-ID'),
-            items: itemsList,
-            subTotal: subTotalAmount,
-            discount: Number(selectedTransaction.value.discount || 0),
-            total: finalTotalAmount,
-            amountPaid: paidAmount,
-            changeAmount: changeVal,
-            paymentMethod: selectedTransaction.value.payment_method || 'cash',
-            footerMessage: "Terimakasih Telah Berbelanja"
-        };
-
-        const strukText = generateReceiptText(transactionData);
-        await print(strukText);
-        toast.success("Perintah cetak struk dikirim.");
-    } catch (error: any) {
-        console.error("Gagal mencetak struk:", error);
-        toast.error("Gagal mencetak struk.");
-    }
+// Contoh 2: Cetak Tiket Dapur (Kitchen Ticket) secara bersamaan jika diperlukan
+const handlePrintKitchenTicket = async (transactionObj: any) => {
+    const formattedData = mapTransactionToReceiptData(transactionObj);
+    const textDapur = formatKitchenReceipt(formattedData);
+    await print(textDapur);
+    toast.success("Tiket dapur dikirim.");
 };
 
 const openPaymentModal = (trx: Transaction) => {
@@ -451,7 +425,7 @@ onBeforeUnmount(() => {
                     <!-- Footer Struk dengan Handler Cetak Bluetooth -->
                     <div class="p-4 sm:p-6 bg-slate-50 dark:bg-zinc-900/80 border-t border-slate-200/80 dark:border-zinc-800 flex flex-col sm:flex-row items-center gap-3">
                         <button 
-                            @click="handlePrintReceipt"
+                            @click="handlePrintCashierReceipt"
                             class="w-full sm:flex-1 py-3 bg-white dark:bg-zinc-800 hover:bg-slate-100 border border-slate-200 dark:border-zinc-700 text-slate-700 dark:text-zinc-200 text-xs font-bold rounded-2xl shadow-2xs transition-all flex items-center justify-center gap-2 cursor-pointer"
                         >
                             <Printer class="h-4 w-4" /> Cetak Struk
