@@ -90,7 +90,7 @@ export function usePosCheckout() {
     });
     
      const finalTotal = computed<number>(() => {
-        const total = (cartSubtotal.value + taxAmount.value + Number(transactionFee.value)) - Number(totalDiscount.value);
+        const total = (cartSubtotal.value + Number(transactionFee.value)) - Number(totalDiscount.value);
         const roundedTotal = Math.round(total);
         return roundedTotal < 0 ? 0 : roundedTotal;
     });
