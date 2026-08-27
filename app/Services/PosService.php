@@ -33,6 +33,24 @@ public function completeOrder(array $orderData, array $itemsData): Order
                 'notes'            => $orderData['notes']
             ]);
 
+            $earnedPoints = floor($orderData['final_total'] / 1000) * 10;
+
+            if ($earnedPoints > 0) {
+                \App\Models\CustomerPoint::create([
+                    'customer_id' => $orderData['customer_id'],
+                    'order_id'    => $order->id,
+                    'points'      => $earnedPoints,
+                    'type'        => 'earned',
+                    'description' => "Poin dari transaksi #{$order->order_number}"
+                ]);
+
+                // Update total poin di tabel customer
+                $customer = \App\Models\Customer::find($order->customer_id);
+                if ($customer) {
+                    $customer->increment('total_points', $earnedPoints);
+                }
+            }
+
             $accumulatedTotalHpp = 0;
             $accumulatedOverhead = 0;
 
@@ -144,5 +162,29 @@ public function completeOrder(array $orderData, array $itemsData): Order
             $order->update(['status' => 'voided']);
             $order->delete(); 
         });
+    }
+
+    public function rewardCustomerPoints(Order $order)
+    {
+        if (!$order->customer_id) return; 
+
+        $amountForPoints = $order->final_total;
+        $earnedPoints = floor($amountForPoints / 1000) * 10;
+
+        if ($earnedPoints > 0) {
+            \App\Models\CustomerPoint::create([
+                'customer_id' => $order->customer_id,
+                'order_id'    => $order->id,
+                'points'      => $earnedPoints,
+                'type'        => 'earned',
+                'description' => "Poin dari transaksi #{$order->order_number}"
+            ]);
+
+            // Update total poin di tabel customer
+            $customer = \App\Models\Customer::find($order->customer_id);
+            if ($customer) {
+                $customer->increment('total_points', $earnedPoints);
+            }
+        }
     }
 }

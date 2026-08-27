@@ -188,6 +188,8 @@ class OrderController extends Controller
                 replacements: $replacements
             );
 
+            $this->posService->rewardCustomerPoints($order);
+            
             return response()->json([
                 'success' => true,
                 'message' => 'Status order berhasil diubah menjadi lunas (paid) dan jurnal tercatat.',
@@ -340,6 +342,7 @@ class OrderController extends Controller
             ];
 
             $order = $this->posService->completeOrder($orderData, $itemsData);
+            // $this->posService->rewardCustomerPoints($order);
 
             if (!empty($request->voucher_id)) {
                 $voucher = \App\Models\Voucher::find($request->voucher_id);
@@ -347,7 +350,7 @@ class OrderController extends Controller
                     $voucher->increment('used_count');
                 }
             }
-            
+
             DB::commit();
 
             return response()->json([
@@ -409,7 +412,7 @@ class OrderController extends Controller
             }
 
             // Cari order berdasarkan order_number dan pastikan milik customer yang sedang login
-            $order = Order::with(['items.menu'])
+            $order = Order::with(['items.menu', 'voucher', 'points'])
                 ->where('order_number', $orderNumber)
                 ->where('customer_id', $customer->id)
                 ->first();

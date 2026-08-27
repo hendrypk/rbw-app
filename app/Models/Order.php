@@ -67,4 +67,9 @@ class Order extends Model
     {
         return $this->hasOne(DokuTransaction::class, 'order_number', 'order_number');
     }
+
+    public function points() : HasOne
+    {
+        return $this->hasOne(CustomerPoint::class);
+    }
 }

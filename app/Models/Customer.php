@@ -12,7 +12,7 @@ class Customer extends Authenticatable
     use HasApiTokens, HasFactory, HasUuids;
 
     protected $fillable = [
-        'name', 'phone', 'email', 'password', 'shipping_address'
+        'name', 'phone', 'email', 'password', 'shipping_address', 'total_points'
     ];
 
     protected $hidden = [
@@ -22,5 +22,10 @@ class Customer extends Authenticatable
     public function orders()
     {
         return $this->hasMany(Order::class);
+    }
+
+    public function points()
+    {
+        return $this->hasMany(CustomerPoint::class);
     }
 }

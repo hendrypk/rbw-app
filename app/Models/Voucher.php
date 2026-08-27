@@ -13,7 +13,8 @@ class Voucher extends Model
 
     protected $fillable = [
         'code', 'name', 'type', 'value', 'min_spend', 'max_discount', 
-        'usage_limit', 'used_count', 'started_at', 'expired_at', 'is_active'
+        'usage_limit', 'used_count', 'started_at', 'expired_at', 'is_active',
+        'is_redeemable', 'points_required'
     ];
 
     protected $casts = [
@@ -23,6 +24,8 @@ class Voucher extends Model
         'started_at' => 'datetime',
         'expired_at' => 'datetime',
         'is_active' => 'boolean',
+        'is_redeemable' => 'boolean', 
+        'points_required' => 'integer', 
     ];
 
     public function menus(): BelongsToMany

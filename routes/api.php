@@ -5,6 +5,7 @@ use App\Http\Controllers\Api\AccountMappingController;
 use App\Http\Controllers\Api\CategoryController;
 use App\Http\Controllers\Api\CustomerAuthController;
 use App\Http\Controllers\Api\CustomerController;
+use App\Http\Controllers\Api\CustomerLoyaltyController;
 use App\Http\Controllers\Api\JournalEntryController;
 use App\Http\Controllers\Api\MenuController;
 use App\Http\Controllers\Api\OrderController;
@@ -18,6 +19,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/test-doku-token', [QrisController::class, 'testGetToken']);
+
 Route::prefix('api/v1/user')->group(function () {
     
     Route::post('/register', [CustomerAuthController::class, 'register']);
@@ -44,8 +46,13 @@ Route::prefix('api/v1/user')->group(function () {
         Route::post('/payment/qris/generate', [QrisController::class, 'generate']);
         Route::get('/payment/qris/debug', [QrisController::class, 'debugGenerate']);
         Route::post('/payment/qris/check-status', [QrisController::class, 'checkStatus']);
+        Route::get('/loyalty-profile', [CustomerLoyaltyController::class, 'myLoyaltyProfile']);
+        Route::get('/leaderboard', [CustomerLoyaltyController::class, 'leaderboard']);
+        Route::get('/redemptions', [CustomerLoyaltyController::class, 'availableRedemptions']);
+        Route::post('/redeem', [CustomerLoyaltyController::class, 'redeemVoucher']);
     });
 });
+
 Route::middleware(['auth', 'verified'])->prefix('api')->name('api.')->group(function () {
 
     Route::apiResource('suppliers', SupplierController::class);
