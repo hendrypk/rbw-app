@@ -212,42 +212,66 @@ class MenuController extends Controller
     }
 
 public function userIndex(Request $request)
-    {
-        $menus = Menu::active()
-            ->with(['category', 'prices' => function ($query) {
+{
+    // Ambil kategori yang visible, memiliki menu aktif, dan urutkan berdasarkan 'sort'
+    $categories = Category::where('is_visible', true)
+        ->whereHas('menus', function ($query) {
+            $query->where('is_active', true);
+        })
+        ->orderBy('sort', 'asc')
+        ->get();
+
+    $menus = Menu::active()
+        ->with([
+            'categories' => function ($query) {
+                $query->orderBy('category_menu.sort', 'asc');
+            }, 
+            'prices' => function ($query) {
                 $query->where('channel', 'offline')->where('is_active', true);
-            }])
-            ->when($request->filled('category_id'), function ($query) use ($request) {
-                $query->where('category_id', $request->category_id);
-            })
-            ->get()
-            ->map(function ($menu) {
-                // Ambil harga offline
-                $priceOffline = $menu->prices->first();
-                
-                // Return sebagai Array murni agar 100% aman dari error 500 serialisasi JSON
+            }
+        ])
+        ->when($request->filled('category_id'), function ($query) use ($request) {
+            $query->whereHas('categories', function ($q) use ($request) {
+                $q->where('categories.id', $request->category_id);
+            });
+        })
+        ->get()
+        ->map(function ($menu) {
+            $priceOffline = $menu->prices->first();
+            
+            $mappedCategories = $menu->categories->map(function ($cat) {
                 return [
-                    'id'          => $menu->id,
-                    'name'        => $menu->name,
-                    'description' => $menu->description,
-                    'image'       => $menu->image_path,
-                    'category_id' => $menu->category_id,
-                    'category'    => $menu->category ? [
-                        'id'   => $menu->category->id,
-                        'name' => $menu->category->name,
-                    ] : null,
-                    'price'       => $priceOffline ? (float) $priceOffline->selling_price : 0,
+                    'id'   => $cat->id,
+                    'name' => $cat->name,
+                    'sort' => $cat->pivot?->sort ?? 0,
                 ];
             });
 
-        $categories = Category::all();
+            $primaryCategory = $menu->categories->first();
+            $pivotSort = $primaryCategory?->pivot?->sort ?? 0;
 
-        return response()->json([
-            'status' => 'success',
-            'data' => [
-                'categories' => $categories,
-                'menus'      => $menus,
-            ]
-        ]);
-    }
+            return [
+                'id'          => $menu->id,
+                'name'        => $menu->name,
+                'description' => $menu->description,
+                'image'       => $menu->image_path,
+                'categories'  => $mappedCategories,
+                'category_id' => $primaryCategory?->id,
+                'category'    => $primaryCategory ? [
+                    'id'   => $primaryCategory->id,
+                    'name' => $primaryCategory->name,
+                ] : null,
+                'sort'        => $pivotSort,
+                'price'       => $priceOffline ? (float) $priceOffline->selling_price : 0,
+            ];
+        });
+
+    return response()->json([
+        'status' => 'success',
+        'data' => [
+            'categories' => $categories,
+            'menus'      => $menus,
+        ]
+    ]);
+}
 }
