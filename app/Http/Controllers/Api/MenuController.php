@@ -20,11 +20,13 @@ class MenuController extends Controller
     {
         return response()->json($this->menuService->getAllMenus());
     }
-public function store(Request $request): JsonResponse
+    
+    public function store(Request $request): JsonResponse
     {
         $data = $request->validate([
             'name'                      => 'required|string|max:255',
-            'category_id'               => 'nullable|string|max:100',
+            'category_ids'              => 'required|array|min:1', // Satu menu bisa banyak kategori
+            'category_ids.*'            => 'string|exists:categories,id',
             'description'               => 'nullable|string',
             'recipes'                   => 'required|array|min:1',
             'overhead_cost'             => 'sometimes|required|numeric|min:0',
@@ -32,16 +34,21 @@ public function store(Request $request): JsonResponse
             'recipes.*.qty_usage'       => 'required|numeric|min:0.0001',
             'prices'                    => 'required|array|min:1',
             'prices.*.channel'          => 'required|in:offline,shopeefood,grabfood,gofood',
-            'prices.*.selling_price'    => 'required|numeric|min:0', // Wajib ada input harga jual final
+            'prices.*.selling_price'    => 'required|numeric|min:0',
             'prices.*.margin_percent'   => 'nullable|numeric', 
         ]);
 
         $menu = Menu::create([
             'name'          => $data['name'],
-            'category_id'   => $data['category_id'] ?? null,
             'description'   => $data['description'] ?? null,
             'overhead_cost' => $data['overhead_cost'] ?? 0
         ]);
+
+        $categorySyncData = [];
+        foreach ($data['category_ids'] as $index => $categoryId) {
+            $categorySyncData[$categoryId] = ['sort' => $index]; 
+        }
+        $menu->categories()->sync($categorySyncData);
 
         $result = $this->menuService->saveRecipesAndPrices($menu, $data['recipes'], $data['prices']);
 
@@ -52,7 +59,8 @@ public function store(Request $request): JsonResponse
     {
         $data = $request->validate([
             'name'                      => 'sometimes|required|string|max:255',
-            'category_id'               => 'nullable|string|max:100',
+            'category_ids'              => 'sometimes|array|min:1',
+            'category_ids.*'            => 'string|exists:categories,id',
             'description'               => 'nullable|string',
             'is_active'                 => 'boolean',
             'recipes'                   => 'sometimes|array|min:1',
@@ -65,6 +73,14 @@ public function store(Request $request): JsonResponse
         ]);
 
         $menu->update($data);
+
+        if (isset($data['category_ids'])) {
+            $categorySyncData = [];
+            foreach ($data['category_ids'] as $index => $categoryId) {
+                $categorySyncData[$categoryId] = ['sort' => $index];
+            }
+            $menu->categories()->sync($categorySyncData);
+        }
 
         if (isset($data['recipes']) || isset($data['prices'])) {
             $result = $this->menuService->saveRecipesAndPrices(
@@ -82,8 +98,9 @@ public function store(Request $request): JsonResponse
             return response()->json($result);
         }
 
-        return response()->json($menu->load(['recipes.rawMaterial', 'prices']));
+        return response()->json($menu->load(['recipes.rawMaterial', 'prices', 'categories']));
     }
+
     public function show(Menu $menu): JsonResponse
     {
         return response()->json(

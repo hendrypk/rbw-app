@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { Link } from '@inertiajs/vue3';
-import { ArrowLeftRightIcon, BookOpen, Box, Calculator, FolderGit2, Landmark, LayoutGrid, NotebookPen, ShoppingCart, Truck, Utensils } from '@lucide/vue';
+import { ArrowLeftRightIcon, BookOpen, Box, Calculator, FolderGit2, Landmark, LayoutGrid, NotebookPen, Receipt, ShoppingCart, Truck, Utensils } from '@lucide/vue';
 import AppLogo from '@/components/AppLogo.vue';
 import NavFooter from '@/components/NavFooter.vue';
 import NavMain from '@/components/NavMain.vue';
@@ -36,7 +36,7 @@ const mainNavItems: NavItem[] = [
     {
         title: 'POS',
         href: webPos.index(),
-        icon: Utensils,
+        icon: Receipt,
     },
     {
         title: 'Menu',

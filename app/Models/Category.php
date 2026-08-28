@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Category extends Model
@@ -26,8 +27,12 @@ class Category extends Model
     /**
      * Relasi ke tabel Menu
      */
-    public function menus(): HasMany
+    public function menus(): BelongsToMany
     {
-        return $this->hasMany(Menu::class);
+        return $this->belongsToMany(Menu::class, 'category_menu', 'category_id', 'menu_id')
+                    ->using(CategoryMenu::class)
+                    ->withPivot('sort')
+                    ->withTimestamps()
+                    ->orderBy('category_menu.sort', 'asc');
     }
 }

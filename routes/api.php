@@ -102,6 +102,12 @@ Route::middleware(['auth', 'verified'])->prefix('api')->name('api.')->group(func
 
     // Overhead
     Route::apiResource('overhead-costs', OverheadCostController::class);
+
+    //Category
+    Route::prefix('categories')->group(function () {
+        Route::post('sort', [CategoryController::class, 'updateCategoriesSort']);
+        Route::post('{category}/menus/sort', [CategoryController::class, 'updateMenusSort']);
+    });
     Route::apiResource('categories', CategoryController::class);
     Route::prefix('finance')->group(function() {
         Route::apiResource('accounts', AccountController::class);

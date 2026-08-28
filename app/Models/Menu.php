@@ -45,9 +45,12 @@ class Menu extends Model
         return $query->where('is_active', true);
     }
 
-    public function category(): BelongsTo
+    public function categories(): BelongsToMany
     {
-        return $this->belongsTo(Category::class, 'category_id');
+        return $this->belongsToMany(Category::class, 'category_menu', 'menu_id', 'category_id')
+                    ->using(CategoryMenu::class) 
+                    ->withPivot('sort')
+                    ->withTimestamps();
     }
 
     public function vouchers(): BelongsToMany

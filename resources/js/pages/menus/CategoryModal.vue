@@ -17,11 +17,14 @@ const newCategoryName = ref('');
 const editingId = ref<string | null>(null);
 const editingName = ref('');
 
+// State untuk Drag and Drop
+const draggedIndex = ref<number | null>(null);
+
 const fetchCategories = async () => {
     isLoading.value = true;
     try {
         const res = await axios.get('/api/categories');
-        categories.value = res.data;
+        categories.value = res.data.sort((a: any, b: any) => (a.sort ?? 0) - (b.sort ?? 0));
     } catch (err) {
         console.error('Gagal memuat kategori', err);
     } finally {
@@ -32,7 +35,12 @@ const fetchCategories = async () => {
 const handleAdd = async () => {
     if (!newCategoryName.value.trim()) return;
     try {
-        await axios.post('/api/categories', { name: newCategoryName.value });
+        const nextSort = categories.value.length > 0 ? Math.max(...categories.value.map(c => c.sort || 0)) + 1 : 0;
+        
+        await axios.post('/api/categories', { 
+            name: newCategoryName.value,
+            sort: nextSort
+        });
         newCategoryName.value = '';
         fetchCategories();
         emit('updated');
@@ -72,6 +80,38 @@ const toggleVisibility = async (item: any) => {
     }
 };
 
+// Handler Drag and Drop
+const onDragStart = (index: number) => {
+    draggedIndex.value = index;
+};
+
+const onDragOver = (event: DragEvent) => {
+    event.preventDefault(); // Diperlukan agar event drop diizinkan
+};
+
+const onDrop = async (targetIndex: number) => {
+    if (draggedIndex.value === null || draggedIndex.value === targetIndex) return;
+
+    // Geser elemen di dalam array lokal secara reaktif
+    const movedItem = categories.value.splice(draggedIndex.value, 1)[0];
+    categories.value.splice(targetIndex, 0, movedItem);
+    draggedIndex.value = null;
+
+    // Susun ulang indeks urutan baru berdasarkan posisi array terkini untuk dikirim ke backend
+    const payloadItems = categories.value.map((cat, idx) => ({
+        id: cat.id,
+        sort: idx
+    }));
+
+    try {
+        await axios.post('/api/categories/sort', { items: payloadItems });
+        emit('updated');
+    } catch (err) {
+        error('Gagal', 'Gagal menyimpan urutan kategori.');
+        fetchCategories(); // Rollback ke data server jika gagal
+    }
+};
+
 const handleDelete = async (item: any) => {
     if (await confirm('Hapus Kategori?', `Apakah Anda yakin ingin menghapus kategori "${item.name}"?`)) {
         try {
@@ -80,7 +120,6 @@ const handleDelete = async (item: any) => {
             emit('updated');
             success('Berhasil', 'Kategori berhasil dihapus.');
         } catch (err: any) {
-            // Menerima response error 422 dari database constraint Laravel
             error('Gagal Menghapus', err.response?.data?.message || 'Kategori ini sedang digunakan.');
         }
     }
@@ -122,10 +161,19 @@ watch(() => props.show, (newVal) => {
                 
                 <div 
                     v-else-if="categories.length > 0"
-                    v-for="item in categories" 
+                    v-for="(item, index) in categories" 
                     :key="item.id"
-                    class="flex items-center justify-between p-2 rounded-lg bg-muted/40 border border-border/40 hover:bg-muted/70 transition-colors"
+                    draggable="true"
+                    @dragstart="onDragStart(index)"
+                    @dragover="onDragOver"
+                    @drop="onDrop(index)"
+                    class="flex items-center justify-between p-2 rounded-lg bg-muted/40 border border-border/40 hover:bg-muted/70 transition-colors cursor-grab active:cursor-grabbing"
                 >
+                    <!-- Indikator Drag (Grip Icon) -->
+                    <div class="text-muted-foreground/50 hover:text-muted-foreground mr-2 shrink-0 flex items-center select-none">
+                        ⠿
+                    </div>
+
                     <div class="flex-1 mr-2">
                         <div v-if="editingId === item.id" class="flex items-center gap-1">
                             <Input v-model="editingName" class="h-7 text-xs font-medium px-2 py-0" @keyup.enter="handleUpdateName(item.id)" />

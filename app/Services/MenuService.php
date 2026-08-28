@@ -78,6 +78,6 @@ class MenuService
     
     public function getAllMenus()
     {
-        return Menu::with(['recipes.rawMaterial', 'prices', 'category'])->get();
+        return Menu::with(['recipes.rawMaterial', 'prices', 'categories'])->get();
     }
 }

@@ -62,7 +62,7 @@
     
     const form = ref({
         name: '',
-        category_id: '',
+        category_ids: [] as string[], // Diubah dari category_id tunggal menjadi array
         overhead_cost: 0,
         recipes: [{ raw_material_id: '', qty_usage: 1 }] as Recipe[],
         prices: [
@@ -76,7 +76,7 @@
     const totalHpp = computed<number>(() => {
         return form.value.recipes.reduce((sum: number, rec: any) => {
             const material = materialMap.value[rec.raw_material_id];
-            const cost = material ? Number(material.avg_cost) : 0; // Diubah ke avg_cost
+            const cost = material ? Number(material.avg_cost) : 0;
             const qty = Number(rec.qty_usage);
             return sum + (cost * qty);
         }, 0);
@@ -94,44 +94,44 @@
         }
     };
 
-// Fungsi untuk menghitung Nett Profit secara murni tanpa menimpa harga jual
-const calculateCleanProfit = (priceObj: PriceChannel) => {
-    const baseCost = totalBaseCost.value;
-    const feePercent = PLATFORM_FEES[priceObj.channel] ?? 0;
-    const sellingPrice = Number(priceObj.selling_price) || 0;
+    // Fungsi untuk menghitung Nett Profit secara murni tanpa menimpa harga jual
+    const calculateCleanProfit = (priceObj: PriceChannel) => {
+        const baseCost = totalBaseCost.value;
+        const feePercent = PLATFORM_FEES[priceObj.channel] ?? 0;
+        const sellingPrice = Number(priceObj.selling_price) || 0;
 
-    if (!sellingPrice || !baseCost) return 0;
+        if (!sellingPrice || !baseCost) return 0;
 
-    const nettPrice = sellingPrice * (1 - feePercent / 100);
-    const cleanProfit = nettPrice - baseCost;
+        const nettPrice = sellingPrice * (1 - feePercent / 100);
+        const cleanProfit = nettPrice - baseCost;
 
-    return Number(cleanProfit.toFixed(2));
-};
+        return Number(cleanProfit.toFixed(2));
+    };
 
-// Fungsi update margin saat user mengetik harga jual
-const updateMarginFromPrice = (priceObj: PriceChannel) => {
-    const baseCost = totalBaseCost.value;
-    const feePercent = PLATFORM_FEES[priceObj.channel] ?? 0;
-    const newSellingPrice = Number(priceObj.selling_price) || 0;
-    
-    if (!newSellingPrice || !baseCost || baseCost <= 0) {
-        priceObj.margin_percent = 0;
-        return; 
-    }
+    // Fungsi update margin saat user mengetik harga jual
+    const updateMarginFromPrice = (priceObj: PriceChannel) => {
+        const baseCost = totalBaseCost.value;
+        const feePercent = PLATFORM_FEES[priceObj.channel] ?? 0;
+        const newSellingPrice = Number(priceObj.selling_price) || 0;
+        
+        if (!newSellingPrice || !baseCost || baseCost <= 0) {
+            priceObj.margin_percent = 0;
+            return; 
+        }
 
-    let targetPriceBeforeOjol = newSellingPrice;
-    if (priceObj.channel !== 'offline' && feePercent > 0) {
-        targetPriceBeforeOjol = newSellingPrice * (1 - feePercent / 100);
-    }
+        let targetPriceBeforeOjol = newSellingPrice;
+        if (priceObj.channel !== 'offline' && feePercent > 0) {
+            targetPriceBeforeOjol = newSellingPrice * (1 - feePercent / 100);
+        }
 
-    if (targetPriceBeforeOjol < baseCost) {
-        priceObj.margin_percent = 0;
-        return;
-    }
+        if (targetPriceBeforeOjol < baseCost) {
+            priceObj.margin_percent = 0;
+            return;
+        }
 
-    const calculatedMargin = ((targetPriceBeforeOjol - baseCost) / baseCost) * 100;
-    priceObj.margin_percent = Number(calculatedMargin.toFixed(2));
-};
+        const calculatedMargin = ((targetPriceBeforeOjol - baseCost) / baseCost) * 100;
+        priceObj.margin_percent = Number(calculatedMargin.toFixed(2));
+    };
 
     watch(
         () => props.show,
@@ -144,9 +144,17 @@ const updateMarginFromPrice = (priceObj: PriceChannel) => {
             ]);
 
             if (props.menu) {
+                // Ambil ID kategori dari relasi categories (array) jika ada, fallback ke category_id lama jika masih berbentuk single
+                let mappedCategoryIds: string[] = [];
+                if (props.menu.categories && Array.isArray(props.menu.categories)) {
+                    mappedCategoryIds = props.menu.categories.map((c: any) => c.id);
+                } else if (props.menu.category_id) {
+                    mappedCategoryIds = [props.menu.category_id];
+                }
+
                 form.value = {
                     name: props.menu.name,
-                    category_id: props.menu.category_id || '',
+                    category_ids: mappedCategoryIds,
                     overhead_cost: Number(props.menu.overhead_cost ?? props.masterOverhead ?? 0),
                     recipes: props.menu.recipes.map((r: any) => ({
                         raw_material_id: r.raw_material_id,
@@ -161,7 +169,7 @@ const updateMarginFromPrice = (priceObj: PriceChannel) => {
             } else {
                 form.value = {
                     name: '',
-                    category_id: '',
+                    category_ids: [],
                     overhead_cost: props.masterOverhead || 0,
                     recipes: [{ raw_material_id: '', qty_usage: 1 }],
                     prices: [
@@ -217,17 +225,27 @@ const updateMarginFromPrice = (priceObj: PriceChannel) => {
                         <Input v-model="form.name" placeholder="Contoh: Ayam Bakar Madu" required />
                     </div>
                     <div>
-                        <Label class="mb-1 block text-xs font-semibold uppercase tracking-wider text-muted-foreground">Kategori</Label>
-                        <select 
-                            v-model="form.category_id" 
-                            class="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                        >
-                            <option value="">-- Pilih Kategori Menu --</option>
-                            <option v-for="cat in userCategories" :key="cat.id" :value="cat.id">
-                                {{ cat.name }}
-                            </option>
-                        </select>
-                        <InputError :message="errors.category_id" class="mt-1" />
+                        <Label class="mb-1 block text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-1">Kategori (Bisa pilih lebih dari satu)</Label>
+                        
+                        <!-- Box Checkbox Multi-Kategori -->
+                        <div class="flex flex-wrap gap-2 p-2 border rounded-md bg-background min-h-[40px] max-h-36 overflow-y-auto">
+                            <label 
+                                v-for="cat in userCategories" 
+                                :key="cat.id" 
+                                class="flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-muted/50 hover:bg-muted text-xs cursor-pointer border border-border/50 select-none transition-colors"
+                            >
+                                <input 
+                                    type="checkbox" 
+                                    :value="cat.id" 
+                                    v-model="form.category_ids"
+                                    class="rounded border-input text-primary focus:ring-ring h-3.5 w-3.5"
+                                />
+                                <span class="font-medium text-foreground">{{ cat.name }}</span>
+                            </label>
+                            <span v-if="userCategories.length === 0" class="text-xs text-muted-foreground italic py-1">Tidak ada kategori aktif.</span>
+                        </div>
+                        
+                        <InputError :message="errors.category_ids" class="mt-1" />
                     </div>
                 </div>
 
@@ -311,57 +329,55 @@ const updateMarginFromPrice = (priceObj: PriceChannel) => {
                         </div>
                     </div>
 
-                    <!-- KELOMPOK KANAN: PRICING PER CHANNEL (Dinamis Dua Arah) -->
-<!-- KELOMPOK KANAN: PRICING PER CHANNEL -->
-<div class="lg:col-span-5 space-y-3 border rounded-xl p-4 bg-background shadow-sm">
-    <div class="border-b pb-2">
-        <h3 class="font-bold text-sm tracking-tight text-foreground">Pricing per Channel</h3>
-    </div>
-    
-    <div class="space-y-2">
-        <div v-for="price in form.prices" :key="price.channel" class="flex flex-col p-2.5 bg-muted/40 rounded-xl border border-border/60">
-            <div class="flex items-center justify-between border-b border-border/40 pb-1.5 mb-1.5">
-                <span class="font-bold text-xs capitalize text-foreground flex items-center gap-1">
-                    <span class="w-1 h-2 rounded bg-primary/50"></span>
-                    {{ price.channel }}
-                </span>
-                <div class="flex items-center gap-1">
-                    <span class="text-[10px] text-muted-foreground">Margin:</span>
-                    <!-- Input margin didisable agar otomatis terhitung dari harga jual -->
-                    <Input 
-                        :model-value="price.margin_percent" 
-                        type="number" 
-                        disabled 
-                        class="w-16 h-6 text-center font-semibold text-xs p-0 bg-muted text-muted-foreground cursor-not-allowed opacity-100" 
-                    />
-                    <span class="text-[10px] font-semibold text-muted-foreground">%</span>
-                </div>
-            </div>
-            
-            <div class="flex items-center justify-between text-xs gap-2">
-                <div class="flex-1">
-                    <span class="text-[10px] text-muted-foreground block mb-0.5">Harga Jual (Manual)</span>
-                    <div class="relative flex items-center">
-                        <span class="absolute left-2 text-[10px] font-bold text-muted-foreground">Rp</span>
-                        <Input 
-                            v-model.number="price.selling_price"
-                            @input="updateMarginFromPrice(price)"
-                            type="number" 
-                            step="1"
-                            class="h-7 pl-6 pr-1 text-left text-xs font-bold text-foreground bg-background" 
-                        />
+                    <!-- KELOMPOK KANAN: PRICING PER CHANNEL -->
+                    <div class="lg:col-span-5 space-y-3 border rounded-xl p-4 bg-background shadow-sm">
+                        <div class="border-b pb-2">
+                            <h3 class="font-bold text-sm tracking-tight text-foreground">Pricing per Channel</h3>
+                        </div>
+                        
+                        <div class="space-y-2">
+                            <div v-for="price in form.prices" :key="price.channel" class="flex flex-col p-2.5 bg-muted/40 rounded-xl border border-border/60">
+                                <div class="flex items-center justify-between border-b border-border/40 pb-1.5 mb-1.5">
+                                    <span class="font-bold text-xs capitalize text-foreground flex items-center gap-1">
+                                        <span class="w-1 h-2 rounded bg-primary/50"></span>
+                                        {{ price.channel }}
+                                    </span>
+                                    <div class="flex items-center gap-1">
+                                        <span class="text-[10px] text-muted-foreground">Margin:</span>
+                                        <Input 
+                                            :model-value="price.margin_percent" 
+                                            type="number" 
+                                            disabled 
+                                            class="w-16 h-6 text-center font-semibold text-xs p-0 bg-muted text-muted-foreground cursor-not-allowed opacity-100" 
+                                        />
+                                        <span class="text-[10px] font-semibold text-muted-foreground">%</span>
+                                    </div>
+                                </div>
+                                
+                                <div class="flex items-center justify-between text-xs gap-2">
+                                    <div class="flex-1">
+                                        <span class="text-[10px] text-muted-foreground block mb-0.5">Harga Jual (Manual)</span>
+                                        <div class="relative flex items-center">
+                                            <span class="absolute left-2 text-[10px] font-bold text-muted-foreground">Rp</span>
+                                            <Input 
+                                                v-model.number="price.selling_price"
+                                                @input="updateMarginFromPrice(price)"
+                                                type="number" 
+                                                step="1"
+                                                class="h-7 pl-6 pr-1 text-left text-xs font-bold text-foreground bg-background" 
+                                            />
+                                        </div>
+                                    </div>
+                                    <div class="text-right">
+                                        <span class="text-[10px] text-muted-foreground block">Nett Profit</span>
+                                        <span class="font-bold text-green-600 dark:text-green-400">
+                                            +{{ currency(calculateCleanProfit(price)) }}
+                                        </span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
                     </div>
-                </div>
-                <div class="text-right">
-                    <span class="text-[10px] text-muted-foreground block">Nett Profit</span>
-                    <span class="font-bold text-green-600 dark:text-green-400">
-                        +{{ currency(calculateCleanProfit(price)) }}
-                    </span>
-                </div>
-            </div>
-        </div>
-    </div>
-</div>
                 </div>
 
                 <!-- BUTTON FOOTER -->
