@@ -191,16 +191,20 @@ const selectedCategory = ref<string>('all');
 const fetchData = async () => {
     try {
         isLoading.value = true;
-        const menuResponse = await axios.get('/api/menus');
+        
+        // Ambil data menu dan kategori secara paralel dari endpoint masing-masing
+        const [menuResponse, categoryResponse] = await Promise.all([
+            axios.get('/api/menus'),
+            axios.get('/api/categories')
+        ]);
+
+        // Masukkan data menu (sesuaikan dengan format wrapper response API)
         menus.value = menuResponse.data.data || menuResponse.data;
 
-        const uniqueCategories = new Map();
-        menus.value.forEach(menu => {
-            if (menu.category) {
-                uniqueCategories.set(menu.category.id, menu.category.name);
-            }
-        });
-        categories.value = Array.from(uniqueCategories, ([id, name]) => ({ id, name }));
+        // Ambil data kategori langsung dari endpoint /api/categories (filter hanya yang visible jika ada properti is_visible)
+        const allCategories = categoryResponse.data.data || categoryResponse.data;
+        categories.value = allCategories.filter((cat: any) => cat.is_visible ?? true);
+
     } catch (error) {
         console.error('Failed to fetch POS menu data:', error);
         toast.error('Gagal mengambil data dari server');
@@ -208,6 +212,19 @@ const fetchData = async () => {
         isLoading.value = false;
     }
 };
+
+const filteredMenus = computed(() => {
+    return menus.value.filter(menu => {
+        const matchesSearch = menu.name.toLowerCase().includes(searchQuery.value.toLowerCase());
+        
+        // Mendukung multi-kategori (melalui array categories) ataupun kategori tunggal
+        const matchesCategory = selectedCategory.value === 'all' || 
+            (menu.categories && menu.categories.some((cat: any) => cat.id === selectedCategory.value)) ||
+            menu.category_id === selectedCategory.value;
+
+        return matchesSearch && matchesCategory;
+    });
+});
 
 const handleClickOutside = (event: MouseEvent) => {
     const target = event.target as HTMLElement;
@@ -229,13 +246,13 @@ onBeforeUnmount(() => {
     window.addEventListener('click', handleClickOutside);
 });
 
-const filteredMenus = computed(() => {
-    return menus.value.filter(menu => {
-        const matchesSearch = menu.name.toLowerCase().includes(searchQuery.value.toLowerCase());
-        const matchesCategory = selectedCategory.value === 'all' || menu.category_id === selectedCategory.value;
-        return matchesSearch && matchesCategory;
-    });
-});
+// const filteredMenus = computed(() => {
+//     return menus.value.filter(menu => {
+//         const matchesSearch = menu.name.toLowerCase().includes(searchQuery.value.toLowerCase());
+//         const matchesCategory = selectedCategory.value === 'all' || menu.category_id === selectedCategory.value;
+//         return matchesSearch && matchesCategory;
+//     });
+// });
 
 const getOfflinePriceObject = (menu: any) => {
     if (!menu.prices) return null;

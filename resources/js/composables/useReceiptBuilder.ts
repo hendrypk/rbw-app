@@ -1,147 +1,211 @@
-export interface ItemBelanja {
-  name: string;
-  qty: number;
-  price: number;
+export interface ReceiptItem {
+    name: string;
+    qty: number;
+    price: number;
+    notes?: string;
 }
 
 export interface ReceiptData {
-  storeName: string;
-  storeAddress: string;
-  phone?: string;
-  cashierName?: string;
-  customerName?: string;
-  orderNumber: string;
-  dateStr: string;
-  items: ItemBelanja[];
-  subTotal: number;
-  discount?: number;
-  total: number;
-  amountPaid?: number;
-  changeAmount?: number;
-  paymentMethod?: string;
-  footerMessage?: string;
+    storeName: string;
+    storeAddress: string;
+    phone: string;
+    cashierName: string;
+    customerName: string;
+    orderNumber: string;
+    dateStr: string;
+    items: ReceiptItem[];
+    subTotal: number;
+    discount: number;
+    total: number;
+    amountPaid: number;
+    changeAmount: number;
+    paymentMethod: string;
+    footerMessage: string;
 }
 
-export function useReceiptBuilder() {
-  const LINE_WIDTH = 32; 
+/**
+ * Template HTML Universal untuk Kertas Thermal 58mm
+ */
+const wrapHtmlReceipt = (content: string): string => {
+    return `
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <meta charset="utf-8">
+            <title>Print Struk</title>
+            <style>
+                /* Pengaturan khusus ukuran fisik kertas thermal 58mm */
+                @page {
+                    size: 58mm auto;
+                    margin: 0;
+                }
+                body {
+                    font-family: 'Courier New', Courier, monospace;
+                    font-size: 11px;
+                    line-height: 1.2;
+                    width: 58mm;
+                    max-width: 58mm;
+                    margin: 0 auto;
+                    padding: 4mm 2mm;
+                    color: #000;
+                    background: #fff;
+                }
+                .text-center { text-align: center; }
+                .text-right { text-align: right; }
+                .font-bold { font-weight: bold; }
+                .uppercase { text-transform: uppercase; }
+                .divider {
+                    border-top: 1px dashed #000;
+                    margin: 6px 0;
+                }
+                .divider-solid {
+                    border-top: 1px solid #000;
+                    margin: 6px 0;
+                }
+                table {
+                    width: 100%;
+                    border-collapse: collapse;
+                }
+                th, td {
+                    font-size: 11px;
+                    vertical-align: top;
+                    padding: 1px 0;
+                }
+                .item-row td {
+                    padding-top: 3px;
+                }
+                .notes {
+                    font-size: 10px;
+                    font-style: italic;
+                    color: #333;
+                    padding-left: 10px;
+                }
+                @media print {
+                    body {
+                        width: 58mm;
+                    }
+                }
+            </style>
+        </head>
+        <body>
+            ${content}
+            <script>
+                window.onload = function() {
+                    window.print();
+                    setTimeout(() => { window.close(); }, 500);
+                }
+            </script>
+        </body>
+        </html>
+    `;
+};
 
-  const formatRupiah = (amount: number): string => {
-    return new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(amount).replace('Rp', '').trim();
-  };
+/**
+ * 1. HTML: Struk Kasir Utama (Customer Receipt)
+ */
+export const formatCashierReceiptHtml = (data: ReceiptData): string => {
+    let html = `
+        <div class="text-center font-bold uppercase" style="font-size: 13px;">${data.storeName}</div>
+        <div class="text-center" style="font-size: 10px;">${data.storeAddress}</div>
+        <div class="text-center" style="font-size: 10px; margin-bottom: 4px;">Telp: ${data.phone}</div>
+        <div class="divider"></div>
+        
+        <table style="font-size: 10px;">
+            <tr><td width="30%">No. Nota</td><td width="70%">: ${data.orderNumber}</td></tr>
+            <tr><td>Kasir</td><td>: ${data.cashierName}</td></tr>
+            <tr><td>Pelanggan</td><td>: ${data.customerName}</td></tr>
+            <tr><td>Tanggal</td><td>: ${data.dateStr}</td></tr>
+        </table>
+        
+        <div class="divider"></div>
+        
+        <table>
+    `;
 
-  const padCenter = (text: string): string => {
-    if (text.length >= LINE_WIDTH) return text.substring(0, LINE_WIDTH);
-    const padding = Math.floor((LINE_WIDTH - text.length) / 2);
-    return ' '.repeat(padding) + text;
-  };
-
-  const padRightLeft = (left: string, right: string): string => {
-    const spaceLength = LINE_WIDTH - (left.length + right.length);
-    if (spaceLength < 1) return left + ' ' + right;
-    return left + ' '.repeat(spaceLength) + right;
-  };
-
-  // Helper untuk memotong nama item panjang menjadi beberapa baris agar tidak merusak layout 32 char
-  const wrapItemName = (name: string): string[] => {
-    if (name.length <= LINE_WIDTH) return [name];
-    const words = name.split(' ');
-    const lines: string[] = [];
-    let currentLine = '';
-
-    for (const word of words) {
-      if ((currentLine + (currentLine ? ' ' : '') + word).length <= LINE_WIDTH) {
-        currentLine += (currentLine ? ' ' : '') + word;
-      } else {
-        if (currentLine) lines.push(currentLine);
-        // Jika satu kata melebihi LINE_WIDTH secara ekstrem, potong paksa
-        if (word.length > LINE_WIDTH) {
-          let remainingWord = word;
-          while (remainingWord.length > 0) {
-            lines.push(remainingWord.substring(0, LINE_WIDTH));
-            remainingWord = remainingWord.substring(LINE_WIDTH);
-          }
-          currentLine = '';
-        } else {
-          currentLine = word;
+    data.items.forEach(item => {
+        const itemSubtotal = item.qty * item.price;
+        html += `
+            <tr class="item-row">
+                <td colspan="2" class="font-bold">${item.name}</td>
+            </tr>
+            <tr>
+                <td>${item.qty}x @${item.price.toLocaleString('id-ID')}</td>
+                <td class="text-right">Rp ${itemSubtotal.toLocaleString('id-ID')}</td>
+            </tr>
+        `;
+        if (item.notes) {
+            html += `<tr><td colspan="2" class="notes">* ${item.notes}</td></tr>`;
         }
-      }
-    }
-    if (currentLine) lines.push(currentLine);
-    return lines;
-  };
-
-  const generateReceiptText = (data: ReceiptData): string => {
-    let receipt = "";
-
-    // Simbol Logo Toko Teks (Pengganti grafis raster untuk printer thermal teks)
-    receipt += padCenter("[=== T O K O ===]") + "\n";
-    receipt += padCenter(data.storeName) + "\n";
-    receipt += padCenter(data.storeAddress) + "\n";
-    if (data.phone) {
-      receipt += padCenter(`Telp: ${data.phone}`) + "\n";
-    }
-    receipt += "-".repeat(LINE_WIDTH) + "\n";
-
-    // Info Header Transaksi (Tanggal, Kasir, Pelanggan, No Invoice)
-    receipt += padRightLeft(data.dateStr, data.cashierName ? `Kasir: ${data.cashierName}` : "") + "\n";
-    if (data.customerName) {
-      receipt += padRightLeft(`Pelanggan:`, data.customerName) + "\n";
-    }
-    receipt += `No. Inv: ${data.orderNumber}\n`;
-    receipt += "-".repeat(LINE_WIDTH) + "\n";
-
-    // Daftar Item Belanja (Dengan nomor urut & wrap nama item panjang)
-    let totalQtyCount = 0;
-    data.items.forEach((item, index) => {
-      const prefix = `${index + 1}. `;
-      const wrappedNames = wrapItemName(item.name);
-
-      // Baris pertama nama item digabung dengan nomor urut
-      wrappedNames.forEach((wName, wIdx) => {
-        if (wIdx === 0) {
-          receipt += prefix + wName + "\n";
-        } else {
-          receipt += `   ${wName}\n`;
-        }
-      });
-
-      // Baris detail qty x harga dan subtotal item
-      const itemDetailQty = `   ${item.qty} x ${formatRupiah(item.price)}`;
-      const itemSubTotal = formatRupiah(item.price * item.qty);
-      
-      totalQtyCount += item.qty;
-
-      receipt += padRightLeft(itemDetailQty, itemSubTotal) + "\n";
     });
 
-    receipt += "-".repeat(LINE_WIDTH) + "\n";
+    html += `
+        </table>
+        <div class="divider"></div>
+        
+        <table>
+            <tr><td>Subtotal</td><td class="text-right">Rp ${data.subTotal.toLocaleString('id-ID')}</td></tr>
+    `;
 
-    // Ringkasan Pembayaran
-    receipt += padRightLeft(`Total QTY : ${totalQtyCount}`, "") + "\n";
-    receipt += padRightLeft("Sub Total", formatRupiah(data.subTotal)) + "\n";
-    if (data.discount && data.discount > 0) {
-      receipt += padRightLeft("Diskon", `-${formatRupiah(data.discount)}`) + "\n";
-    }
-    receipt += padRightLeft("Total", formatRupiah(data.total)) + "\n";
-
-    if (data.amountPaid !== undefined) {
-      const paymentMethodLabel = `Bayar (${(data.paymentMethod || 'cash').toUpperCase()})`;
-      receipt += padRightLeft(paymentMethodLabel, formatRupiah(data.amountPaid)) + "\n";
-      receipt += padRightLeft("Kembali", formatRupiah(data.changeAmount || 0)) + "\n";
+    if (data.discount > 0) {
+        html += `<tr><td>Diskon</td><td class="text-right">-Rp ${data.discount.toLocaleString('id-ID')}</td></tr>`;
     }
 
-    receipt += "-".repeat(LINE_WIDTH) + "\n";
+    html += `
+            <tr class="font-bold" style="font-size: 12px;">
+                <td>TOTAL</td>
+                <td class="text-right">Rp ${data.total.toLocaleString('id-ID')}</td>
+            </tr>
+            <tr><td>Bayar (${data.paymentMethod.toUpperCase()})</td><td class="text-right">Rp ${data.amountPaid.toLocaleString('id-ID')}</td></tr>
+            <tr><td>Kembalian</td><td class="text-right">Rp ${data.changeAmount.toLocaleString('id-ID')}</td></tr>
+        </table>
+        
+        <div class="divider"></div>
+        <div class="text-center" style="margin-top: 6px; font-size: 10px;">${data.footerMessage}</div>
+        <div style="height: 15px;"></div>
+    `;
 
-    // Footer Pesan & Kritik Saran
-    const footer = data.footerMessage || "Terimakasih Telah Berbelanja";
-    receipt += padCenter(footer) + "\n";
-    receipt += padCenter("Layanan Kritik & Saran:") + "\n";
-    receipt += padCenter("bit.ly/e-receipt-pos") + "\n";
+    return wrapHtmlReceipt(html);
+};
 
-    return receipt;
-  };
+/**
+ * 2. HTML: Struk Dapur (Kitchen Ticket)
+ */
+export const formatKitchenReceiptHtml = (data: ReceiptData): string => {
+    let html = `
+        <div class="text-center font-bold" style="font-size: 14px; border-bottom: 1px solid #000; padding-bottom: 4px; margin-bottom: 6px;">
+            [ TIKET DAPUR ]
+        </div>
+        
+        <table style="font-size: 11px; margin-bottom: 6px;">
+            <tr><td width="30%">No. Nota</td><td width="70%">: ${data.orderNumber}</td></tr>
+            <tr><td>Pelanggan</td><td>: ${data.customerName}</td></tr>
+            <tr><td>Waktu</td><td>: ${data.dateStr}</td></tr>
+        </table>
+        
+        <div class="divider-solid"></div>
+        <div class="font-bold" style="margin-bottom: 4px;">DAFTAR PESANAN:</div>
+        
+        <table style="font-size: 12px;">
+    `;
 
-  return {
-    generateReceiptText
-  };
-}
+    data.items.forEach((item, index) => {
+        html += `
+            <tr style="padding-top: 4px;">
+                <td width="15%" class="font-bold">${index + 1}. (${item.qty}x)</td>
+                <td width="85%" class="font-bold uppercase">${item.name}</td>
+            </tr>
+        `;
+        if (item.notes) {
+            html += `<tr><td colspan="2" class="notes" style="font-size: 11px; font-weight: bold; color: #000;">NOTE: [ ${item.notes} ]</td></tr>`;
+        }
+    });
+
+    html += `
+        </table>
+        <div class="divider-solid"></div>
+        <div class="text-center font-bold" style="margin-top: 8px;">* Segera Siapkan Pesanan *</div>
+        <div style="height: 15px;"></div>
+    `;
+
+    return wrapHtmlReceipt(html);
+};
