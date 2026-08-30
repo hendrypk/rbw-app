@@ -12,6 +12,7 @@ export interface ReceiptData {
     cashierName: string;
     customerName: string;
     orderNumber: string;
+    queueNumber: string;
     dateStr: string;
     items: ReceiptItem[];
     subTotal: number;

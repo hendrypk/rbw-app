@@ -34,7 +34,8 @@ const emit = defineEmits([
     'closeSuccessModal',
     'submitCash',
     'handleQrisCheckout',
-    'handlePrintReceipt'
+    'handlePrintReceipt',
+    'handlePrintAll',
 ]);
 
 // State lokal khusus untuk pilihan tab metode pembayaran di dalam modal (Tunai / QRIS)

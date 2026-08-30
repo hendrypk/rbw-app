@@ -13,7 +13,8 @@ import { usePosCheckout } from '@/composables/usePosCheckout';
 import { useThermalPrinter } from '@/composables/useThermalPrinter';
 import { 
     mapTransactionToReceiptData, 
-    formatCashierReceipt 
+    formatCashierReceipt,
+    formatKitchenReceipt
 } from '@/composables/useReceiptFormatter';
 import PaymentModal from '@/components/pos/PaymentModal.vue';
 import CustomerSelectModal from '@/components/pos/CustomerSelectModal.vue';
@@ -44,12 +45,33 @@ const {
 } = usePosCheckout();
 
 // Fungsi Cetak Struk
+// const handlePrintReceipt = async () => {
+//     if (lastCompletedOrder.value && lastCompletedOrder.value.orderNumber !== '-') {
+//         const formattedData = mapTransactionToReceiptData(lastCompletedOrder.value);
+//         const textStruk = formatCashierReceipt(formattedData);
+//         await print(textStruk);
+//         toast.success("Struk kasir dicetak.");
+//     } else {
+//         toast.error("Data transaksi tidak ditemukan untuk dicetak.");
+//     }
+//     closeSuccessModal();
+// };
+
+
+// Fungsi Cetak Struk Kasir & Bill (Dapur) Sekaligus
 const handlePrintReceipt = async () => {
     if (lastCompletedOrder.value && lastCompletedOrder.value.orderNumber !== '-') {
         const formattedData = mapTransactionToReceiptData(lastCompletedOrder.value);
+        
+        // 1. Cetak Struk Kasir terlebih dahulu (masuk antrean)
         const textStruk = formatCashierReceipt(formattedData);
         await print(textStruk);
-        toast.success("Struk kasir dicetak.");
+
+        // 2. Cetak Tiket Dapur / Bill otomatis setelahnya
+        const textDapur = formatKitchenReceipt(formattedData);
+        await print(textDapur);
+
+        toast.success("Struk kasir dan bill dapur berhasil dicetak.");
     } else {
         toast.error("Data transaksi tidak ditemukan untuk dicetak.");
     }

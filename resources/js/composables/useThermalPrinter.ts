@@ -161,24 +161,48 @@
 // resources/js/composables/useThermalPrinter.ts
 import { ref } from 'vue';
 
+// Antrean global (Queue) agar perintah cetak POS dieksekusi satu per satu 
+// dan tidak bentrok/rebutan port dengan order masuk dari ShopeeFood
+let printQueue: Promise<void> = Promise.resolve();
+
 export function useThermalPrinter() {
   const connectedDeviceName = ref<string>('Direct Print Bridge');
 
-  const print = async (rawText: string): Promise<void> => {
-    try {
-      const encodedText = encodeURIComponent(rawText);
-      const rawbtUrl = `rawbt:data?text=${encodedText}`;
+  const executeRawBtPrint = (rawText: string): Promise<void> => {
+    return new Promise((resolve) => {
+      // Ubah teks ke Base64 untuk MENGHINDARI bug teks "rawbt:data?text=" ikut tercetak 
+      // akibat karakter khusus (\n, spasi, simbol) gagal di-decode oleh RawBT
+      const base64Text = btoa(unescape(encodeURIComponent(rawText)));
+      const rawbtUrl = `rawbt:base64,${base64Text}`;
 
       const link = document.createElement('a');
       link.href = rawbtUrl;
+      link.setAttribute('target', '_blank');
       document.body.appendChild(link);
+      
       link.click();
       document.body.removeChild(link);
       
-    } catch (error) {
-      console.warn("Gagal mengirim ke aplikasi cetak, gunakan fallback browser...", error);
-      printViaBrowserFallback(rawText);
-    }
+      // Jeda cooldown 1.5 detik agar P7A sempat merilis socket Bluetooth-nya 
+      // kembali ke sistem (aman buat ShopeeFood)
+      setTimeout(() => {
+        resolve();
+      }, 1500);
+    });
+  };
+
+  const print = async (rawText: string): Promise<void> => {
+    // Masukkan ke dalam antrean (Queue)
+    printQueue = printQueue.then(async () => {
+      try {
+        await executeRawBtPrint(rawText);
+      } catch (error) {
+        console.warn("Gagal mengirim ke aplikasi cetak, gunakan fallback browser...", error);
+        printViaBrowserFallback(rawText);
+      }
+    });
+
+    return printQueue;
   };
 
   const printViaBrowserFallback = (text: string) => {

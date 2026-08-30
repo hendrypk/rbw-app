@@ -2,7 +2,7 @@ export interface ReceiptItem {
     name: string;
     qty: number;
     price: number;
-    notes?: string; // Sangat berguna untuk catatan masakan di struk dapur
+    notes?: string; 
 }
 
 export interface ReceiptData {
@@ -12,6 +12,7 @@ export interface ReceiptData {
     cashierName: string;
     customerName: string;
     orderNumber: string;
+    queueNumber: string; 
     dateStr: string;
     items: ReceiptItem[];
     subTotal: number;
@@ -45,6 +46,7 @@ export const mapTransactionToReceiptData = (transaction: any): ReceiptData => {
         cashierName: "Admin POS",
         customerName: transaction.customer_name || 'Pelanggan Umum',
         orderNumber: transaction.order_number || '-',
+        queueNumber: transaction.queue_number || transaction.queueNumber || 'A-01', // <-- Ambil dari backend
         dateStr: new Date(transaction.created_at || Date.now()).toLocaleString('id-ID'),
         items: itemsList,
         subTotal: subTotalAmount,
@@ -105,6 +107,7 @@ export const formatKitchenReceipt = (data: ReceiptData): string => {
     
     text += `         [ TIKET DAPUR ]        \n`;
     text += `${line}\n`;
+    text += `NO. ANTRIAN : [ ${data.queueNumber} ]\n`; 
     text += `No. Nota : ${data.orderNumber}\n`;
     text += `Pelanggan: ${data.customerName}\n`;
     text += `Waktu    : ${data.dateStr}\n`;
