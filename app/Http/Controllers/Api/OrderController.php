@@ -94,6 +94,7 @@ class OrderController extends Controller
                 // 'tax'            => $fee,
                 'discount'       => $discount,
                 'final_total'    => $finalTotal,
+                'amount_paid'    => $request->amount_paid,
                 'payment_method' => $request->payment_method,
                 'status'         => $status,
                 'notes'          => $request->notes
