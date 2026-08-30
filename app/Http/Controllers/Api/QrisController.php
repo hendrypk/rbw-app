@@ -128,7 +128,8 @@ class QrisController extends Controller
         }
 
         // 2. Hit API DOKU menggunakan Service jika belum ada / sudah kedaluwarsa
-        $dokuResponse = $this->qrisService->generate($order->order_number, $order->final_total);
+        $dokuInvoiceNo = $order->order_number . '-' . strtoupper(substr(uniqid(), -4));
+        $dokuResponse = $this->qrisService->generate($dokuInvoiceNo, $order->final_total);
 
         // 3. Kode sukses QRIS dari DOKU adalah 2004700 atau 2000000
         if (isset($dokuResponse['responseCode']) && in_array($dokuResponse['responseCode'], ['2004700', '2000000'])) {
@@ -141,7 +142,7 @@ class QrisController extends Controller
             DokuTransaction::updateOrCreate(
                 ['order_number' => $order->order_number],
                 [
-                    'original_reference_no' => $referenceNo,
+                    'original_reference_no' => $dokuInvoiceNo,
                     'amount' => $order->final_total,
                     'qr_content' => $qrisString,
                     'status' => 'pending',
