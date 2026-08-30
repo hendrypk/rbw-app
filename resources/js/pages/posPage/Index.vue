@@ -59,15 +59,19 @@ const {
 
 
 // Fungsi Cetak Struk Kasir & Bill (Dapur) Sekaligus
+// Fungsi Cetak Struk Kasir & Bill (Dapur) dengan jeda aman
 const handlePrintReceipt = async () => {
     if (lastCompletedOrder.value && lastCompletedOrder.value.orderNumber !== '-') {
         const formattedData = mapTransactionToReceiptData(lastCompletedOrder.value);
         
-        // 1. Cetak Struk Kasir terlebih dahulu (masuk antrean)
+        // 1. Cetak Struk Kasir
         const textStruk = formatCashierReceipt(formattedData);
         await print(textStruk);
 
-        // 2. Cetak Tiket Dapur / Bill otomatis setelahnya
+        // Berikan jeda 2 detik (2000ms) agar RawBT selesai meluncurkan printer pertama
+        await new Promise(resolve => setTimeout(resolve, 2000));
+
+        // 2. Cetak Tiket Dapur / Bill
         const textDapur = formatKitchenReceipt(formattedData);
         await print(textDapur);
 

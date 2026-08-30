@@ -130,6 +130,11 @@ class OrderController extends Controller
                         replacements: $replacements
                     );
                 }
+
+                if (strtolower($request->payment_method) === 'cash' && !empty($request->customer_id)) {
+                    $this->posService->rewardCustomerPoints($order);
+                }
+                
             } else {
                 // Jurnal Kasus Pending / Piutang
                 JournalEntry::createEntryFromMapping(

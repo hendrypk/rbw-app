@@ -28,6 +28,7 @@ class PosService
                 // 'tax'            => $orderData['tax'],
                 'discount'         => $orderData['discount'],
                 'final_total'      => $orderData['final_total'],
+                'amount_paid'      => $orderData['amount_paid'],
                 'payment_method'   => $orderData['payment_method'],
                 'status'           => $orderData['status'],
                 'notes'            => $orderData['notes']
