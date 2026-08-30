@@ -132,9 +132,9 @@ class OrderController extends Controller
                     );
                 }
 
-                if (strtolower($request->payment_method) === 'cash' && !empty($request->customer_id)) {
-                    $this->posService->rewardCustomerPoints($order);
-                }
+                // if (strtolower($request->payment_method) === 'cash' && !empty($request->customer_id)) {
+                //     $this->posService->rewardCustomerPoints($order);
+                // }
                 
             } else {
                 // Jurnal Kasus Pending / Piutang
