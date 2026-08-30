@@ -23,6 +23,9 @@ export interface CompletedOrderData {
     orderNumber: string;
     customerName: string;
     customerId: string | null;
+    subtotal: number;
+    discount: number;
+    pointsUsed?: number;
     finalTotal: number;
     items: CartItem[];
     paymentMethod: string;
@@ -54,16 +57,6 @@ export function usePosCheckout() {
     // const paymentStatus = ref<'PENDING' | 'SUCCESS' | 'FAILED'>('PENDING');
     const paymentStatus = ref<'PENDING' | 'SUCCESS' | 'FAILED'>('PENDING');
 
-    // Menyimpan data pesanan terakhir yang sukses untuk dicetak struk
-    const lastCompletedOrder = ref<CompletedOrderData>({
-        orderNumber: '-',
-        customerName: '',
-        customerId: '',
-        finalTotal: 0,
-        items: [],
-        paymentMethod: 'cash'
-    });
-
     const { 
         vouchers, 
         appliedVoucher, 
@@ -93,6 +86,18 @@ export function usePosCheckout() {
         const total = (cartSubtotal.value + Number(transactionFee.value)) - Number(totalDiscount.value);
         const roundedTotal = Math.round(total);
         return roundedTotal < 0 ? 0 : roundedTotal;
+    });
+
+    const lastCompletedOrder = ref<CompletedOrderData>({
+        orderNumber: '-',
+        customerName: '',
+        customerId: '',
+        subtotal: 0,
+        discount: 0,
+        pointsUsed: 0,
+        finalTotal: 0,
+        items: [],
+        paymentMethod: 'cash'
     });
 
     const openPaymentModal = () => {
@@ -173,8 +178,10 @@ export function usePosCheckout() {
                 action_type: type,
                 amount_paid: type === 'pay' ? amountPaidInput.value : 0
             };
-console.log("🚀 PAYLOAD CHECKOUT POS DIKIRIM:", payload);
+            
+            console.log("🚀 PAYLOAD CHECKOUT POS DIKIRIM:", payload);
             console.log("🏷️ Applied Voucher Object:", appliedVoucher.value);
+            
             const response = await axios.post('/api/pos/checkout', payload);
             const orderData = response.data.data;
             
@@ -186,16 +193,18 @@ console.log("🚀 PAYLOAD CHECKOUT POS DIKIRIM:", payload);
                     orderNumber: orderData.order_number,
                     customerName: customerName.value || 'Pelanggan Umum',
                     customerId: customerId.value || null,
-                    finalTotal: finalTotal.value,
+                    subtotal: cartSubtotal.value,
+                    discount: totalDiscount.value,
+                    pointsUsed: Number(orderData.points_used || orderData.points || 0),
+                    finalTotal: orderData.final_total ?? finalTotal.value,
                     items: [...cart.value],
                     paymentMethod: paymentMethod.value
                 };
                 
                 closePaymentModal();
                 paymentStatus.value = 'SUCCESS';
-                isSuccessModalOpen.value = true; // Munculkan modal sukses
+                isSuccessModalOpen.value = true;
             } else {
-                // Jika hanya disimpan (save / unpaid), langsung reset state keranjang
                 resetPosState();
             }
         } catch (error: any) {
@@ -265,7 +274,7 @@ console.log("🚀 PAYLOAD CHECKOUT POS DIKIRIM:", payload);
     };
 
     // --- Polling Status Payment Checker ---
-const startPollingStatus = () => {
+    const startPollingStatus = () => {
         if (statusInterval) clearInterval(statusInterval);
 
         statusInterval = setInterval(async () => {
@@ -281,17 +290,17 @@ const startPollingStatus = () => {
                     clearInterval(statusInterval);
 
                     // --- LANGSUNG AMBIL ENDPOINT MARK-PAID DI SINI ---
-const currentOrderId = (qrisData.value as any).orderId;
-console.log("ID Order yang mau dilunasi:", currentOrderId); // Cek F12 Console browser
+                    const currentOrderId = (qrisData.value as any).orderId;
+                    console.log("ID Order yang mau dilunasi:", currentOrderId); // Cek F12 Console browser
 
-if (currentOrderId) {
-    const res = await axios.post(`/api/pos/orders/${currentOrderId}/mark-paid`, {
-        payment_method: 'qris'
-    });
-    console.log("Respon mark-paid:", res.data);
-} else {
-    console.error("ERROR: orderId kosong/null!");
-}
+                    if (currentOrderId) {
+                        const res = await axios.post(`/api/pos/orders/${currentOrderId}/mark-paid`, {
+                            payment_method: 'qris'
+                        });
+                        console.log("Respon mark-paid:", res.data);
+                    } else {
+                        console.error("ERROR: orderId kosong/null!");
+                    }
 
                     // Panggil fungsi untuk memunculkan modal sukses & data struk
                     handleQrisSuccessAction();
@@ -306,29 +315,27 @@ if (currentOrderId) {
         }, 4000);
     };
 
-    // Dipanggil ketika polling QRIS mendeteksi status SUCCESS dari backend
-    const handleQrisSuccessAction = () => {
+    const handleQrisSuccessAction = (orderDetail?: any) => {
         lastCompletedOrder.value = {
             orderNumber: qrisData.value.invoiceNo,
             customerName: customerName.value || 'Pelanggan Umum',
             customerId: customerId.value || null,
-            finalTotal: finalTotal.value,
+            subtotal: cartSubtotal.value,
+            discount: totalDiscount.value,
+            pointsUsed: Number(orderDetail?.points_used || orderDetail?.points || 0),
+            finalTotal: orderDetail?.final_total ?? finalTotal.value,
             items: [...cart.value],
             paymentMethod: 'qris'
         };
 
         if (statusInterval) clearInterval(statusInterval);
         isQrisModalOpen.value = false;
-        
-        // Tampilkan modal sukses universal
         isSuccessModalOpen.value = true;
     };
 
     onBeforeUnmount(() => {
         if (statusInterval) clearInterval(statusInterval);
     });
-    console.log("Customer Name yang dikirim:", customerName.value);
-console.log("Customer ID yang dikirim:", customerId.value); // <-- Cek F12 Console browser, apakah ini berisi UUID atau string kosong/null?
 
     return {
         isPaymentModalOpen, isQrisModalOpen, isGeneratingQris, isSuccessModalOpen, checking,

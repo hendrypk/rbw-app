@@ -27,7 +27,8 @@ import PosLayout from '@/layouts/PosLayout.vue';
 
 // Import composables thermal printer & receipt builder
 import { useThermalPrinter } from '@/composables/useThermalPrinter';
-import { useReceiptBuilder, ReceiptData } from '@/composables/useReceiptBuilder';
+import { mapTransactionToReceiptData } from '@/composables/useReceiptFormatter';
+import { formatCashierReceipt, formatCopyReceipt, formatKitchenReceipt } from '@/composables/useReceiptBuilder';
 
 
 defineOptions({
@@ -36,12 +37,6 @@ defineOptions({
 
 // Inisialisasi Composable Printer & Builder
 const { print } = useThermalPrinter();
-import { 
-    mapTransactionToReceiptData, 
-    formatCashierReceipt, 
-    formatKitchenReceipt,
-    formatCopyReceipt 
-} from '@/composables/useReceiptFormatter';
 
 // Interface TypeScript untuk Data Transaksi
 interface TransactionItem {
@@ -189,9 +184,13 @@ const handlePrintCopyReceipt = async () => {
     }
     const formattedData = mapTransactionToReceiptData(selectedTransaction.value);
     const textCopyStruk = formatCopyReceipt(formattedData);
+    console.log(textCopyStruk);
+    console.groupEnd();
     await print(textCopyStruk);
     toast.success("Salinan struk (Copy) dicetak.");
 };
+
+
 
 // Contoh 2: Cetak Tiket Dapur (Kitchen Ticket) secara bersamaan jika diperlukan
 const handlePrintKitchenTicket = async (transactionObj: any) => {

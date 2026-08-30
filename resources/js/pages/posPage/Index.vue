@@ -13,9 +13,8 @@ import { usePosCheckout } from '@/composables/usePosCheckout';
 import { useThermalPrinter } from '@/composables/useThermalPrinter';
 import { 
     mapTransactionToReceiptData, 
-    formatCashierReceipt,
-    formatKitchenReceipt
 } from '@/composables/useReceiptFormatter';
+import { formatCashierReceipt, formatKitchenReceipt } from '@/composables/useReceiptBuilder';
 import PaymentModal from '@/components/pos/PaymentModal.vue';
 import CustomerSelectModal from '@/components/pos/CustomerSelectModal.vue';
 import DiscountModal from '@/components/pos/DiscountModal.vue';
@@ -62,21 +61,35 @@ const {
 // Fungsi Cetak Struk Kasir & Bill (Dapur) dengan jeda aman
 const handlePrintReceipt = async () => {
     if (lastCompletedOrder.value && lastCompletedOrder.value.orderNumber !== '-') {
+        console.log("📌 [Cetak] Memulai proses persiapan data transaksi...", lastCompletedOrder.value);
+        
         const formattedData = mapTransactionToReceiptData(lastCompletedOrder.value);
         
         // 1. Cetak Struk Kasir
         const textStruk = formatCashierReceipt(formattedData);
+        console.group("🖨️ [Cetak - 1] Payload Struk Kasir");
+        console.log(textStruk);
+        console.groupEnd();
+
         await print(textStruk);
+        console.log("✅ [Cetak - 1] Struk kasir berhasil dilempar ke antrean printer.");
 
         // Berikan jeda 2 detik (2000ms) agar RawBT selesai meluncurkan printer pertama
+        console.log("⏳ [Cetak] Menunggu jeda cooldown 2 detik...");
         await new Promise(resolve => setTimeout(resolve, 2000));
 
         // 2. Cetak Tiket Dapur / Bill
         const textDapur = formatKitchenReceipt(formattedData);
+        console.group("📋 [Cetak - 2] Payload Tiket Dapur / Bill");
+        console.log(textDapur);
+        console.groupEnd();
+
         await print(textDapur);
+        console.log("✅ [Cetak - 2] Tiket dapur berhasil dilempar ke antrean printer.");
 
         toast.success("Struk kasir dan bill dapur berhasil dicetak.");
     } else {
+        console.warn("⚠️ [Cetak] Gagal: Data transaksi tidak ditemukan atau nomor nota kosong.", lastCompletedOrder.value);
         toast.error("Data transaksi tidak ditemukan untuk dicetak.");
     }
     closeSuccessModal();

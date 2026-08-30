@@ -137,7 +137,6 @@ class OrderController extends Controller
                 // }
                 
             } else {
-                // Jurnal Kasus Pending / Piutang
                 JournalEntry::createEntryFromMapping(
                     type: 'pos_pending',
                     j1Amount: (float) $order->final_total,
@@ -171,15 +170,14 @@ class OrderController extends Controller
         try {
             $order = Order::findOrFail($id);
 
-            // Jika sudah lunas, cegah duplikasi jurnal
             if ($order->status === 'paid') {
                 return response()->json(['success' => true, 'message' => 'Order sudah berstatus lunas sebelumnya.']);
             }
 
-            // 1. Update status order menjadi paid
             $order->update([
                 'status'         => 'paid',
                 'payment_method' => $request->payment_method,
+                'amount_paid' => $request->amount_paid,
                 'customer_id'    => $request->customer_id ?? $order->customer_id // Pertahankan atau perbarui jika dikirim
             ]);
 
@@ -290,16 +288,24 @@ class OrderController extends Controller
             'notes' => 'nullable|string',
             'voucher_id'       => 'nullable|uuid|exists:vouchers,id', // ⬅️ Tambahkan validasi voucher_id
             'discount'         => 'nullable|numeric|min:0',
+            'points_to_use'    => 'nullable|integer|min:0', // ⬅️ Tambahkan validasi poin yang digunakan
         ]);
 
         try {
             DB::beginTransaction();
 
             $customer = auth('customer')->user();
+            $pointsToUse = intval($request->points_to_use ?? 0);
 
-            $today = Carbon::now()->format('Ymd');
-            $timeHash = Carbon::now()->format('His') . '-' . strtoupper(substr(uniqid(), -4));
-            
+            if ($pointsToUse > 0) {
+                if (!$customer) {
+                    return response()->json(['status' => 'error', 'message' => 'Anda harus login untuk menggunakan poin.'], 401);
+                }
+                if ($customer->total_points < $pointsToUse) {
+                    return response()->json(['status' => 'error', 'message' => 'Saldo poin Anda tidak mencukupi.'], 422);
+                }
+            }
+
             $totalSubtotal = 0;
             $itemsData = [];
 
@@ -331,7 +337,7 @@ class OrderController extends Controller
             }
 
             $discount = floatval($request->discount ?? 0);
-            $finalTotal = max(0, $totalSubtotal - $discount);
+            $finalTotal = max(0, ($totalSubtotal - $discount) - $pointsToUse);
 
             $orderData = [
                 'customer_name'    => $request->customer_name,
@@ -344,7 +350,8 @@ class OrderController extends Controller
                 'final_total'      => $finalTotal,                  // ⬅️ Simpan total bersih setelah diskon
                 'payment_method'   => 'pending', 
                 'status'           => 'unpaid',
-                'notes'            => $request->notes
+                'notes'            => $request->notes,
+                'amount_paid'      => floatval($request->amount_paid ?? 0), // ⬅️ Tambahkan baris pengaman ini
             ];
 
             $order = $this->posService->completeOrder($orderData, $itemsData);

@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 use App\Models\Customer;
 use App\Models\CustomerPoint;
+use App\Models\Order;
 use App\Models\Voucher;
 
 class CustomerLoyaltyController extends Controller
@@ -86,5 +87,31 @@ class CustomerLoyaltyController extends Controller
             'message' => 'Berhasil menukar poin dengan voucher!',
             'remaining_points' => $customer->total_points
         ]);
+    }
+
+    public function redeemCustomerPoints(Order $order, int $pointsToUse)
+    {
+        if (!$order->customer_id || $pointsToUse <= 0) {
+            return; 
+        }
+
+        $existingPoint = \App\Models\CustomerPoint::where('order_id', $order->id)
+            ->where('type', 'redeem')
+            ->exists();
+
+        if (!$existingPoint) {
+            \App\Models\CustomerPoint::create([
+                'customer_id' => $order->customer_id,
+                'order_id'    => $order->id,
+                'points'      => -$pointsToUse,
+                'type'        => 'redeem',
+                'description' => "Penggunaan poin untuk pembayaran pesanan #{$order->order_number}"
+            ]);
+
+            $customer = \App\Models\Customer::find($order->customer_id);
+            if ($customer) {
+                $customer->decrement('total_points', $pointsToUse);
+            }
+        }
     }
 }
