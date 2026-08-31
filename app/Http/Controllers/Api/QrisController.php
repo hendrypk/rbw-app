@@ -128,7 +128,7 @@ class QrisController extends Controller
         }
 
         // 2. Hit API DOKU menggunakan Service jika belum ada / sudah kedaluwarsa
-        $dokuInvoiceNo = $order->order_number . '-' . strtoupper(substr(uniqid(), -4));
+        $dokuInvoiceNo = $order->order_number;
         $dokuResponse = $this->qrisService->generate($dokuInvoiceNo, $order->final_total);
 
         // 3. Kode sukses QRIS dari DOKU adalah 2004700 atau 2000000
@@ -179,17 +179,15 @@ class QrisController extends Controller
     public function checkStatus(Request $request)
     {
         $request->validate([
-            'order_number' => 'required|string',
-            'reference_no' => 'required|string',
+            'order_number' => 'required|string'
         ]);
 
         $order = Order::where('order_number', $request->order_number)->firstOrFail();
-        $dokuReferenceNo = $request->reference_no;
 
         // Ambil data referensi DOKU dari tabel doku_transactions
         $dokuTx = DokuTransaction::where('order_number', $order->order_number)->latest()->first();
 
-        if (!$dokuReferenceNo) {
+        if (!$dokuTx || empty($dokuTx->original_reference_no)) {
             return response()->json([
                 'status' => 'error',
                 'message' => 'Referensi transaksi DOKU tidak ditemukan untuk order ini.'
@@ -197,17 +195,16 @@ class QrisController extends Controller
         }
 
         // Kirim original_reference_no yang benar ke service queryStatus DOKU
-        // $status = $this->qrisService->queryStatus($order->order_number, $dokuTx->original_reference_no);
-        $status = $this->qrisService->queryStatus($order->order_number, $dokuReferenceNo);
+        $status = $this->qrisService->queryStatus($order->order_number, $dokuTx->original_reference_no);
+
         Log::info('DOKU Query Status Response:', (array) $status);
 
         // Sesuaikan pengecekan status sukses dari DOKU
-        // $latestStatus = $status['latestTransactionStatus'] ?? $status['transaction_status'] ?? '';
-        $latestStatus = (string) ($status['latestTransactionStatus'] ?? $status['responCode'] ?? $status['transaction_status'] ?? '');
-        // $isPaid = strtoupper($latestStatus) === 'SUCCESS' || strtoupper($latestStatus) === '00';
-        $isPaid = in_array(strtoupper(trim($latestStatus)), ['00', 'Success', 'PAID', 'SUCCESSFUL', '2005100']);
+        $latestStatus = $status['latestTransactionStatus'] ?? $status['transaction_status'] ?? '';
+        $isPaid = strtoupper($latestStatus) === 'SUCCESS' || strtoupper($latestStatus) === '00';
+
         if ($isPaid) {
-            DB::transaction(function () use ($order, $dokuReferenceNo, $status) {
+            DB::transaction(function () use ($order, $dokuTx, $status) {
                 if ($order->status !== 'paid') {
                     $order->update([
                         'status' => 'paid', 
@@ -215,12 +212,13 @@ class QrisController extends Controller
                     ]);
                 }
 
-                DokuTransaction::where('original_reference_no', $dokuReferenceNo)->update([
+                $dokuTx->update([
                     'status' => 'success',
                     'raw_response' => $status
                 ]);
             });
         }
+
         return response()->json([
             'status' => 'success',
             'paid'   => $isPaid,
