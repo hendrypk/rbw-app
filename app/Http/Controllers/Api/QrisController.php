@@ -179,15 +179,17 @@ class QrisController extends Controller
     public function checkStatus(Request $request)
     {
         $request->validate([
-            'order_number' => 'required|string'
+            'order_number' => 'required|string',
+            'reference_no' => 'required|string',
         ]);
 
         $order = Order::where('order_number', $request->order_number)->firstOrFail();
+        $dokuReferenceNo = $request->reference_no;
 
         // Ambil data referensi DOKU dari tabel doku_transactions
         $dokuTx = DokuTransaction::where('order_number', $order->order_number)->latest()->first();
 
-        if (!$dokuTx || empty($dokuTx->original_reference_no)) {
+        if (!$dokuReferenceNo) {
             return response()->json([
                 'status' => 'error',
                 'message' => 'Referensi transaksi DOKU tidak ditemukan untuk order ini.'
@@ -195,8 +197,8 @@ class QrisController extends Controller
         }
 
         // Kirim original_reference_no yang benar ke service queryStatus DOKU
-        $status = $this->qrisService->queryStatus($order->order_number, $dokuTx->original_reference_no);
-
+        // $status = $this->qrisService->queryStatus($order->order_number, $dokuTx->original_reference_no);
+        $status = $this->qrisService->queryStatus($order->order_number, $dokuReferenceNo);
         Log::info('DOKU Query Status Response:', (array) $status);
 
         // Sesuaikan pengecekan status sukses dari DOKU
@@ -204,7 +206,7 @@ class QrisController extends Controller
         $isPaid = strtoupper($latestStatus) === 'SUCCESS' || strtoupper($latestStatus) === '00';
 
         if ($isPaid) {
-            DB::transaction(function () use ($order, $dokuTx, $status) {
+            DB::transaction(function () use ($order, $dokuReferenceNo, $status) {
                 if ($order->status !== 'paid') {
                     $order->update([
                         'status' => 'paid', 
@@ -212,13 +214,12 @@ class QrisController extends Controller
                     ]);
                 }
 
-                $dokuTx->update([
+                DokuTransaction::where('original_reference_no', $dokuReferenceNo)->update([
                     'status' => 'success',
                     'raw_response' => $status
                 ]);
             });
         }
-
         return response()->json([
             'status' => 'success',
             'paid'   => $isPaid,
