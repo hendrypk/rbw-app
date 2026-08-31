@@ -342,16 +342,16 @@ const getInitials = (name: string) => {
 
 <template>
     <Head title="RBW POS" />
-<div class="h-full w-full flex flex-col md:flex-row overflow-hidden relative select-none">
+    <div class="h-full w-full flex flex-col md:flex-row overflow-hidden relative select-none">
         
         <!-- ========================================================= -->
         <!-- LEFT PANEL: CART & CHECKOUT CONTAINER (SEKARANG DI KIRI)  -->
         <!-- ========================================================= -->
         <div 
-            class="fixed md:relative bottom-0 left-0 right-0 z-30 bg-white dark:bg-zinc-900 border-t md:border-t-0 border-slate-200 dark:border-zinc-800 flex flex-col shadow-2xl md:shadow-none transition-all duration-300 ease-out"
+            class="fixed md:relative bottom-0 left-0 right-0 z-30 bg-white dark:bg-zinc-900 border-t md:border-t-0 border-slate-200 dark:border-zinc-800 flex flex-col shadow-2xl md:shadow-none transition-all duration-300 ease-out overflow-hidden"
             :style="{ width: windowWidth >= 768 ? `${catalogWidth}%` : '100%' }"
             :class="[
-                isCartExpanded ? 'h-[85vh]' : 'h-24 md:h-full',
+                isCartExpanded ? 'h-[90vh]' : 'h-auto md:h-full',
                 'md:flex-initial'
             ]"
             @touchstart="handleTouchStart"
@@ -367,36 +367,31 @@ const getInitials = (name: string) => {
             </div>
 
             <!-- Cart Header -->
-<div class="p-4 border-b border-slate-100 dark:border-zinc-800 flex items-center justify-between bg-white dark:bg-zinc-900 shrink-0 gap-2">
-                <div class="flex items-center gap-3 flex-1 min-w-0">
-                    <button class="p-1.5 text-slate-600 dark:text-zinc-300 hover:bg-slate-100 dark:hover:bg-zinc-800 rounded-lg shrink-0">
-                        <MenuIcon class="h-5 w-5" />
-                    </button>
-                    
-                    <!-- Tombol CustomerModal (Pengganti Input Teks Biasa) -->
+            <div class="p-3 border-b border-slate-100 dark:border-zinc-800 flex items-center justify-between bg-white dark:bg-zinc-900 shrink-0 gap-2">
+                <div class="flex items-center gap-2 flex-1 min-w-0">
+
                     <button 
                         @click="openCustomerModal" 
                         type="button"
-                        class="text-xs sm:text-sm font-bold text-slate-800 dark:text-zinc-100 bg-slate-100 dark:bg-zinc-800 hover:bg-slate-200 dark:hover:bg-zinc-700 px-3 py-2 rounded-xl transition-all truncate text-left w-full flex items-center justify-between cursor-pointer"
+                        class="text-xs font-bold text-slate-800 dark:text-zinc-100 bg-slate-100 dark:bg-zinc-800 hover:bg-slate-200 dark:hover:bg-zinc-700 px-3 py-1.5 rounded-xl transition-all truncate text-left w-full flex items-center justify-between cursor-pointer"
                     >
                         <span class="truncate">{{ customerName || 'Pilih Pelanggan' }}</span>
                         <span class="text-[10px] text-slate-400 uppercase tracking-wider ml-1 shrink-0">Ganti</span>
                     </button>
                 </div>
 
-                <!-- Tombol Clear All Keranjang -->
                 <button 
                     @click="cart = []" 
                     :disabled="cart.length === 0"
-                    class="px-2.5 py-2 bg-red-50 hover:bg-red-100 dark:bg-red-950/30 dark:hover:bg-red-900/50 text-red-600 dark:text-red-400 rounded-xl text-xs font-bold transition-all disabled:opacity-30 disabled:cursor-not-allowed shrink-0 cursor-pointer"
+                    class="px-2.5 py-1.5 bg-red-50 hover:bg-red-100 dark:bg-red-950/30 dark:hover:bg-red-900/50 text-red-600 dark:text-red-400 rounded-xl text-xs font-bold transition-all disabled:opacity-30 disabled:cursor-not-allowed shrink-0 cursor-pointer"
                     title="Kosongkan Keranjang"
                 >
                     Clear All
                 </button>
             </div>
 
-            <!-- Cart Items List -->
-            <div class="flex-1 overflow-y-auto divide-y divide-slate-100 dark:divide-zinc-800 custom-scrollbar p-2">
+            <!-- Cart Items List (Hanya tampil saat expanded di mobile) -->
+            <div :class="[isCartExpanded ? 'flex-1' : 'hidden md:block md:flex-1', 'overflow-y-auto divide-y divide-slate-100 dark:divide-zinc-800 custom-scrollbar p-2']">
                 <div v-if="cart.length === 0" class="text-center py-16 text-xs text-slate-400">
                     Keranjang kosong. Klik menu untuk menambah.
                 </div>
@@ -413,7 +408,6 @@ const getInitials = (name: string) => {
                         <span class="text-xs text-slate-400 font-mono">Rp {{ Number(item.price).toLocaleString('id-ID') }}</span>
                     </div>
 
-                    <!-- Tombol Qty plus minus mini -->
                     <div class="flex items-center gap-2 shrink-0">
                         <button @click="updateQuantity(item.menu_id, -1)" class="p-1 bg-slate-100 dark:bg-zinc-800 rounded-md text-slate-600 dark:text-zinc-300 hover:bg-red-100 hover:text-red-600 transition-colors">
                             <Minus class="h-3.5 w-3.5" />
@@ -430,30 +424,25 @@ const getInitials = (name: string) => {
                 </div>
             </div>
 
-            <!-- Catatan Pesanan Ringkas -->
-<div class="px-4 py-2 border-t border-slate-100 dark:border-zinc-800 bg-slate-50/50 dark:bg-zinc-900/50 shrink-0">
+            <!-- Catatan Pesanan (Hanya saat expanded di mobile) -->
+            <div :class="[isCartExpanded ? 'block' : 'hidden md:block', 'px-3 py-1.5 border-t border-slate-100 dark:border-zinc-800 bg-slate-50/50 dark:bg-zinc-900/50 shrink-0']">
                 <input 
                     v-model="orderNote"
                     type="text" 
                     placeholder="Tambah catatan pesanan..." 
-                    class="w-full text-xs px-3 py-1.5 bg-white dark:bg-zinc-800 border border-slate-200 dark:border-zinc-700 rounded-lg text-slate-700 dark:text-zinc-300 focus:outline-none"
+                    class="w-full text-xs px-3 py-1 bg-white dark:bg-zinc-800 border border-slate-200 dark:border-zinc-700 rounded-lg text-slate-700 dark:text-zinc-300 focus:outline-none"
                 />
             </div>
 
-            <!-- Footer Summary & Checkout Actions -->
-
-<!-- Footer Summary & Checkout Actions -->
-<!-- Footer Summary & Checkout Actions -->
-            <div class="p-4 border-t border-slate-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 space-y-3 shrink-0">
+            <!-- Footer Summary & Checkout Actions (Selalu Tampil di Bawah) -->
+            <div class="p-3 border-t border-slate-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 space-y-2 shrink-0">
                 
-                <!-- Rincian Subtotal, Diskon Voucher, & Total -->
-                <div class="space-y-1.5 px-1">
+                <div class="space-y-1 px-1">
                     <div class="flex items-center justify-between text-xs text-slate-500 dark:text-zinc-400">
                         <span>Subtotal</span>
                         <span class="font-mono">Rp {{ cartSubtotal.toLocaleString('id-ID') }}</span>
                     </div>
 
-                    <!-- Tampilkan baris potongan voucher jika sedang applied -->
                     <div v-if="appliedVoucher" class="flex items-center justify-between text-xs text-emerald-600 dark:text-emerald-400 font-semibold">
                         <span class="flex items-center gap-1">
                             <span class="w-1.5 h-1.5 rounded-full bg-emerald-500 inline-block"></span>
@@ -462,34 +451,30 @@ const getInitials = (name: string) => {
                         <span class="font-mono">- Rp {{ appliedVoucher.discount_amount.toLocaleString('id-ID') }}</span>
                     </div>
 
-                    <!-- Total Akhir -->
-                    <div class="flex items-center justify-between pt-2 border-t border-slate-100 dark:border-zinc-800">
-                        <span class="text-xs uppercase font-bold text-slate-400 tracking-wider">Total Pembayaran</span>
-                        <span class="text-base sm:text-lg font-black text-slate-900 dark:text-zinc-50 font-mono">
+                    <div class="flex items-center justify-between pt-1.5 border-t border-slate-100 dark:border-zinc-800">
+                        <span class="text-xs uppercase font-bold text-slate-400 tracking-wider">Total</span>
+                        <span class="text-sm sm:text-base font-black text-slate-900 dark:text-zinc-50 font-mono">
                             Rp {{ finalTotal.toLocaleString('id-ID') }}
                         </span>
                     </div>
                 </div>
 
-                <!-- Tombol Aksi (Icon Diskon di Kiri, Simpan & Bayar Dominan di Kanan) -->
-                <div class="flex items-center gap-2 pt-1">
-                    <!-- Tombol Diskon Berikon Saja (Icon Only) -->
+                <!-- Tombol Aksi -->
+                <div class="flex items-center gap-2 pt-0.5">
                     <button 
                         @click="openDiscountModal" 
-                        class="w-11 h-11 rounded-xl bg-orange-50 hover:bg-orange-100 dark:bg-orange-950/40 text-orange-600 dark:text-orange-400 flex items-center justify-center transition-all border border-orange-200/60 dark:border-orange-900/50 cursor-pointer shadow-2xs relative shrink-0"
+                        class="w-10 h-10 rounded-xl bg-orange-50 hover:bg-orange-100 dark:bg-orange-950/40 text-orange-600 dark:text-orange-400 flex items-center justify-center transition-all border border-orange-200/60 dark:border-orange-900/50 cursor-pointer relative shrink-0"
                         title="Beri Diskon / Voucher"
                     >
-                        <Percent class="w-5 h-5" />
-                        <!-- Indikator kecil jika voucher aktif -->
-                        <span v-if="appliedVoucher" class="absolute -top-1 -right-1 w-3.5 h-3.5 bg-emerald-500 rounded-full border-2 border-white dark:border-zinc-950"></span>
+                        <Percent class="w-4 h-4" />
+                        <span v-if="appliedVoucher" class="absolute -top-1 -right-1 w-3 h-3 bg-emerald-500 rounded-full border-2 border-white dark:border-zinc-950"></span>
                     </button>
 
-                    <!-- Tombol Simpan & Bayar Diperbesar Menjadi Flex-1 -->
                     <div class="flex items-center gap-2 flex-1">
                         <button 
                             @click="submitCheckout('save')"
                             :disabled="cart.length === 0"
-                            class="flex-1 py-3 bg-amber-400 hover:bg-amber-500 text-slate-950 font-black rounded-xl text-xs sm:text-sm shadow-xs transition-all disabled:opacity-40 cursor-pointer text-center"
+                            class="flex-1 py-2.5 bg-amber-400 hover:bg-amber-500 text-slate-950 font-black rounded-xl text-xs shadow-xs transition-all disabled:opacity-40 cursor-pointer text-center"
                         >
                             Simpan
                         </button>
@@ -497,7 +482,7 @@ const getInitials = (name: string) => {
                         <button 
                             @click="openPaymentModal"
                             :disabled="cart.length === 0"
-                            class="flex-1 py-3 bg-emerald-600 hover:bg-emerald-500 text-white font-black rounded-xl text-xs sm:text-sm shadow-md transition-all disabled:opacity-40 cursor-pointer text-center"
+                            class="flex-1 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white font-black rounded-xl text-xs shadow-md transition-all disabled:opacity-40 cursor-pointer text-center"
                         >
                             Bayar
                         </button>
@@ -505,7 +490,6 @@ const getInitials = (name: string) => {
                 </div>
             </div>
         </div>
-
         <!-- ========================================================= -->
         <!-- DRAGGABLE RESIZER BAR                                     -->
         <!-- ========================================================= -->
