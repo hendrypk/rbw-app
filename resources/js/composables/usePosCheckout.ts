@@ -317,7 +317,7 @@ export function usePosCheckout() {
 
     const handleQrisSuccessAction = (orderDetail?: any) => {
         lastCompletedOrder.value = {
-            orderNumber: qrisData.value.invoiceNo,
+            orderNumber: qrisData.value.invoiceNo || orderDetail?.order_number || '-',
             customerName: customerName.value || 'Pelanggan Umum',
             customerId: customerId.value || null,
             subtotal: cartSubtotal.value,

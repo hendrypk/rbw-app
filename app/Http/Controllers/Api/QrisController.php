@@ -107,7 +107,6 @@ class QrisController extends Controller
 
         $order = Order::where('order_number', $request->order_number)->firstOrFail();
 
-        // 1. Cek apakah sudah ada transaksi pending yang aktif di tabel doku_transactions
         $existingTx = DokuTransaction::where('order_number', $order->order_number)
             ->where('status', 'pending')
             ->where('expired_at', '>', now())
@@ -127,18 +126,15 @@ class QrisController extends Controller
             ]);
         }
 
-        // 2. Hit API DOKU menggunakan Service jika belum ada / sudah kedaluwarsa
         $dokuInvoiceNo = $order->order_number;
         $dokuResponse = $this->qrisService->generate($dokuInvoiceNo, $order->final_total);
 
-        // 3. Kode sukses QRIS dari DOKU adalah 2004700 atau 2000000
         if (isset($dokuResponse['responseCode']) && in_array($dokuResponse['responseCode'], ['2004700', '2000000'])) {
             
             $qrisString = $dokuResponse['qrContent'] ?? '';
             $referenceNo = $dokuResponse['referenceNo'] ?? $dokuResponse['originalReferenceNo'] ?? null;
             $expiredAt = Carbon::now()->addMinutes(15);
 
-            // 4. SIMPAN KE TABEL doku_transactions AGAR BISA DI-QUERY NANTINYA
             DokuTransaction::updateOrCreate(
                 ['order_number' => $order->order_number],
                 [
@@ -184,7 +180,6 @@ class QrisController extends Controller
 
         $order = Order::where('order_number', $request->order_number)->firstOrFail();
 
-        // Ambil data referensi DOKU dari tabel doku_transactions
         $dokuTx = DokuTransaction::where('order_number', $order->order_number)->latest()->first();
 
         if (!$dokuTx || empty($dokuTx->original_reference_no)) {
@@ -194,12 +189,10 @@ class QrisController extends Controller
             ], 404);
         }
 
-        // Kirim original_reference_no yang benar ke service queryStatus DOKU
         $status = $this->qrisService->queryStatus($order->order_number, $dokuTx->original_reference_no);
 
         Log::info('DOKU Query Status Response:', (array) $status);
 
-        // Sesuaikan pengecekan status sukses dari DOKU
         $latestStatus = $status['latestTransactionStatus'] ?? $status['transaction_status'] ?? '';
         $isPaid = strtoupper($latestStatus) === 'SUCCESS' || strtoupper($latestStatus) === '00';
 

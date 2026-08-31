@@ -347,20 +347,20 @@ const getInitials = (name: string) => {
         <!-- ========================================================= -->
         <!-- LEFT PANEL: CART & CHECKOUT CONTAINER (SEKARANG DI KIRI)  -->
         <!-- ========================================================= -->
-        <div 
-            class="fixed md:relative bottom-0 left-0 right-0 z-30 bg-white dark:bg-zinc-900 border-t md:border-t-0 border-slate-200 dark:border-zinc-800 flex flex-col shadow-2xl md:shadow-none transition-all duration-300 ease-out overflow-hidden"
-            :style="{ width: windowWidth >= 768 ? `${catalogWidth}%` : '100%' }"
+<div 
+            class="fixed lg:relative bottom-0 left-0 right-0 z-30 bg-white dark:bg-zinc-900 border-t lg:border-t-0 border-slate-200 dark:border-zinc-800 flex flex-col shadow-2xl lg:shadow-none transition-all duration-300 ease-out overflow-hidden"
+            :style="{ width: windowWidth >= 1024 ? `${catalogWidth}%` : '100%' }"
             :class="[
-                isCartExpanded ? 'h-[90vh]' : 'h-auto md:h-full',
-                'md:flex-initial'
+                isCartExpanded ? 'h-[90vh]' : 'h-auto lg:h-full',
+                'lg:flex-initial'
             ]"
             @touchstart="handleTouchStart"
             @touchend="handleTouchEnd"
         >
-            <!-- Handle Bar untuk Swipe Up di Mobile Portrait -->
-            <div @click="isCartExpanded = !isCartExpanded" class="md:hidden w-full flex flex-col items-center pt-2 pb-1 bg-slate-50 dark:bg-zinc-900 border-b border-slate-100 dark:border-zinc-800 cursor-pointer shrink-0">
+            <!-- Handle Bar untuk Swipe Up di Mobile & Tablet Portrait -->
+            <div @click="isCartExpanded = !isCartExpanded" class="lg:hidden w-full flex flex-col items-center pt-2 pb-1 bg-slate-50 dark:bg-zinc-900 border-b border-slate-100 dark:border-zinc-800 cursor-pointer shrink-0">
                 <div class="w-10 h-1.5 bg-slate-300 dark:bg-zinc-700 rounded-full mb-1"></div>
-                <div class="flex items-center justify-between w-full px-4 text-xs font-bold text-slate-600 dark:text-zinc-300">
+                <div class="flex items-center justify-between w-full px-4 text-md font-bold text-slate-600 dark:text-zinc-300">
                     <span>{{ cart.length }} Item di Keranjang</span>
                     <span class="text-primary font-black">Rp {{ finalTotal.toLocaleString('id-ID') }}</span>
                 </div>
@@ -369,11 +369,10 @@ const getInitials = (name: string) => {
             <!-- Cart Header -->
             <div class="p-3 border-b border-slate-100 dark:border-zinc-800 flex items-center justify-between bg-white dark:bg-zinc-900 shrink-0 gap-2">
                 <div class="flex items-center gap-2 flex-1 min-w-0">
-
                     <button 
                         @click="openCustomerModal" 
                         type="button"
-                        class="text-xs font-bold text-slate-800 dark:text-zinc-100 bg-slate-100 dark:bg-zinc-800 hover:bg-slate-200 dark:hover:bg-zinc-700 px-3 py-1.5 rounded-xl transition-all truncate text-left w-full flex items-center justify-between cursor-pointer"
+                        class="text-md font-bold text-slate-800 dark:text-zinc-100 bg-slate-100 dark:bg-zinc-800 hover:bg-slate-200 dark:hover:bg-zinc-700 px-3 py-1.5 rounded-xl transition-all truncate text-left w-full flex items-center justify-between cursor-pointer"
                     >
                         <span class="truncate">{{ customerName || 'Pilih Pelanggan' }}</span>
                         <span class="text-[10px] text-slate-400 uppercase tracking-wider ml-1 shrink-0">Ganti</span>
@@ -383,16 +382,16 @@ const getInitials = (name: string) => {
                 <button 
                     @click="cart = []" 
                     :disabled="cart.length === 0"
-                    class="px-2.5 py-1.5 bg-red-50 hover:bg-red-100 dark:bg-red-950/30 dark:hover:bg-red-900/50 text-red-600 dark:text-red-400 rounded-xl text-xs font-bold transition-all disabled:opacity-30 disabled:cursor-not-allowed shrink-0 cursor-pointer"
+                    class="px-2.5 py-1.5 bg-red-50 hover:bg-red-100 dark:bg-red-950/30 dark:hover:bg-red-900/50 text-red-600 dark:text-red-400 rounded-xl text-md font-bold transition-all disabled:opacity-30 disabled:cursor-not-allowed shrink-0 cursor-pointer"
                     title="Kosongkan Keranjang"
                 >
                     Clear All
                 </button>
             </div>
 
-            <!-- Cart Items List (Hanya tampil saat expanded di mobile) -->
-            <div :class="[isCartExpanded ? 'flex-1' : 'hidden md:block md:flex-1', 'overflow-y-auto divide-y divide-slate-100 dark:divide-zinc-800 custom-scrollbar p-2']">
-                <div v-if="cart.length === 0" class="text-center py-16 text-xs text-slate-400">
+            <!-- Cart Items List (Tampil saat expanded di mobile/tablet portrait) -->
+            <div :class="[isCartExpanded ? 'flex-1' : 'hidden lg:block lg:flex-1', 'overflow-y-auto divide-y divide-slate-100 dark:divide-zinc-800 custom-scrollbar p-2']">
+                <div v-if="cart.length === 0" class="text-center py-16 text-md text-slate-400">
                     Keranjang kosong. Klik menu untuk menambah.
                 </div>
                 
@@ -402,48 +401,47 @@ const getInitials = (name: string) => {
                     class="p-3 hover:bg-slate-50/50 dark:hover:bg-zinc-800/30 transition-colors flex items-center justify-between gap-3 rounded-xl"
                 >
                     <div class="space-y-0.5 flex-1 min-w-0">
-                        <h4 class="font-bold text-xs sm:text-sm text-slate-900 dark:text-zinc-100 truncate">
+                        <h4 class="font-bold text-md sm:text-sm text-slate-900 dark:text-zinc-100 truncate">
                             {{ item.name }}
                         </h4>
-                        <span class="text-xs text-slate-400 font-mono">Rp {{ Number(item.price).toLocaleString('id-ID') }}</span>
+                        <span class="text-md text-slate-400 font-mono">Rp {{ Number(item.price).toLocaleString('id-ID') }}</span>
                     </div>
 
                     <div class="flex items-center gap-2 shrink-0">
                         <button @click="updateQuantity(item.menu_id, -1)" class="p-1 bg-slate-100 dark:bg-zinc-800 rounded-md text-slate-600 dark:text-zinc-300 hover:bg-red-100 hover:text-red-600 transition-colors">
                             <Minus class="h-3.5 w-3.5" />
                         </button>
-                        <span class="font-bold text-xs w-5 text-center text-slate-900 dark:text-zinc-100">{{ item.quantity }}</span>
+                        <span class="font-bold text-md w-5 text-center text-slate-900 dark:text-zinc-100">{{ item.quantity }}</span>
                         <button @click="updateQuantity(item.menu_id, 1)" class="p-1 bg-slate-100 dark:bg-zinc-800 rounded-md text-slate-600 dark:text-zinc-300 hover:bg-slate-200 transition-colors">
                             <Plus class="h-3.5 w-3.5" />
                         </button>
                     </div>
 
-                    <div class="text-right shrink-0 font-black text-xs sm:text-sm text-slate-900 dark:text-zinc-100 font-mono w-20">
+                    <div class="text-right shrink-0 font-black text-md sm:text-sm text-slate-900 dark:text-zinc-100 font-mono w-20">
                         Rp {{ Number(item.subtotal).toLocaleString('id-ID') }}
                     </div>
                 </div>
             </div>
 
-            <!-- Catatan Pesanan (Hanya saat expanded di mobile) -->
-            <div :class="[isCartExpanded ? 'block' : 'hidden md:block', 'px-3 py-1.5 border-t border-slate-100 dark:border-zinc-800 bg-slate-50/50 dark:bg-zinc-900/50 shrink-0']">
+            <!-- Catatan Pesanan -->
+            <div :class="[isCartExpanded ? 'block' : 'hidden lg:block', 'px-3 py-1.5 border-t border-slate-100 dark:border-zinc-800 bg-slate-50/50 dark:bg-zinc-900/50 shrink-0']">
                 <input 
                     v-model="orderNote"
                     type="text" 
                     placeholder="Tambah catatan pesanan..." 
-                    class="w-full text-xs px-3 py-1 bg-white dark:bg-zinc-800 border border-slate-200 dark:border-zinc-700 rounded-lg text-slate-700 dark:text-zinc-300 focus:outline-none"
+                    class="w-full text-md px-3 py-1 bg-white dark:bg-zinc-800 border border-slate-200 dark:border-zinc-700 rounded-lg text-slate-700 dark:text-zinc-300 focus:outline-none"
                 />
             </div>
 
-            <!-- Footer Summary & Checkout Actions (Selalu Tampil di Bawah) -->
+            <!-- Footer Summary & Checkout Actions -->
             <div class="p-3 border-t border-slate-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 space-y-2 shrink-0">
-                
                 <div class="space-y-1 px-1">
-                    <div class="flex items-center justify-between text-xs text-slate-500 dark:text-zinc-400">
+                    <div class="flex items-center justify-between text-md text-slate-500 dark:text-zinc-400">
                         <span>Subtotal</span>
                         <span class="font-mono">Rp {{ cartSubtotal.toLocaleString('id-ID') }}</span>
                     </div>
 
-                    <div v-if="appliedVoucher" class="flex items-center justify-between text-xs text-emerald-600 dark:text-emerald-400 font-semibold">
+                    <div v-if="appliedVoucher" class="flex items-center justify-between text-md text-emerald-600 dark:text-emerald-400 font-semibold">
                         <span class="flex items-center gap-1">
                             <span class="w-1.5 h-1.5 rounded-full bg-emerald-500 inline-block"></span>
                             Voucher ({{ appliedVoucher.code }})
@@ -452,7 +450,7 @@ const getInitials = (name: string) => {
                     </div>
 
                     <div class="flex items-center justify-between pt-1.5 border-t border-slate-100 dark:border-zinc-800">
-                        <span class="text-xs uppercase font-bold text-slate-400 tracking-wider">Total</span>
+                        <span class="text-md uppercase font-bold text-slate-400 tracking-wider">Total</span>
                         <span class="text-sm sm:text-base font-black text-slate-900 dark:text-zinc-50 font-mono">
                             Rp {{ finalTotal.toLocaleString('id-ID') }}
                         </span>
@@ -463,7 +461,7 @@ const getInitials = (name: string) => {
                 <div class="flex items-center gap-2 pt-0.5">
                     <button 
                         @click="openDiscountModal" 
-                        class="w-10 h-10 rounded-xl bg-orange-50 hover:bg-orange-100 dark:bg-orange-950/40 text-orange-600 dark:text-orange-400 flex items-center justify-center transition-all border border-orange-200/60 dark:border-orange-900/50 cursor-pointer relative shrink-0"
+                        class="w-13 h-13 rounded-xl bg-orange-50 hover:bg-orange-100 dark:bg-orange-950/40 text-orange-600 dark:text-orange-400 flex items-center justify-center transition-all border border-orange-200/60 dark:border-orange-900/50 cursor-pointer relative shrink-0"
                         title="Beri Diskon / Voucher"
                     >
                         <Percent class="w-4 h-4" />
@@ -474,7 +472,7 @@ const getInitials = (name: string) => {
                         <button 
                             @click="submitCheckout('save')"
                             :disabled="cart.length === 0"
-                            class="flex-1 py-2.5 bg-amber-400 hover:bg-amber-500 text-slate-950 font-black rounded-xl text-xs shadow-xs transition-all disabled:opacity-40 cursor-pointer text-center"
+                            class="flex-1 py-3.5 bg-amber-400 hover:bg-amber-500 text-slate-950 font-black rounded-xl text-md shadow-xs transition-all disabled:opacity-40 cursor-pointer text-center"
                         >
                             Simpan
                         </button>
@@ -482,7 +480,7 @@ const getInitials = (name: string) => {
                         <button 
                             @click="openPaymentModal"
                             :disabled="cart.length === 0"
-                            class="flex-1 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white font-black rounded-xl text-xs shadow-md transition-all disabled:opacity-40 cursor-pointer text-center"
+                            class="flex-1 py-3.5 bg-emerald-600 hover:bg-emerald-500 text-white font-black rounded-xl text-md shadow-md transition-all disabled:opacity-40 cursor-pointer text-center"
                         >
                             Bayar
                         </button>
@@ -505,105 +503,109 @@ const getInitials = (name: string) => {
         <!-- RIGHT PANEL: CATALOG & CATEGORY FILTER (SEKARANG DI KANAN)-->
         <!-- ========================================================= -->
         <div class="flex-1 h-full overflow-y-auto p-4 space-y-4 custom-scrollbar flex flex-col transition-all duration-75">
-            <div class="flex items-center justify-between gap-3 bg-white dark:bg-zinc-900 p-3 rounded-2xl border border-slate-200 dark:border-zinc-800 shadow-xs shrink-0">
-                <div class="flex-1 max-w-md">
-                    <input 
-                        v-model="searchQuery"
-                        type="text" 
-                        placeholder="Cari menu makanan / minuman..." 
-                        class="w-full px-3.5 py-2 text-sm bg-slate-50 dark:bg-zinc-800 border border-slate-200 dark:border-zinc-700 rounded-xl focus:outline-none focus:border-primary text-slate-900 dark:text-white placeholder:text-slate-400"
-                    />
-                </div>
-                <div class="relative view-dropdown-container">
-                    <button 
-                        @click="isViewDropdownOpen = !isViewDropdownOpen"
-                        class="flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition-all border bg-slate-50 border-slate-200 text-slate-700 dark:bg-zinc-800 dark:border-zinc-700 dark:text-zinc-200 hover:border-primary cursor-pointer shadow-2xs"
-                    >
-                        <LayoutGrid class="w-4 h-4 text-primary" />
-                        <span>Tampilan Menu</span>
-                    </button>
-
-                    <div 
-                        v-if="isViewDropdownOpen" 
-                        class="absolute right-0 mt-2 w-64 bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 rounded-2xl shadow-xl p-4 z-50 space-y-4 animate-fade-in"
-                    >
-                        <div 
-                            @click="viewMode = 'grid'; isViewDropdownOpen = false"
-                            class="flex items-center justify-between cursor-pointer group py-1"
+            <div class="sticky top-0 z-20 pt-2 pb-2 space-y-3 shrink-0">
+                <!-- Search & View Dropdown -->
+                <div class="flex items-center justify-between gap-3 bg-white dark:bg-zinc-900 p-3 rounded-2xl border border-slate-200 dark:border-zinc-800 shadow-xs">
+                    <div class="flex-1 max-w-md">
+                        <input 
+                            v-model="searchQuery"
+                            type="text" 
+                            placeholder="Cari menu makanan / minuman..." 
+                            class="w-full px-3.5 py-2 text-sm bg-slate-50 dark:bg-zinc-800 border border-slate-200 dark:border-zinc-700 rounded-xl focus:outline-none focus:border-primary text-slate-900 dark:text-white placeholder:text-slate-400"
+                        />
+                    </div>
+                    <div class="relative view-dropdown-container">
+                        <button 
+                            @click="isViewDropdownOpen = !isViewDropdownOpen"
+                            class="flex items-center gap-2 px-3.5 py-2 rounded-xl text-md font-bold transition-all border bg-slate-50 border-slate-200 text-slate-700 dark:bg-zinc-800 dark:border-zinc-700 dark:text-zinc-200 hover:border-primary cursor-pointer shadow-2xs"
                         >
-                            <span class="text-xs font-bold text-slate-800 dark:text-zinc-200 group-hover:text-primary transition-colors">
-                                Mode Gambar
-                            </span>
-                            <span v-if="viewMode === 'grid'" class="text-emerald-600 font-black text-sm">✓</span>
-                        </div>
+                            <LayoutGrid class="w-4 h-4 text-primary" />
+                            <span>Tampilan Menu</span>
+                        </button>
 
-                        <div v-if="viewMode === 'grid'" class="space-y-2.5 pt-2 border-t border-slate-100 dark:border-zinc-800" @mousedown.stop @touchstart.stop>
-                            <span class="text-[11px] font-bold text-slate-400 block">Zoom in / Zoom out</span>
-                            
-                            <div class="relative py-2 px-1">
-                                <div class="absolute inset-x-2 top-1/2 -translate-y-1/2 h-1 bg-emerald-100 dark:bg-zinc-800 rounded-full overflow-hidden">
-                                    <div 
-                                        class="h-full bg-emerald-500 transition-all duration-150"
-                                        :style="{ width: `${((gridScale - 1) / 3) * 100}%` }"
-                                    ></div>
-                                </div>
-
-                                <div class="absolute inset-x-2.5 top-1/2 -translate-y-1/2 flex items-center justify-between pointer-events-none">
-                                    <div class="w-2 h-2 rounded-full" :class="gridScale >= 1 ? 'bg-emerald-600' : 'bg-emerald-300'"></div>
-                                    <div class="w-2 h-2 rounded-full" :class="gridScale >= 2 ? 'bg-emerald-600' : 'bg-emerald-300'"></div>
-                                    <div class="w-2 h-2 rounded-full" :class="gridScale >= 3 ? 'bg-emerald-600' : 'bg-emerald-300'"></div>
-                                    <div class="w-2 h-2 rounded-full" :class="gridScale >= 4 ? 'bg-emerald-600' : 'bg-emerald-300'"></div>
-                                </div>
-
-                                <input 
-                                    type="range" 
-                                    v-model.number="gridScale" 
-                                    min="1" 
-                                    max="4" 
-                                    step="1" 
-                                    class="w-full opacity-0 cursor-pointer relative z-20 h-6 block"
-                                />
+                        <div 
+                            v-if="isViewDropdownOpen" 
+                            class="absolute right-0 mt-2 w-64 bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 rounded-2xl shadow-xl p-4 z-50 space-y-4 animate-fade-in"
+                        >
+                            <div 
+                                @click="viewMode = 'grid'; isViewDropdownOpen = false"
+                                class="flex items-center justify-between cursor-pointer group py-1"
+                            >
+                                <span class="text-md font-bold text-slate-800 dark:text-zinc-200 group-hover:text-primary transition-colors">
+                                    Mode Gambar
+                                </span>
+                                <span v-if="viewMode === 'grid'" class="text-emerald-600 font-black text-sm">✓</span>
                             </div>
-                        </div>
 
-                        <div 
-                            @click="viewMode = 'list'; isViewDropdownOpen = false"
-                            class="flex items-center justify-between cursor-pointer group pt-2 border-t border-slate-100 dark:border-zinc-800"
-                        >
-                            <span class="text-xs font-bold text-slate-800 dark:text-zinc-200 group-hover:text-primary transition-colors">
-                                Mode Daftar
-                            </span>
-                            <span v-if="viewMode === 'list'" class="text-emerald-600 font-black text-sm">✓</span>
+                            <div v-if="viewMode === 'grid'" class="space-y-2.5 pt-2 border-t border-slate-100 dark:border-zinc-800" @mousedown.stop @touchstart.stop>
+                                <span class="text-[11px] font-bold text-slate-400 block">Zoom in / Zoom out</span>
+                                
+                                <div class="relative py-2 px-1">
+                                    <div class="absolute inset-x-2 top-1/2 -translate-y-1/2 h-1 bg-emerald-100 dark:bg-zinc-800 rounded-full overflow-hidden">
+                                        <div 
+                                            class="h-full bg-emerald-500 transition-all duration-150"
+                                            :style="{ width: `${((gridScale - 1) / 3) * 100}%` }"
+                                        ></div>
+                                    </div>
+
+                                    <div class="absolute inset-x-2.5 top-1/2 -translate-y-1/2 flex items-center justify-between pointer-events-none">
+                                        <div class="w-2 h-2 rounded-full" :class="gridScale >= 1 ? 'bg-emerald-600' : 'bg-emerald-300'"></div>
+                                        <div class="w-2 h-2 rounded-full" :class="gridScale >= 2 ? 'bg-emerald-600' : 'bg-emerald-300'"></div>
+                                        <div class="w-2 h-2 rounded-full" :class="gridScale >= 3 ? 'bg-emerald-600' : 'bg-emerald-300'"></div>
+                                        <div class="w-2 h-2 rounded-full" :class="gridScale >= 4 ? 'bg-emerald-600' : 'bg-emerald-300'"></div>
+                                    </div>
+
+                                    <input 
+                                        type="range" 
+                                        v-model.number="gridScale" 
+                                        min="1" 
+                                        max="4" 
+                                        step="1" 
+                                        class="w-full opacity-0 cursor-pointer relative z-20 h-6 block"
+                                    />
+                                </div>
+                            </div>
+
+                            <div 
+                                @click="viewMode = 'list'; isViewDropdownOpen = false"
+                                class="flex items-center justify-between cursor-pointer group pt-2 border-t border-slate-100 dark:border-zinc-800"
+                            >
+                                <span class="text-md font-bold text-slate-800 dark:text-zinc-200 group-hover:text-primary transition-colors">
+                                    Mode Daftar
+                                </span>
+                                <span v-if="viewMode === 'list'" class="text-emerald-600 font-black text-sm">✓</span>
+                            </div>
                         </div>
                     </div>
                 </div>
-            </div>
 
-            <div class="flex items-center gap-2 overflow-x-auto pb-2 scrollbar-none border-b border-slate-100 dark:border-zinc-800/60 shrink-0">
-                <button 
-                    @click="selectedCategory = 'all'"
-                    :class="[
-                        'px-4 py-1.5 text-xs font-semibold rounded-full whitespace-nowrap border transition-all',
-                        selectedCategory === 'all' 
-                            ? 'bg-primary border-primary text-primary-foreground shadow-sm' 
-                            : 'bg-white border-slate-200 text-slate-600 dark:bg-zinc-900 dark:border-zinc-800 dark:text-zinc-400 hover:border-slate-300'
-                    ]"
-                >
-                    Semua Kategori
-                </button>
-                <button 
-                    v-for="cat in categories" 
-                    :key="cat.id"
-                    @click="selectedCategory = cat.id"
-                    :class="[
-                        'px-4 py-1.5 text-xs font-semibold rounded-full whitespace-nowrap border transition-all',
-                        selectedCategory === cat.id 
-                            ? 'bg-primary border-primary text-primary-foreground shadow-sm' 
-                            : 'bg-white border-slate-200 text-slate-600 dark:bg-zinc-900 dark:border-zinc-800 dark:text-zinc-400 hover:border-slate-300'
-                    ]"
-                >
-                    {{ cat.name }}
-                </button>
+                <!-- Horizontal Scroll Kategori -->
+                <div class="flex items-center gap-2 overflow-x-auto pb-2 scrollbar-none border-b border-slate-100 dark:border-zinc-800/60">
+                    <button 
+                        @click="selectedCategory = 'all'"
+                        :class="[
+                            'px-4 py-1.5 text-md font-semibold rounded-full whitespace-nowrap border transition-all',
+                            selectedCategory === 'all' 
+                                ? 'bg-primary border-primary text-primary-foreground shadow-sm' 
+                                : 'bg-white border-slate-200 text-slate-600 dark:bg-zinc-900 dark:border-zinc-800 dark:text-zinc-400 hover:border-slate-300'
+                        ]"
+                    >
+                        Semua Kategori
+                    </button>
+                    <button 
+                        v-for="cat in categories" 
+                        :key="cat.id"
+                        @click="selectedCategory = cat.id"
+                        :class="[
+                            'px-4 py-1.5 text-md font-semibold rounded-full whitespace-nowrap border transition-all',
+                            selectedCategory === cat.id 
+                                ? 'bg-primary border-primary text-primary-foreground shadow-sm' 
+                                : 'bg-white border-slate-200 text-slate-600 dark:bg-zinc-900 dark:border-zinc-800 dark:text-zinc-400 hover:border-slate-300'
+                        ]"
+                    >
+                        {{ cat.name }}
+                    </button>
+                </div>
             </div>
 
             <!-- Menu Layout: GRID VIEW -->
@@ -627,12 +629,12 @@ const getInitials = (name: string) => {
                     </div>
 
                     <div class="flex-1 flex flex-col justify-between pt-3">
-                        <h3 class="font-black text-xs sm:text-sm text-slate-900 dark:text-zinc-50 line-clamp-2 leading-tight group-hover:text-primary transition-colors">
+                        <h3 class="font-black text-md sm:text-sm text-slate-900 dark:text-zinc-50 line-clamp-2 leading-tight group-hover:text-primary transition-colors">
                             {{ menu.name }}
                         </h3>
                         <div class="flex items-end justify-between mt-2 pt-1 border-t border-slate-50 dark:border-zinc-800/50">
                             <span class="text-[10px] text-slate-400 font-semibold truncate max-w-20">{{ menu.category?.name || 'Umum' }}</span>
-                            <span class="font-black text-xs sm:text-sm text-primary whitespace-nowrap">
+                            <span class="font-black text-md sm:text-sm text-primary whitespace-nowrap">
                                 Rp {{ Number(getOfflinePriceObject(menu)?.selling_price || 0).toLocaleString('id-ID') }}
                             </span>
                         </div>
@@ -651,11 +653,11 @@ const getInitials = (name: string) => {
                     <div class="flex items-center gap-3">
                         <div class="w-12 h-12 bg-slate-100 dark:bg-zinc-800 rounded-lg overflow-hidden shrink-0">
                             <img v-if="menu.image_path" :src="menu.image_path.startsWith('http') ? menu.image_path : `/storage/${menu.image_path}`" class="w-full h-full object-cover" />
-                            <div v-else class="w-full h-full flex items-center justify-center text-xs font-bold text-primary">{{ getInitials(menu.name) }}</div>
+                            <div v-else class="w-full h-full flex items-center justify-center text-md font-bold text-primary">{{ getInitials(menu.name) }}</div>
                         </div>
                         <div>
                             <h4 class="font-bold text-sm text-slate-900 dark:text-zinc-100">{{ menu.name }}</h4>
-                            <span class="text-xs text-slate-400">{{ menu.category?.name || 'Umum' }}</span>
+                            <span class="text-md text-slate-400">{{ menu.category?.name || 'Umum' }}</span>
                         </div>
                     </div>
                     <span class="font-black text-sm text-primary font-mono">
