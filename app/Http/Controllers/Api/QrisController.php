@@ -202,9 +202,10 @@ class QrisController extends Controller
         Log::info('DOKU Query Status Response:', (array) $status);
 
         // Sesuaikan pengecekan status sukses dari DOKU
-        $latestStatus = $status['latestTransactionStatus'] ?? $status['transaction_status'] ?? '';
-        $isPaid = strtoupper($latestStatus) === 'SUCCESS' || strtoupper($latestStatus) === '00';
-
+        // $latestStatus = $status['latestTransactionStatus'] ?? $status['transaction_status'] ?? '';
+        $latestStatus = (string) ($status['latestTransactionStatus'] ?? $status['responCode'] ?? $status['transaction_status'] ?? '');
+        // $isPaid = strtoupper($latestStatus) === 'SUCCESS' || strtoupper($latestStatus) === '00';
+        $isPaid = in_array(strtoupper(trim($latestStatus)), ['00', 'Success', 'PAID', 'SUCCESSFUL', '2005100']);
         if ($isPaid) {
             DB::transaction(function () use ($order, $dokuReferenceNo, $status) {
                 if ($order->status !== 'paid') {
