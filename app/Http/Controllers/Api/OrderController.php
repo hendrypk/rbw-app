@@ -505,7 +505,7 @@ class OrderController extends Controller
         }
     }
 
-public function getSummary(Request $request): JsonResponse
+    public function getSummary(Request $request): JsonResponse
     {
         $outletId = $request->header('X-Outlet-ID') ?? session('active_outlet_id');
         $shiftId  = $request->header('X-Shift-ID') ?? session('active_cashier_shift_id');
@@ -516,13 +516,11 @@ public function getSummary(Request $request): JsonResponse
         if ($shiftId) {
             $query->where('cashier_shift_id', $shiftId);
         } else {
-            // Atau filter hari ini jika tidak ada shift spesifik
             $query->whereDate('created_at', today());
         }
 
         $orders = $query->with('items')->get();
 
-        // Rincian Pembayaran Tunai (Cash)
         $cashOrders = $orders->where('payment_method', 'cash');
         $omzetCash  = $cashOrders->sum('final_total');
         $notaCash   = $cashOrders->count();
@@ -530,7 +528,6 @@ public function getSummary(Request $request): JsonResponse
             return $order->items->sum('quantity');
         });
 
-        // Rincian Pembayaran QRIS
         $qrisOrders = $orders->where('payment_method', 'qris');
         $omzetQris  = $qrisOrders->sum('final_total');
         $notaQris   = $qrisOrders->count();
@@ -544,13 +541,11 @@ public function getSummary(Request $request): JsonResponse
             return $order->items->sum('quantity');
         });
 
-        // 1. Laba Bersih
         $totalHpp = $orders->sum('total_hpp');
         $totalOverhead = $orders->sum('total_overhead');
         $netProfit = $totalOmzet - ($totalHpp + $totalOverhead);
         $profitMargin = $totalOmzet > 0 ? ($netProfit / $totalOmzet) * 100 : 0;
 
-        // 2. Daftar Produk Terjual (Menggunakan relasi Eloquent 'menu')
         $orderIds = $orders->pluck('id');
         $soldProducts = collect();
         
@@ -576,7 +571,6 @@ public function getSummary(Request $request): JsonResponse
                 ->values();
         }
 
-        // 3. Analisis Jam Ramai
         $peakHours = $orders->groupBy(function ($order) {
             return Carbon::parse($order->created_at)->format('H:00');
         })->map(function ($group) {

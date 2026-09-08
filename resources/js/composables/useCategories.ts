@@ -4,17 +4,14 @@ import axios from 'axios';
 export function useCategories() {
     const categories = ref<any[]>([]);
     const isLoading = ref(false);
-    const error = ref<string | null>(null);
 
-    const fetchCategories = async () => {
+    const fetchCategories = async (params = {}) => {
         isLoading.value = true;
-        error.value = null;
         try {
-            const res = await axios.get('/api/categories');
-            categories.value = res.data;
-        } catch (err: any) {
-            console.error('Gagal memuat kategori:', err);
-            error.value = err.response?.data?.message || 'Gagal memuat data kategori.';
+            const response = await axios.get('/api/categories', { params });
+            categories.value = response.data;
+        } catch (error) {
+            console.error('Gagal memuat kategori', error);
         } finally {
             isLoading.value = false;
         }
@@ -23,7 +20,6 @@ export function useCategories() {
     return {
         categories,
         isLoading,
-        error,
-        fetchCategories
+        fetchCategories,
     };
 }

@@ -76,8 +76,14 @@ class MenuService
         }
     }
     
-    public function getAllMenus()
+    public function getAllMenus(?string $outletId = null)
     {
-        return Menu::with(['recipes.rawMaterial', 'prices', 'categories'])->get();
+        $query = Menu::with(['recipes.rawMaterial', 'prices', 'categories']);
+
+        if ($outletId && $outletId !== 'all') {
+            $query->where('outlet_id', $outletId);
+        }
+
+        return $query->get();
     }
 }

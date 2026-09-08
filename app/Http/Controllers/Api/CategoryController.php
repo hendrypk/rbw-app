@@ -10,12 +10,20 @@ use Illuminate\Validation\Rule;
 
 class CategoryController extends Controller
 {
-    public function index()
+    public function index(Request $request): JsonResponse
     {
-        // Mengembalikan semua kategori untuk kebutuhan managemen modal
-        return response()->json(Category::orderBy('name')->get());
+        $outletId = $request->input('outlet_id', 'all');
+
+        $query = Category::orderBy('name');
+
+        if ($outletId && $outletId !== 'all') {
+            $query->where('outlet_id', $outletId);
+        }
+
+        return response()->json($query->get());
     }
-public function store(Request $request)
+
+    public function store(Request $request)
     {
         $validated = $request->validate([
             'name' => 'required|string|max:100|unique:categories,name',

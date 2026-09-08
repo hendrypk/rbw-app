@@ -77,16 +77,18 @@ class Order extends Model
         return $this->hasOne(CustomerPoint::class);
     }
 
-public static function getDashboardSummary(?string $outletId = null)
+    public static function getDashboardSummary(?string $outletId = null, ?string $startDate = null, ?string $endDate = null)
     {
-        // Tambahkan withoutGlobalScopes() di sini untuk mematikan paksaan filter dari trait BelongsToOutlet
         $query = self::withoutGlobalScopes()->where('status', 'paid');
 
         $cleanOutletId = strtolower(trim((string) $outletId));
 
-        // Jika user memilih outlet spesifik, baru kita filter secara manual
         if ($cleanOutletId !== '' && $cleanOutletId !== 'all' && $cleanOutletId !== 'null' && $cleanOutletId !== 'undefined') {
             $query->where('outlet_id', $outletId);
+        }
+
+        if (!empty($startDate) && !empty($endDate)) {
+            $query->whereBetween('created_at', [$startDate . ' 00:00:00', $endDate . ' 23:59:59']);
         }
 
         return $query->with('items.menu')->get();

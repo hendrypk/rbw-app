@@ -14,9 +14,10 @@ class ReportController extends Controller
 public function getSummary(Request $request): JsonResponse
     {
         $outletId = $request->header('X-Outlet-ID') ?? $request->input('outlet_id');
+        $startDate = $request->input('start_date');
+        $endDate = $request->input('end_date');
 
-        // Panggil method dari Model Order
-        $orders = Order::getDashboardSummary($outletId);
+        $orders = Order::getDashboardSummary($outletId, $startDate, $endDate);
 
         $omzetCash = $orders->where('payment_method', 'cash')->sum('final_total');
         $omzetQris = $orders->where('payment_method', 'qris')->sum('final_total');

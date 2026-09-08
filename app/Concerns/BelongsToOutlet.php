@@ -18,16 +18,13 @@ trait BelongsToOutlet
      */
     public static function bootBelongsToOutlet(): void
     {
-        // Global scope untuk filter data otomatis berdasarkan outlet aktif
         static::addGlobalScope('outlet', function (Builder $builder) {
             $outletId = request()->header('X-Outlet-ID') ?? session('active_outlet_id');
             if ($outletId) {
-                // ⬅️ Gunakan getModel()->getTable() agar aman dari error undefined method
                 $builder->where($builder->getModel()->getTable() . '.outlet_id', $outletId);
             }
         });
 
-        // Otomatis isi outlet_id saat record baru dibuat (create)
         static::creating(function ($model) {
             if (empty($model->outlet_id)) {
                 $model->outlet_id = request()->header('X-Outlet-ID') 

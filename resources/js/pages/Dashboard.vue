@@ -2,8 +2,9 @@
 import { ref, onMounted } from 'vue';
 import { Head } from '@inertiajs/vue3';
 import { dashboard } from '@/routes';
-import { DollarSign, Receipt, ShoppingCart, Banknote, QrCode, TrendingUp, PackageOpen, Award, Clock } from '@lucide/vue';
+import { DollarSign, Receipt, ShoppingCart, Banknote, QrCode, TrendingUp, PackageOpen, Award, Clock, Calendar } from '@lucide/vue';
 import axios from 'axios';
+import DatePresetFilter from '@/components/DatePresetFilter.vue';
 
 defineOptions({
     layout: {
@@ -19,6 +20,7 @@ defineOptions({
 const outlets = ref<Array<{ id: string; name: string }>>([]);
 const selectedOutletId = ref<string>('all');
 const isLoading = ref(true);
+const dateRange = ref({ start: '', end: '' });
 
 const summary = ref({
     total_omzet: 0,
@@ -35,6 +37,12 @@ const summary = ref({
     sold_products: [] as Array<{ item_name: string; total_qty: number; total_revenue: number }>,
     peak_hours: {} as Record<string, { total_transactions: number; total_omzet: number }>
 });
+
+// FUNGSI UNTUK MENANGANI PERUBAHAN TANGGAL
+const handleDateChange = (range: { start: string; end: string }) => {
+    dateRange.value = range;
+    fetchDashboardSummary(); // Panggil ulang API dengan parameter tanggal baru
+};
 
 // Ambil daftar outlet
 const fetchOutlets = async () => {
@@ -55,6 +63,10 @@ const fetchDashboardSummary = async () => {
         const response = await axios.get('/api/summary', {
             headers: { 
                 'X-Outlet-ID': selectedOutletId.value 
+            },
+            params: {
+                start_date: dateRange.value.start,
+                end_date: dateRange.value.end
             }
         });
 
@@ -84,7 +96,8 @@ const formatHourRange = (hourStr: string) => {
 
 onMounted(async () => {
     await fetchOutlets();
-    await fetchDashboardSummary();
+    // fetchDashboardSummary() tidak perlu dipanggil di sini karena komponen DatePresetFilter 
+    // akan memicu event 'change' saat pertama kali dimuat yang otomatis menjalankan fetchDashboardSummary().
 });
 </script>
 
@@ -92,28 +105,40 @@ onMounted(async () => {
     <Head title="Dashboard Ringkasan Penjualan" />
 
     <div class="flex h-full flex-1 flex-col gap-6 p-4 md:p-6 overflow-x-auto">
-        <!-- Header & Pemilih Outlet -->
-        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white dark:bg-zinc-900 p-4 rounded-2xl border border-slate-200 dark:border-zinc-800 shadow-2xs">
+        <!-- Header & Pemilih Outlet + Filter Tanggal -->
+        <div class="flex flex-col xl:flex-row xl:items-center justify-between gap-4 bg-card p-4 rounded-xl border border-border shadow-2xs">
             <div>
-                <h1 class="font-bold text-base text-slate-900 dark:text-white">Panel Analisis Penjualan</h1>
-                <p class="text-xs text-slate-500 dark:text-zinc-400">Pantau performa harian per outlet atau gabungan seluruh outlet.</p>
+                <h1 class="font-semibold text-base text-foreground tracking-tight">Panel Analisis Penjualan</h1>
+                <p class="text-xs text-muted-foreground mt-0.5">Pantau performa harian per outlet atau gabungan seluruh outlet.</p>
             </div>
-            <div class="flex items-center gap-3">
-                <label class="text-xs font-bold uppercase text-slate-400">Outlet:</label>
-                <select 
-                    v-model="selectedOutletId" 
-                    @change="handleOutletChange"
-                    class="px-3 py-2 rounded-xl border border-slate-200 dark:border-zinc-700 bg-slate-50 dark:bg-zinc-800 text-slate-900 dark:text-zinc-100 font-bold text-xs outline-none focus:ring-2 focus:ring-primary cursor-pointer"
-                >
-                    <option value="all">🌐 Gabungan Semua Outlet</option>
-                    <option v-for="outlet in outlets" :key="outlet.id" :value="outlet.id">
-                        {{ outlet.name }}
-                    </option>
-                </select>
+            <div class="flex flex-wrap items-center gap-2.5">
+                <!-- FILTER TANGGAL DARI KOMPONEN -->
+                <div class="flex items-center gap-2 border-r border-border pr-3">
+                    <Calendar class="w-4 h-4 text-muted-foreground" />
+                    <DatePresetFilter @change="handleDateChange" class="px-3 py-1.5 rounded-lg border border-input bg-secondary text-foreground font-medium text-xs outline-none focus:ring-2 focus:ring-ring cursor-pointer" />
+                </div>
+
+                <!-- FILTER OUTLET -->
+                <div class="flex items-center gap-2">
+                    <label class="text-xs font-medium uppercase tracking-wider text-muted-foreground hidden sm:block">Outlet:</label>
+                    <select 
+                        v-model="selectedOutletId" 
+                        @change="handleOutletChange"
+                        class="px-3 py-1.5 rounded-lg border border-input bg-secondary text-foreground font-medium text-xs outline-none focus:ring-2 focus:ring-ring cursor-pointer"
+                    >
+                        <option value="all">Gabungan Semua Outlet</option>
+                        <option v-for="outlet in outlets" :key="outlet.id" :value="outlet.id">
+                            {{ outlet.name }}
+                        </option>
+                    </select>
+                </div>
+
                 <button 
                     @click="fetchDashboardSummary" 
-                    class="px-3 py-2 text-xs font-bold bg-slate-100 dark:bg-zinc-800 rounded-xl hover:bg-slate-200 transition-colors cursor-pointer"
+                    :disabled="isLoading"
+                    class="px-3 py-1.5 text-xs font-medium bg-secondary text-secondary-foreground rounded-lg hover:bg-accent transition-colors cursor-pointer disabled:opacity-50 flex items-center gap-2 border border-input"
                 >
+                    <span v-if="isLoading" class="w-3 h-3 border-2 border-muted-foreground border-t-foreground rounded-full animate-spin"></span>
                     Muat Ulang
                 </button>
             </div>
@@ -121,87 +146,89 @@ onMounted(async () => {
 
         <!-- Kartu Metrik Utama -->
         <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div class="p-5 rounded-2xl bg-gradient-to-br from-primary/10 to-primary/5 border border-primary/20 space-y-2">
-                <div class="flex items-center justify-between text-primary">
-                    <span class="text-xs font-bold uppercase tracking-wider">Total Omzet</span>
-                    <DollarSign class="w-5 h-5" />
+            <div class="p-5 rounded-xl bg-card border border-border space-y-2 relative overflow-hidden shadow-2xs">
+                <div class="flex items-center justify-between text-muted-foreground relative z-10">
+                    <span class="text-xs font-medium uppercase tracking-wider">Total Omzet</span>
+                    <DollarSign class="w-4 h-4" />
                 </div>
-                <div class="text-2xl font-black text-slate-900 dark:text-white">
+                <div class="text-2xl font-bold tracking-tight text-foreground relative z-10">
                     {{ formatRupiah(summary.total_omzet) }}
                 </div>
             </div>
 
-            <div class="p-5 rounded-2xl bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 space-y-2">
-                <div class="flex items-center justify-between text-amber-500">
-                    <span class="text-xs font-bold uppercase tracking-wider">Total Nota (Transaksi)</span>
-                    <Receipt class="w-5 h-5" />
+            <div class="p-5 rounded-xl bg-card border border-border space-y-2 relative overflow-hidden shadow-2xs">
+                <div class="flex items-center justify-between text-muted-foreground relative z-10">
+                    <span class="text-xs font-medium uppercase tracking-wider">Total Nota (Transaksi)</span>
+                    <Receipt class="w-4 h-4" />
                 </div>
-                <div class="text-2xl font-black text-slate-900 dark:text-white">
-                    {{ summary.total_nota }} <span class="text-xs font-normal text-slate-400">Nota</span>
+                <div class="text-2xl font-bold tracking-tight text-foreground relative z-10">
+                    {{ summary.total_nota }} <span class="text-xs font-normal text-muted-foreground">Nota</span>
                 </div>
             </div>
 
-            <div class="p-5 rounded-2xl bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 space-y-2">
-                <div class="flex items-center justify-between text-emerald-500">
-                    <span class="text-xs font-bold uppercase tracking-wider">Total Item Terjual</span>
-                    <ShoppingCart class="w-5 h-5" />
+            <div class="p-5 rounded-xl bg-card border border-border space-y-2 relative overflow-hidden shadow-2xs">
+                <div class="flex items-center justify-between text-muted-foreground relative z-10">
+                    <span class="text-xs font-medium uppercase tracking-wider">Total Item Terjual</span>
+                    <ShoppingCart class="w-4 h-4" />
                 </div>
-                <div class="text-2xl font-black text-slate-900 dark:text-white">
-                    {{ summary.total_items }} <span class="text-xs font-normal text-slate-400">Pcs</span>
+                <div class="text-2xl font-bold tracking-tight text-foreground relative z-10">
+                    {{ summary.total_items }} <span class="text-xs font-normal text-muted-foreground">Pcs</span>
                 </div>
             </div>
         </div>
 
         <!-- Kartu Analisa Laba Bersih -->
-        <div class="p-6 rounded-2xl bg-gradient-to-r from-emerald-600 to-teal-700 text-white shadow-md flex flex-col md:flex-row items-center justify-between gap-4">
+        <div class="p-6 rounded-xl bg-card border border-border shadow-2xs flex flex-col md:flex-row items-center justify-between gap-4">
             <div class="space-y-1 text-center md:text-left">
-                <span class="text-xs font-bold uppercase tracking-wider text-emerald-100 flex items-center justify-center md:justify-start gap-1.5">
+                <span class="text-xs font-medium uppercase tracking-wider text-muted-foreground flex items-center justify-center md:justify-start gap-1.5">
                     <TrendingUp class="w-4 h-4" /> Estimasi Laba Bersih (Net Profit)
                 </span>
-                <div class="text-3xl font-black">
+                <div class="text-3xl font-bold tracking-tight text-foreground">
                     {{ formatRupiah(summary.net_profit) }}
                 </div>
-                <p class="text-xs text-emerald-100 opacity-90">Dihitung dari Total Omzet dikurangi Total HPP dan Total Overhead.</p>
+                <p class="text-xs text-muted-foreground">Dihitung dari Total Omzet dikurangi Total HPP dan Total Overhead.</p>
             </div>
-            <div class="bg-white/15 backdrop-blur-md px-5 py-3 rounded-xl border border-white/20 text-center shrink-0">
-                <span class="text-[10px] font-bold uppercase tracking-wider text-emerald-200 block">Margin Keuntungan</span>
-                <span class="text-xl font-black">{{ summary.profit_margin }}%</span>
+            <div class="bg-secondary px-4 py-2.5 rounded-lg border border-border text-center shrink-0">
+                <span class="text-[10px] font-medium uppercase tracking-wider text-muted-foreground block">Margin Keuntungan</span>
+                <span class="text-lg font-bold text-foreground">{{ summary.profit_margin }}%</span>
             </div>
         </div>
 
         <!-- Rincian Metode Pembayaran -->
         <div class="pt-2">
-            <h3 class="text-xs font-bold uppercase text-slate-400 mb-3 tracking-wider">Rincian Pembayaran (Tunai vs QRIS)</h3>
+            <h3 class="text-xs font-medium uppercase text-muted-foreground mb-3 tracking-wider flex items-center gap-2">
+                <Banknote class="w-4 h-4" /> Rincian Pembayaran
+            </h3>
             <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div class="p-4 rounded-xl bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 flex items-center justify-between shadow-2xs">
+                <div class="p-4 rounded-xl bg-card border border-border flex items-center justify-between shadow-2xs">
                     <div class="flex items-center gap-3">
-                        <div class="p-2.5 bg-emerald-500/10 text-emerald-600 rounded-lg shrink-0">
-                            <Banknote class="w-5 h-5" />
+                        <div class="p-2.5 bg-secondary text-foreground rounded-lg shrink-0">
+                            <Banknote class="w-4 h-4" />
                         </div>
                         <div>
-                            <span class="text-[11px] font-semibold text-slate-400 uppercase tracking-wide">Tunai (Cash)</span>
-                            <div class="text-base font-black text-slate-900 dark:text-white mt-0.5">{{ formatRupiah(summary.omzet_cash) }}</div>
+                            <span class="text-[11px] font-medium text-muted-foreground uppercase tracking-wider">Tunai (Cash)</span>
+                            <div class="text-base font-bold tracking-tight text-foreground mt-0.5">{{ formatRupiah(summary.omzet_cash) }}</div>
                         </div>
                     </div>
                     <div class="text-right space-y-0.5 text-xs">
-                        <div class="text-slate-600 dark:text-zinc-300 font-bold">{{ summary.nota_cash }} <span class="text-[10px] font-normal text-slate-400">Nota</span></div>
-                        <div class="text-emerald-600 dark:text-emerald-400 font-bold">{{ summary.items_cash }} <span class="text-[10px] font-normal text-slate-400">Pcs</span></div>
+                        <div class="text-foreground font-medium">{{ summary.nota_cash }} <span class="text-[10px] font-normal text-muted-foreground">Nota</span></div>
+                        <div class="text-muted-foreground">{{ summary.items_cash }} <span class="text-[10px] font-normal text-muted-foreground">Pcs</span></div>
                     </div>
                 </div>
 
-                <div class="p-4 rounded-xl bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 flex items-center justify-between shadow-2xs">
+                <div class="p-4 rounded-xl bg-card border border-border flex items-center justify-between shadow-2xs">
                     <div class="flex items-center gap-3">
-                        <div class="p-2.5 bg-sky-500/10 text-sky-600 rounded-lg shrink-0">
-                            <QrCode class="w-5 h-5" />
+                        <div class="p-2.5 bg-secondary text-foreground rounded-lg shrink-0">
+                            <QrCode class="w-4 h-4" />
                         </div>
                         <div>
-                            <span class="text-[11px] font-semibold text-slate-400 uppercase tracking-wide">QRIS</span>
-                            <div class="text-base font-black text-slate-900 dark:text-white mt-0.5">{{ formatRupiah(summary.omzet_qris) }}</div>
+                            <span class="text-[11px] font-medium text-muted-foreground uppercase tracking-wider">QRIS</span>
+                            <div class="text-base font-bold tracking-tight text-foreground mt-0.5">{{ formatRupiah(summary.omzet_qris) }}</div>
                         </div>
                     </div>
                     <div class="text-right space-y-0.5 text-xs">
-                        <div class="text-slate-600 dark:text-zinc-300 font-bold">{{ summary.nota_qris }} <span class="text-[10px] font-normal text-slate-400">Nota</span></div>
-                        <div class="text-sky-600 dark:text-sky-400 font-bold">{{ summary.items_qris }} <span class="text-[10px] font-normal text-slate-400">Pcs</span></div>
+                        <div class="text-foreground font-medium">{{ summary.nota_qris }} <span class="text-[10px] font-normal text-muted-foreground">Nota</span></div>
+                        <div class="text-muted-foreground">{{ summary.items_qris }} <span class="text-[10px] font-normal text-muted-foreground">Pcs</span></div>
                     </div>
                 </div>
             </div>
@@ -209,28 +236,29 @@ onMounted(async () => {
 
         <!-- Analisis Jam Ramai -->
         <div class="pt-2 space-y-3">
-            <h3 class="text-xs font-bold uppercase text-slate-400 tracking-wider flex items-center gap-2">
-                <Clock class="w-4 h-4 text-primary" /> Analisis Jam Ramai Transaksi
+            <h3 class="text-xs font-medium uppercase text-muted-foreground tracking-wider flex items-center gap-2">
+                <Clock class="w-4 h-4" /> Analisis Jam Ramai Transaksi
             </h3>
             
-            <div class="bg-white dark:bg-zinc-900 rounded-2xl border border-slate-200 dark:border-zinc-800 p-5 shadow-2xs space-y-4">
-                <div v-if="Object.keys(summary.peak_hours).length === 0" class="text-center py-8 text-slate-400 text-xs">
-                    Belum ada data jam transaksi tercatat.
+            <div class="bg-card rounded-xl border border-border p-5 shadow-2xs space-y-4">
+                <div v-if="Object.keys(summary.peak_hours).length === 0" class="text-center py-8 text-muted-foreground text-xs flex flex-col items-center justify-center">
+                    <Clock class="w-8 h-8 mb-2 opacity-40" />
+                    Belum ada data transaksi pada rentang waktu ini.
                 </div>
                 
                 <div v-else class="space-y-3">
                     <div v-for="(data, hour) in summary.peak_hours" :key="hour" class="space-y-1">
                         <div class="flex justify-between text-xs">
-                            <span class="font-bold text-slate-700 dark:text-zinc-300">
+                            <span class="font-medium text-foreground">
                                 Pukul {{ formatHourRange(hour as string) }}
                             </span>
-                            <span class="text-slate-500">
-                                {{ data.total_transactions }} Nota • <strong class="text-primary">{{ formatRupiah(data.total_omzet) }}</strong>
+                            <span class="text-muted-foreground">
+                                {{ data.total_transactions }} Nota • <strong class="text-foreground font-medium">{{ formatRupiah(data.total_omzet) }}</strong>
                             </span>
                         </div>
-                        <div class="w-full bg-slate-100 dark:bg-zinc-800 h-2.5 rounded-full overflow-hidden">
+                        <div class="w-full bg-secondary h-2 rounded-full overflow-hidden">
                             <div 
-                                class="bg-primary h-full rounded-full transition-all duration-500" 
+                                class="bg-foreground h-full rounded-full transition-all duration-300" 
                                 :style="{ width: `${Math.min((data.total_transactions / Math.max(1, ...Object.values(summary.peak_hours).map((d: any) => d.total_transactions))) * 100, 100)}%` }"
                             ></div>
                         </div>
@@ -241,34 +269,34 @@ onMounted(async () => {
 
         <!-- Daftar Produk Terjual -->
         <div class="pt-2 space-y-3">
-            <h3 class="text-xs font-bold uppercase text-slate-400 tracking-wider flex items-center gap-2">
-                <Award class="w-4 h-4 text-primary" /> Daftar Produk Terjual
+            <h3 class="text-xs font-medium uppercase text-muted-foreground tracking-wider flex items-center gap-2">
+                <Award class="w-4 h-4" /> Daftar Produk Terjual
             </h3>
             
-            <div class="bg-white dark:bg-zinc-900 rounded-2xl border border-slate-200 dark:border-zinc-800 overflow-hidden shadow-2xs">
-                <div v-if="summary.sold_products.length === 0" class="text-center py-12 text-slate-400 space-y-2">
-                    <PackageOpen class="w-10 h-10 mx-auto opacity-40" />
-                    <p class="text-xs">Belum ada produk yang terjual hari ini.</p>
+            <div class="bg-card rounded-xl border border-border overflow-hidden shadow-2xs">
+                <div v-if="summary.sold_products.length === 0" class="text-center py-12 text-muted-foreground space-y-2">
+                    <PackageOpen class="w-8 h-8 mx-auto opacity-40" />
+                    <p class="text-xs">Belum ada produk yang terjual pada rentang waktu ini.</p>
                 </div>
 
-                <div v-else class="divide-y divide-slate-100 dark:divide-zinc-800">
+                <div v-else class="divide-y divide-border">
                     <div 
                         v-for="(product, index) in summary.sold_products" 
                         :key="index"
-                        class="p-4 flex items-center justify-between hover:bg-slate-50 dark:hover:bg-zinc-800/40 transition-colors"
+                        class="p-4 flex items-center justify-between hover:bg-secondary/50 transition-colors"
                     >
                         <div class="flex items-center gap-3">
-                            <span class="w-6 h-6 rounded-full bg-slate-100 dark:bg-zinc-800 text-slate-600 dark:text-zinc-400 text-xs font-bold flex items-center justify-center shrink-0">
+                            <span class="w-6 h-6 rounded-md bg-secondary text-muted-foreground text-xs font-medium flex items-center justify-center shrink-0">
                                 {{ index + 1 }}
                             </span>
                             <div>
-                                <h4 class="font-bold text-sm text-slate-900 dark:text-white">{{ product.item_name }}</h4>
-                                <span class="text-xs text-slate-500">Terjual: <strong class="text-primary">{{ product.total_qty }} Pcs</strong></span>
+                                <h4 class="font-medium text-sm text-foreground tracking-tight">{{ product.item_name }}</h4>
+                                <span class="text-xs text-muted-foreground">Terjual: <strong class="text-foreground font-medium">{{ product.total_qty }} Pcs</strong></span>
                             </div>
                         </div>
                         <div class="text-right">
-                            <div class="text-sm font-bold text-slate-900 dark:text-white">{{ formatRupiah(product.total_revenue) }}</div>
-                            <span class="text-[10px] text-slate-400">Total Pendapatan</span>
+                            <div class="text-sm font-bold tracking-tight text-foreground">{{ formatRupiah(product.total_revenue) }}</div>
+                            <span class="text-[10px] text-muted-foreground">Total Pendapatan</span>
                         </div>
                     </div>
                 </div>

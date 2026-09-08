@@ -16,9 +16,13 @@ class MenuController extends Controller
 {
     public function __construct(private MenuService $menuService) {}
 
-    public function index()
+    public function index(Request $request)
     {
-        return response()->json($this->menuService->getAllMenus());
+        $outletId = $request->input('outlet_id', 'all');
+
+        $menus = $this->menuService->getAllMenus($outletId);
+
+        return response()->json($menus);
     }
     
     public function store(Request $request): JsonResponse

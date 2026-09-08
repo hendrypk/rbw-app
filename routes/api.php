@@ -80,8 +80,14 @@ Route::middleware(['auth', 'verified', 'resolve.outlet'])->prefix('api')->name('
     Route::apiResource('suppliers', SupplierController::class);
     Route::apiResource('customers', CustomerController::class);
     Route::apiResource('vouchers', VoucherController::class);
+    Route::get('raw-materials/options', [RawMaterialController::class, 'options']);
     Route::apiResource('raw-materials', RawMaterialController::class);
     Route::apiResource('purchase-orders', PurchaseOrderController::class);
+    Route::get('menus/overhead-sync-status', [MenuController::class, 'checkOverheadSync']);
+    Route::get('menus/recipe-sync-status', [MenuController::class, 'checkRecipeSync']);
+    Route::post('menus/overhead-sync', [MenuController::class, 'syncOverhead']);
+    Route::post('menus/sync-recipes', [MenuController::class, 'syncRecipes']);
+    Route::post('menus/bulk-destroy', [MenuController::class, 'bulkDestroy']);
     Route::apiResource('menus', MenuController::class);
     Route::apiResource('overhead-costs', OverheadCostController::class);
     Route::apiResource('categories', CategoryController::class);
