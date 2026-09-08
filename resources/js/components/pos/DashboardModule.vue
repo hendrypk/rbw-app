@@ -1,9 +1,10 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue';
-import { DollarSign, Receipt, ShoppingCart, Banknote, QrCode, TrendingUp, PackageOpen, Award, Clock } from '@lucide/vue';
+import { ref, onMounted, onUnmounted } from 'vue';
+import { DollarSign, Receipt, ShoppingCart, Banknote, QrCode, TrendingUp, PackageOpen, Award, Clock, Timer } from '@lucide/vue';
 import axios from 'axios';
 
 const summary = ref({
+    shift_started_at: null as string | null,
     total_omzet: 0,
     omzet_cash: 0,
     nota_cash: 0,
@@ -19,6 +20,8 @@ const summary = ref({
     peak_hours: {} as Record<string, { total_transactions: number; total_omzet: number }>
 });
 const isLoading = ref(true);
+const activeDuration = ref('00j 00m 00d');
+let durationTimer: any = null;
 
 const fetchSummary = async () => {
     isLoading.value = true;
@@ -35,6 +38,7 @@ const fetchSummary = async () => {
 
         if (response.data.success) {
             summary.value = response.data.data;
+            updateDuration();
         }
     } catch (error) {
         console.error("Gagal mengambil ringkasan dashboard", error);
@@ -43,9 +47,42 @@ const fetchSummary = async () => {
     }
 };
 
+// Hitung selisih waktu mulai shift hingga sekarang
+const updateDuration = () => {
+    if (!summary.value.shift_started_at) {
+        activeDuration.value = '-';
+        return;
+    }
+
+    const start = new Date(summary.value.shift_started_at).getTime();
+    const now = new Date().getTime();
+    const diff = Math.max(0, Math.floor((now - start) / 1000)); // dalam detik
+
+    const hours = Math.floor(diff / 3600);
+    const minutes = Math.floor((diff % 3600) / 60);
+    const seconds = diff % 60;
+
+    activeDuration.value = `${String(hours).padStart(2, '0')}j ${String(minutes).padStart(2, '0')}m ${String(seconds).padStart(2, '0')}d`;
+};
+
+const formatTanggalMulai = (dateStr: string | null) => {
+    if (!dateStr) return '-';
+    const date = new Date(dateStr);
+    return date.toLocaleString('id-ID', { 
+        weekday: 'short', 
+        day: 'numeric', 
+        month: 'short', 
+        year: 'numeric', 
+        hour: '2-digit', 
+        minute: '2-digit',
+        hour12: false 
+    });
+};
+
 const formatRupiah = (val: number) => {
     return new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(val || 0);
 };
+
 const formatHourRange = (hourStr: string) => {
     const startHour = parseInt(hourStr.split(':')[0], 10);
     const endHour = (startHour + 1) % 24;
@@ -58,22 +95,43 @@ const formatHourRange = (hourStr: string) => {
 
 onMounted(() => {
     fetchSummary();
+    durationTimer = setInterval(updateDuration, 1000);
+});
+
+onUnmounted(() => {
+    if (durationTimer) clearInterval(durationTimer);
 });
 </script>
 
 <template>
     <div class="space-y-6">
-        <div class="flex items-center justify-between">
+        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <div>
                 <h2 class="text-lg font-bold text-slate-900 dark:text-white">Ringkasan Penjualan & Analisa</h2>
                 <p class="text-xs text-slate-500 dark:text-zinc-400">Statistik performa transaksi pada shift / hari aktif saat ini.</p>
             </div>
-            <button 
-                @click="fetchSummary" 
-                class="px-3 py-1.5 text-xs font-bold bg-slate-100 dark:bg-zinc-800 rounded-lg hover:bg-slate-200 transition-colors cursor-pointer"
-            >
-                Muat Ulang
-            </button>
+            
+            <div class="flex items-center gap-2">
+                <!-- Info Shift Mulai & Durasi Live -->
+                <div v-if="summary.shift_started_at" class="flex items-center gap-3 px-3.5 py-2 bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 rounded-xl text-xs shadow-2xs">
+                    <div class="flex items-center gap-1.5 text-slate-500 dark:text-zinc-400">
+                        <Clock class="w-3.5 h-3.5 text-primary" />
+                        <span>Mulai: <strong class="text-slate-800 dark:text-zinc-200">{{ formatTanggalMulai(summary.shift_started_at) }}</strong></span>
+                    </div>
+                    <div class="h-3 w-px bg-slate-200 dark:bg-zinc-700"></div>
+                    <div class="flex items-center gap-1.5 text-emerald-600 dark:text-emerald-400 font-bold">
+                        <Timer class="w-3.5 h-3.5 animate-pulse" />
+                        <span>Durasi: {{ activeDuration }}</span>
+                    </div>
+                </div>
+
+                <button 
+                    @click="fetchSummary" 
+                    class="px-3.5 py-2 text-xs font-bold bg-slate-100 dark:bg-zinc-800 rounded-xl hover:bg-slate-200 transition-colors cursor-pointer"
+                >
+                    Muat Ulang
+                </button>
+            </div>
         </div>
 
         <!-- Kartu Metrik Utama -->
@@ -123,14 +181,13 @@ onMounted(() => {
                 </div>
                 <p class="text-xs text-emerald-100 opacity-90">Dihitung dari Total Omzet dikurangi Total HPP dan Total Overhead.</p>
             </div>
-            <div class="bg-white/10 backdrop-blur-md px-5 py-3 rounded-xl border border-white/20 text-center shrink-0">
+            <div class="bg-white/15 backdrop-blur-md px-5 py-3 rounded-xl border border-white/20 text-center shrink-0">
                 <span class="text-[10px] font-bold uppercase tracking-wider text-emerald-200 block">Margin Keuntungan</span>
                 <span class="text-xl font-black">{{ summary.profit_margin }}%</span>
             </div>
         </div>
 
-        <!-- Rincian Omzet Berdasarkan Metode Pembayaran -->
-<!-- Rincian Omzet Berdasarkan Metode Pembayaran (Tunai vs QRIS) -->
+        <!-- Rincian Omzet Berdasarkan Metode Pembayaran (Tunai vs QRIS) -->
         <div class="pt-2">
             <h3 class="text-xs font-bold uppercase text-slate-400 mb-3 tracking-wider">Rincian Pembayaran (Tunai vs QRIS)</h3>
             <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -170,7 +227,7 @@ onMounted(() => {
             </div>
         </div>
 
-        <!-- Analisis Jam Ramai (Peak Hours Chart Sederhana) -->
+        <!-- Analisis Jam Ramai -->
         <div class="pt-2 space-y-3">
             <h3 class="text-xs font-bold uppercase text-slate-400 tracking-wider flex items-center gap-2">
                 <Clock class="w-4 h-4 text-primary" /> Analisis Jam Ramai Transaksi

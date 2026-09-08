@@ -599,9 +599,16 @@ public function getSummary(Request $request): JsonResponse
             }
         }
 
+        $shiftStartedAt = null;
+        if ($shiftId) {
+            $shift = \App\Models\CashierShift::find($shiftId);
+            $shiftStartedAt = $shift?->opened_at;
+        }
+
         return response()->json([
             'success' => true,
             'data'    => [
+                'shift_started_at' => $shiftStartedAt,
                 'total_omzet'   => $totalOmzet,
                 'omzet_cash'    => $omzetCash,
                 'nota_cash'     => $notaCash,

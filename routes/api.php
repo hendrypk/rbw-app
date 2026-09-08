@@ -16,9 +16,12 @@ use App\Http\Controllers\Api\RawMaterialController;
 use App\Http\Controllers\Api\SupplierController;
 use App\Http\Controllers\Api\VoucherController;
 use App\Http\Controllers\Api\CashierShiftController;
+use App\Http\Controllers\Api\OutletController;
+use App\Http\Controllers\Api\ReportController;
 use App\Http\Controllers\PosController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
+use SebastianBergmann\CodeCoverage\Report\Xml\Report;
 
 Route::get('/test-doku-token', [QrisController::class, 'testGetToken']);
 
@@ -55,16 +58,21 @@ Route::prefix('api/v1/user')->group(function () {
     });
 });
 
-Route::middleware(['auth', 'verified', 'resolve.outlet'])->prefix('api')->name('api.')->group(function () {
 
-    // ----------------------------------------------------
-    // 1. FINANCE / BACK OFFICE ONLY (Restricted Access)
-    // ----------------------------------------------------
+Route::middleware(['auth', 'verified'])->prefix('api')->name('api.')->group(function () {
+    // 1. FINANCE / BACK OFFICE ONLY
     Route::middleware(['can:manage-finance'])->prefix('finance')->group(function() {
         Route::apiResource('accounts', AccountController::class);
         Route::apiResource('account-mappings', AccountMappingController::class);
         Route::apiResource('journal-entry', JournalEntryController::class);
     });
+
+    // Dashboard & Outlet List
+    Route::get('/summary', [ReportController::class, 'getSummary']);
+    Route::get('/outlets', [OutletController::class, 'index']);
+});
+
+Route::middleware(['auth', 'verified', 'resolve.outlet'])->prefix('api')->name('api.')->group(function () {
 
     // ----------------------------------------------------
     // 2. MASTER DATA & OPERATIONAL

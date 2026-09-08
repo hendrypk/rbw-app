@@ -76,4 +76,19 @@ class Order extends Model
     {
         return $this->hasOne(CustomerPoint::class);
     }
+
+public static function getDashboardSummary(?string $outletId = null)
+    {
+        // Tambahkan withoutGlobalScopes() di sini untuk mematikan paksaan filter dari trait BelongsToOutlet
+        $query = self::withoutGlobalScopes()->where('status', 'paid');
+
+        $cleanOutletId = strtolower(trim((string) $outletId));
+
+        // Jika user memilih outlet spesifik, baru kita filter secara manual
+        if ($cleanOutletId !== '' && $cleanOutletId !== 'all' && $cleanOutletId !== 'null' && $cleanOutletId !== 'undefined') {
+            $query->where('outlet_id', $outletId);
+        }
+
+        return $query->with('items.menu')->get();
+    }
 }
