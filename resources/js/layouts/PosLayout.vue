@@ -1,12 +1,14 @@
 <script setup lang="ts">
 import { Link } from '@inertiajs/vue3';
 import { Toaster } from '@/components/ui/sonner';
-import { ShoppingBag, ClipboardList, Receipt, ShoppingCart, LayoutGrid, Settings } from '@lucide/vue';
+import { ShoppingBag, ClipboardList, Receipt, ShoppingCart, LayoutGrid, Settings, MapPin, Wallet } from '@lucide/vue';
 import { ref, onMounted, onUnmounted } from 'vue';
 import { NavItem } from '@/types';
-import webPos from '@/routes/web-pos';
 import { dashboard } from '@/routes';
 import PrinterSetup from '@/components/PrinterSetup.vue';
+import pos from '@/routes/pos';
+import axios from 'axios';
+import ShiftModal from '@/pages/posPage/ShiftModal.vue';
 
 const mainNavItems: NavItem[] = [
     {
@@ -16,22 +18,30 @@ const mainNavItems: NavItem[] = [
     },
     {
         title: 'POS',
-        href: webPos.index(),
+        href: pos.index(),
         icon: ShoppingCart,
     },
     {
         title: 'Pesanan (Unpaid)',
-        href: webPos.orders(),
+        href: pos.orders(),
         icon: ClipboardList,
     },
     {
         title: 'Riwayat Invoice',
-        href: webPos.invoices(),
+        href: pos.invoices(),
         icon: Receipt,
     },
 ];
 
 const currentDateTime = ref('');
+const activeOutletName = ref('Belum Pilih Outlet');
+
+// --- State Shift Kasir ---
+const activeShift = ref<any>(null);
+const isShiftModalOpen = ref(false);
+const shiftModalMode = ref<'open' | 'close'>('open');
+const isForcedShift = ref(false);
+const totalCashInDrawer = ref(0);
 
 const updateTime = () => {
     const now = new Date();
@@ -53,12 +63,92 @@ const updateTime = () => {
     currentDateTime.value = `${dateStr}  •  ${timeStr}`;
 };
 
-const isPrinterModalOpen = ref(false);
+// Cek status shift kasir aktif di outlet saat ini
+const checkShiftStatus = async () => {
+    try {
+        const activeOutletId = localStorage.getItem('active_outlet_id');
+        
+        if (!activeOutletId) {
+            isForcedShift.value = true;
+            shiftModalMode.value = 'open';
+            isShiftModalOpen.value = true;
+            return;
+        }
 
+        const response = await axios.get('/api/pos/shifts/active', {
+            headers: { 'X-Outlet-ID': activeOutletId }
+        });
+
+        if (response.data.success) {
+            if (!response.data.has_active_shift) {
+                activeShift.value = null;
+                localStorage.removeItem('active_cashier_shift_id');
+                
+                shiftModalMode.value = 'open';
+                isForcedShift.value = true;
+                isShiftModalOpen.value = true;
+            } else {
+                activeShift.value = response.data.data;
+                localStorage.setItem('active_cashier_shift_id', response.data.data.id);
+                
+                isShiftModalOpen.value = false;
+            }
+        }
+    } catch (error) {
+        console.error("Gagal memeriksa status shift kasir", error);
+        isForcedShift.value = true;
+        shiftModalMode.value = 'open';
+        isShiftModalOpen.value = true;
+    }
+};
+
+const handleShiftSuccess = (shiftData: any) => {
+    if (shiftModalMode.value === 'open') {
+        activeShift.value = shiftData;
+        localStorage.setItem('active_cashier_shift_id', shiftData.id);
+        totalCashInDrawer.value = Number(shiftData.starting_cash || 0);
+
+        isShiftModalOpen.value = false;
+        isForcedShift.value = false;
+    } else {
+        // ⬅️ Tutup shift berhasil, reset state lalu paksa buka modal open shift baru
+        activeShift.value = null;
+        localStorage.removeItem('active_cashier_shift_id');
+        totalCashInDrawer.value = 0;
+
+        isShiftModalOpen.value = false;
+        
+        setTimeout(() => {
+            shiftModalMode.value = 'open';
+            isForcedShift.value = true;
+            isShiftModalOpen.value = true;
+        }, 150);
+    }
+};
+
+const openCloseShiftModal = () => {
+    if (!activeShift.value) return;
+    shiftModalMode.value = 'close';
+    isForcedShift.value = false;
+    isShiftModalOpen.value = true;
+};
+
+const formatRupiah = (val: number) => {
+    return new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(val || 0);
+};
+
+const isPrinterModalOpen = ref(false);
 let timeInterval: any;
+
 onMounted(() => {
+    const savedName = localStorage.getItem('active_outlet_name');
+    if (savedName) {
+        activeOutletName.value = savedName;
+    }
+
     updateTime(); 
-    timeInterval = setInterval(updateTime, 1000); 
+    timeInterval = setInterval(updateTime, 1000);
+    checkShiftStatus();
 });
 
 onUnmounted(() => {
@@ -73,53 +163,58 @@ defineProps<{
 <template>
     <div class="h-screen w-screen flex flex-col bg-slate-100 dark:bg-zinc-950 text-slate-900 dark:text-zinc-50 overflow-hidden font-sans">
         
-        <header class="h-16 bg-white dark:bg-zinc-900 border-b border-slate-200 dark:border-zinc-800 flex items-center px-6 justify-between shrink-0 shadow-sm z-10">
+        <header class="h-16 bg-white dark:bg-zinc-900 border-b border-slate-200 dark:border-zinc-800 flex items-center px-6 justify-between shrink-0 shadow-xs z-10">
             <div class="flex items-center gap-3">
                 <div class="p-2 bg-primary text-primary-foreground rounded-lg">
                     <ShoppingBag class="h-5 w-5" />
                 </div>
                 <div>
-                    <h1 class="font-bold text-lg leading-none">{{ title || 'Roti Bakar Wisuda' }}</h1>
+                    <h1 class="font-bold text-base leading-none">{{ title || 'Roti Bakar Wisuda' }}</h1>
                     <span class="text-xs text-emerald-600 dark:text-emerald-400 font-medium flex items-center gap-1 mt-0.5">
-                        <span class="h-1.5 w-1.5 bg-emerald-500 rounded-full animate-pulse"></span>
-                        Kasir Aktif
+                        <MapPin class="h-3 w-3 text-emerald-600" />
+                        <span class="font-bold text-slate-700 dark:text-zinc-300">{{ activeOutletName }}</span>
                     </span>
                 </div>
             </div>
 
-            <div class="flex items-center gap-4">
-                <Link 
-                    :href="webPos.orders()" 
-                    class="inline-flex items-center gap-2 text-sm font-bold px-3 py-2 text-amber-600 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-950/20 rounded-lg transition-colors"
-                >
-                    <ClipboardList class="h-4 w-4" />
-                    <span class="hidden md:inline">Pesanan (Unpaid)</span>
-                </Link>
-
-                <Link 
-                    :href="webPos.transactions()" 
-                    class="inline-flex items-center gap-2 text-sm font-bold px-3 py-2 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-950/20 rounded-lg transition-colors"
-                >
-                    <Receipt class="h-4 w-4" />
-                    <span class="hidden md:inline">Riwayat Invoice</span>
-                </Link>
+            <div class="flex items-center gap-2.5">
+                <!-- Tombol Status / Tutup Shift (Ringkas dengan ikon dan nilai modal) -->
                 <button 
-                    @click="isPrinterModalOpen = true"
-                    class="relative p-2 bg-white dark:bg-zinc-800 border border-slate-200 dark:border-zinc-700 rounded-xl text-slate-600 dark:text-zinc-300 hover:bg-slate-100 dark:hover:bg-zinc-700 transition-colors shadow-2xs flex items-center gap-1.5 px-3 text-xs font-bold cursor-pointer"
-                    title="Pengaturan Printer"
+                    v-if="activeShift"
+                    @click="openCloseShiftModal"
+                    class="inline-flex items-center gap-1.5 text-xs font-bold px-3 py-2 bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 rounded-xl hover:bg-emerald-100 transition-colors cursor-pointer"
+                    title="Kelola Shift Kasir"
                 >
-                    <Settings class="h-4 w-4 text-primary" />
-                    <span class="hidden sm:inline">Printer</span>
+                    <!-- <Wallet class="h-4 w-4" /> -->
+                    <span class="hidden sm:inline">Close Shift</span>
+                    <!-- <span class="font-extrabold">{{ formatRupiah(activeShift.starting_cash) }}</span> -->
                 </button>
 
-                <div class="h-6 w-[1px] bg-slate-200 dark:bg-zinc-800 hidden sm:block"></div>
+                <Link 
+                    :href="pos.transactions()" 
+                    class="p-2 bg-slate-50 dark:bg-zinc-800 border border-slate-200 dark:border-zinc-700 rounded-xl text-emerald-600 dark:text-emerald-400 hover:bg-slate-100 dark:hover:bg-zinc-700 transition-colors flex items-center gap-1.5 px-3 text-xs font-bold"
+                    title="Riwayat Invoice"
+                >
+                    <Receipt class="h-4 w-4" />
+                    <span class="hidden lg:inline">Invoice</span>
+                </Link>
+
+                <!-- Tombol Pengaturan POS Utama -->
+                <Link 
+                    :href="pos.settings()" 
+                    class="p-2 bg-white dark:bg-zinc-800 border border-slate-200 dark:border-zinc-700 rounded-xl text-slate-600 dark:text-zinc-300 hover:bg-slate-100 dark:hover:bg-zinc-700 transition-colors flex items-center gap-1.5 px-3 text-xs font-bold"
+                    title="Pengaturan POS & Dashboard"
+                >
+                    <Settings class="h-4 w-4 text-primary" />
+                    </Link>
+
+                <div class="h-5 w-px bg-slate-200 dark:bg-zinc-800 hidden xl:block"></div>
                
-                <div class="text-right hidden sm:block">
-                    <div class="text-sm font-medium text-slate-500 dark:text-zinc-400">
+                <div class="text-right hidden xl:block">
+                    <div class="text-xs font-medium text-slate-500 dark:text-zinc-400">
                         {{ currentDateTime }}
                     </div>
                 </div>
-
             </div>
         </header>
 
@@ -127,10 +222,19 @@ defineProps<{
             <slot />
         </main>
 
+        <ShiftModal 
+            :is-open="isShiftModalOpen"
+            :mode="shiftModalMode"
+            :active-shift="activeShift"
+            :forced="isForcedShift"
+            @close="isShiftModalOpen = false"
+            @success="handleShiftSuccess"
+        />
+
         <Toaster close-button position="top-center" />
         <PrinterSetup 
-        :is-open="isPrinterModalOpen" 
-        @close="isPrinterModalOpen = false" 
-    />
+            :is-open="isPrinterModalOpen" 
+            @close="isPrinterModalOpen = false" 
+        />
     </div>
 </template>

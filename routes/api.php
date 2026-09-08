@@ -15,6 +15,8 @@ use App\Http\Controllers\Api\QrisController;
 use App\Http\Controllers\Api\RawMaterialController;
 use App\Http\Controllers\Api\SupplierController;
 use App\Http\Controllers\Api\VoucherController;
+use App\Http\Controllers\Api\CashierShiftController;
+use App\Http\Controllers\PosController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 
@@ -53,83 +55,48 @@ Route::prefix('api/v1/user')->group(function () {
     });
 });
 
-Route::middleware(['auth', 'verified'])->prefix('api')->name('api.')->group(function () {
+Route::middleware(['auth', 'verified', 'resolve.outlet'])->prefix('api')->name('api.')->group(function () {
 
-    Route::apiResource('suppliers', SupplierController::class);
-    Route::post('/suppliers/bulk-delete', [SupplierController::class, 'bulkDestroy']);
-
-    Route::prefix('customers')->group(function () {
-        Route::post('bulk-delete', [CustomerController::class, 'bulkDestroy']);
-    });
-    Route::apiResource('customers', CustomerController::class);
-
-
-    Route::apiResource('vouchers', VoucherController::class);
-        Route::prefix('vouchers')->group(function () {
-        Route::post('bulk-delete', [VoucherController::class, 'bulkDestroy']);
-        Route::post('validate', [VoucherController::class, 'validateVoucher']);
-    });
-    Route::apiResource('vouchers', VoucherController::class);
-
-
-    // Raw Materials
-    Route::prefix('raw-materials')->group(function () {
-        Route::post('bulk-delete', [RawMaterialController::class, 'bulkDestroy']);
-        Route::get('{rawMaterial}/ledger', [RawMaterialController::class, 'ledger']);
-    });
-    Route::get('raw-materials/options', [RawMaterialController::class, 'options']);
-    Route::apiResource('raw-materials', RawMaterialController::class);
-
-    // Purchase Orders
-    Route::prefix('purchase-orders')->group(function () {
-        Route::post('bulk-delete', [PurchaseOrderController::class, 'bulkDestroy']);
-        Route::post('{purchaseOrder}/receive', [PurchaseOrderController::class, 'receive']);
-    });
-    Route::apiResource('purchase-orders', PurchaseOrderController::class);
-    Route::prefix('purchase-orders')->group(function () {
-        Route::post('{id}/payments', [PurchaseOrderController::class, 'payOrder'])->name('po.payOrder');
-    });
-
-    // Menus
-    Route::prefix('menus')->group(function () {
-        Route::get('channels', [MenuController::class, 'channels']);
-        Route::get('overhead-sync-status', [MenuController::class, 'checkOverheadSync']);
-        Route::post('overhead-sync', [MenuController::class, 'syncOverhead']);
-        Route::get('recipe-sync-status', [MenuController::class, 'checkRecipeSync']);
-        Route::post('sync-recipes', [MenuController::class, 'syncRecipes']);
-    });
-    Route::apiResource('menus', MenuController::class);
-
-    // Overhead
-    Route::apiResource('overhead-costs', OverheadCostController::class);
-
-    //Category
-    Route::prefix('categories')->group(function () {
-        Route::post('sort', [CategoryController::class, 'updateCategoriesSort']);
-        Route::post('{category}/menus/sort', [CategoryController::class, 'updateMenusSort']);
-    });
-    Route::apiResource('categories', CategoryController::class);
-    Route::prefix('finance')->group(function() {
+    // ----------------------------------------------------
+    // 1. FINANCE / BACK OFFICE ONLY (Restricted Access)
+    // ----------------------------------------------------
+    Route::middleware(['can:manage-finance'])->prefix('finance')->group(function() {
         Route::apiResource('accounts', AccountController::class);
         Route::apiResource('account-mappings', AccountMappingController::class);
         Route::apiResource('journal-entry', JournalEntryController::class);
     });
 
-    //Order
+    // ----------------------------------------------------
+    // 2. MASTER DATA & OPERATIONAL
+    // ----------------------------------------------------
+    Route::apiResource('suppliers', SupplierController::class);
+    Route::apiResource('customers', CustomerController::class);
+    Route::apiResource('vouchers', VoucherController::class);
+    Route::apiResource('raw-materials', RawMaterialController::class);
+    Route::apiResource('purchase-orders', PurchaseOrderController::class);
+    Route::apiResource('menus', MenuController::class);
+    Route::apiResource('overhead-costs', OverheadCostController::class);
+    Route::apiResource('categories', CategoryController::class);
+
+    // ----------------------------------------------------
+    // 3. POS API TRANSACTIONS (Tetap butuh resolve.outlet)
+    // ----------------------------------------------------
     Route::prefix('pos')->group(function () {
         Route::post('checkout', [OrderController::class, 'checkout']);
         Route::get('/orders', [OrderController::class, 'getOrdersData']);
         Route::post('/orders/{id}/mark-paid', [OrderController::class, 'markOrderAsPaid']);
+        Route::post('/orders/{order}/pay', [OrderController::class, 'payOrder']);
         Route::get('/orders-unpaid', [OrderController::class, 'getUnpaidOrders']);
         Route::get('/invoices-paid', [OrderController::class, 'getPaidInvoices']);
+        Route::get('/shifts/active', [CashierShiftController::class, 'checkActiveShift']);
+        Route::post('/shifts/open', [CashierShiftController::class, 'openShift']);
+        Route::post('/shifts/{shift}/close', [CashierShiftController::class, 'closeShift']);
+        Route::get('/dashboard/summary', [OrderController::class, 'getSummary']);
     });
     
-    //qris
-    Route::prefix('payment')->group(function () {
-        Route::prefix('qris')->group(function () {
-            Route::post('/generate', [QrisController::class, 'generate']);
-            Route::post('/check-status', [QrisController::class, 'checkStatus']);
-        });
+    // QRIS Payment
+    Route::prefix('payment/qris')->group(function () {
+        Route::post('/generate', [QrisController::class, 'generate']);
+        Route::post('/check-status', [QrisController::class, 'checkStatus']);
     });
-
 });

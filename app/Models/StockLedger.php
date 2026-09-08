@@ -16,7 +16,7 @@ class StockLedger extends Model
     protected $fillable = [
         'raw_material_id', 'reference_id', 'reference_type',
         'movement_type', 'qty', 'unit_cost',
-        'avg_cost_before', 'avg_cost_after',
+        'avg_cost_before', 'avg_cost_after', 'outlet_id',
         'stock_before', 'stock_after', 'notes', 'created_at',
     ];
 

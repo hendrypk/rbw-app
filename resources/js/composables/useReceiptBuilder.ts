@@ -34,6 +34,7 @@ export const formatCashierReceipt = (data: ReceiptData): string => {
     if (data.pointsUsed && data.pointsUsed > 0) {
         text += `Poin Digunakan : Rp ${data.pointsUsed.toLocaleString('id-ID')}\n`;
     }
+    const safeMethod = data.paymentMethod ? data.paymentMethod.toUpperCase() : 'CASH';
     text += `Dibayar (${data.paymentMethod.toUpperCase()})  : Rp ${data.amountPaid.toLocaleString('id-ID')}\n`;
     text += `Kembalian      : Rp ${data.changeAmount.toLocaleString('id-ID')}\n`;
     text += `${line}\n`;

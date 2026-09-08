@@ -19,7 +19,7 @@ import {
     Check,
     X
 } from '@lucide/vue';
-import webPos from '@/routes/web-pos';
+import pos from '@/routes/pos';
 import { SearchXIcon } from '@lucide/vue';
 import { toast } from 'vue-sonner';
 import QrcodeVue from 'qrcode.vue';
@@ -119,7 +119,12 @@ const startCountdown = () => {
 const fetchTransactions = async () => {
     isLoading.value = true;
     try {
-        const response = await axios.get('/api/pos/orders');
+        const activeOutletId = localStorage.getItem('active_outlet_id');
+        const response = await axios.get('/api/pos/orders', {
+            headers: {
+                'X-Outlet-ID': activeOutletId
+            }
+        });
         if (response.data.success) {
             transactions.value = response.data.data;
             
@@ -316,7 +321,7 @@ onBeforeUnmount(() => {
         <!-- ========================================================= -->
         <div :class="['w-full md:w-[420px] flex-col bg-white dark:bg-zinc-900 border-r border-slate-200 dark:border-zinc-800 h-full shrink-0 shadow-sm z-10', selectedTransaction ? 'hidden md:flex' : 'flex']">
             <div class="p-4 border-b border-slate-100 dark:border-zinc-800 flex items-center gap-3 bg-slate-50/50 dark:bg-zinc-900/50 shrink-0">
-                <Link :href="webPos.index()" class="p-2 bg-white dark:bg-zinc-800 border border-slate-200 dark:border-zinc-700 rounded-xl text-slate-500 hover:text-slate-900 dark:hover:text-white transition-colors shadow-2xs">
+                <Link :href="pos.index()" class="p-2 bg-white dark:bg-zinc-800 border border-slate-200 dark:border-zinc-700 rounded-xl text-slate-500 hover:text-slate-900 dark:hover:text-white transition-colors shadow-2xs">
                     <ArrowLeft class="h-4 w-4" />
                 </Link>
                 <div>
@@ -413,37 +418,35 @@ onBeforeUnmount(() => {
                         </button>
                     </div>
 
-                    <!-- ISI NOTA (Tanpa Header Toko, langsung Informasi Transaksi & Status) -->
                     <div class="p-6 sm:p-8 md:p-10 space-y-6 text-xs">
                         
-                        <!-- Informasi Transaksi & Status -->
                          <div class="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-2.5 bg-slate-50 dark:bg-zinc-800/40 p-4 rounded-2xl border border-slate-100 dark:border-zinc-800 text-xs">
                             
-                            <!-- Pelanggan -->
+                            <div class="grid grid-cols-[80px_1fr] items-center">
+                                <span class="text-slate-400 font-semibold uppercase text-[10px]">Outlet</span>
+                                <span class="font-bold text-slate-800 dark:text-zinc-200 truncate">: {{ selectedTransaction.outlet?.name || '-' }}</span>
+                            </div>
+
                             <div class="grid grid-cols-[80px_1fr] items-center">
                                 <span class="text-slate-400 font-semibold uppercase text-[10px]">Pelanggan</span>
                                 <span class="font-bold text-slate-800 dark:text-zinc-200 truncate">: {{ selectedTransaction.customer_name || 'Pelanggan Umum' }}</span>
                             </div>
 
-                            <!-- No. Invoice -->
                             <div class="grid grid-cols-[80px_1fr] items-center">
                                 <span class="text-slate-400 font-semibold uppercase text-[10px]">Invoice</span>
                                 <span class="font-extrabold text-slate-800 dark:text-zinc-200 font-mono truncate">:{{ selectedTransaction.order_number }}</span>
                             </div>
 
-                            <!-- Waktu -->
                             <div class="grid grid-cols-[80px_1fr] items-center">
                                 <span class="text-slate-400 font-semibold uppercase text-[10px]">Waktu</span>
                                 <span class="font-medium text-slate-800 dark:text-zinc-200 truncate">: {{ formatDate(selectedTransaction.created_at ?? '') }}</span>
                             </div>
 
-                            <!-- Metode Bayar -->
                             <div class="grid grid-cols-[80px_1fr] items-center">
                                 <span class="text-slate-400 font-semibold uppercase text-[10px]">Metode</span>
                                 <span class="font-bold text-slate-800 dark:text-zinc-200 uppercase truncate">: {{ selectedTransaction.payment_method }}</span>
                             </div>
 
-                            <!-- Status Pembayaran (Full Span di bawah) -->
                             <div class="sm:col-span-2 pt-2.5 mt-1 border-t border-slate-200/60 dark:border-zinc-700 flex items-center justify-between">
                                 <span class="text-slate-400 font-semibold uppercase text-[10px]">Status Pembayaran</span>
                                 <span :class="['px-3 py-0.5 rounded-full text-[10px] font-black tracking-wider uppercase', selectedTransaction.status === 'paid' ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-400 border border-emerald-200' : 'bg-amber-100 text-amber-700 dark:bg-amber-950/60 dark:text-amber-400 border border-amber-200']">
@@ -451,7 +454,6 @@ onBeforeUnmount(() => {
                                 </span>
                             </div>
                         </div>
-                        <!-- Daftar Item -->
                         <div class="space-y-3">
                             <span class="text-[11px] font-black tracking-wider text-slate-400 uppercase block">Rincian Item Pesanan</span>
                             <div class="divide-y divide-slate-100 dark:divide-zinc-800/60 border-y border-slate-100 dark:border-zinc-800">
@@ -465,13 +467,11 @@ onBeforeUnmount(() => {
                             </div>
                         </div>
 
-                        <!-- Catatan (Jika Ada) -->
                         <div v-if="selectedTransaction.notes" class="bg-amber-50/60 dark:bg-amber-950/20 p-3.5 rounded-2xl border border-amber-200/60">
                             <span class="font-bold text-amber-700 dark:text-amber-400 block mb-0.5 text-[11px]">📝 Catatan:</span>
                             <p class="text-slate-600 dark:text-zinc-300 font-medium">{{ selectedTransaction.notes }}</p>
                         </div>
 
-                        <!-- Ringkasan Tagihan -->
                         <div class="space-y-2 pt-2 border-t border-dashed border-slate-200 dark:border-zinc-800 pb-4">
                             <div class="flex justify-between text-slate-500 font-medium"><span>Subtotal</span><span>Rp {{ Number(selectedTransaction.subtotal || selectedTransaction.final_total).toLocaleString('id-ID') }}</span></div>
                             <div v-if="selectedTransaction.discount && selectedTransaction.discount > 0" class="flex justify-between text-red-500 font-medium"><span>Diskon</span><span>-Rp {{ Number(selectedTransaction.discount).toLocaleString('id-ID') }}</span></div>

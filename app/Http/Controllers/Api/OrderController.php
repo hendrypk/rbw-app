@@ -86,7 +86,10 @@ class OrderController extends Controller
                 }
             }
 
+            $outletId = session('active_outlet_id') ?? $request->header('X-Outlet-ID');
+
             $orderData = [
+                'outlet_id'      => $outletId,
                 'customer_id' => $request->customer_id ?? null,
                 'voucher_id'     => $request->voucher_id ?? null,
                 'customer_name'  => $request->customer_name ?? 'Pelanggan POS',
@@ -153,6 +156,58 @@ class OrderController extends Controller
 
         } catch (\Exception $e) {
             return response()->json(['success' => false, 'error' => $e->getMessage()], 500);
+        }
+    }
+
+    public function payOrder(Request $request, Order $order): JsonResponse
+    {
+        $request->validate([
+            'payment_method' => 'required|string|in:cash,qris,edc',
+            'amount_paid'    => 'required|numeric|min:' . $order->final_total,
+        ]);
+
+        try {
+            // 1. Update status order yang sudah ada menjadi paid
+            $order->update([
+                'payment_method' => $request->payment_method,
+                'amount_paid'    => $request->amount_paid,
+                'status'         => 'paid',
+            ]);
+
+            // 2. Tentukan jenis jurnal berdasarkan metode pembayaran
+            $journalType = 'pos_revenue_' . $request->payment_method;
+            $replacements = ['order_number' => $order->order_number];
+
+            // 3. Catat Jurnal Keuangan Sisi Penerimaan Uang
+            JournalEntry::createEntryFromMapping(
+                type: $journalType, 
+                j1Amount: (float) $order->final_total,
+                reference: $order,
+                replacements: $replacements
+            );
+
+            // 4. Catat Jurnal HPP jika belum tercatat sebelumnya
+            if ($order->total_hpp > 0) {
+                JournalEntry::createEntryFromMapping(
+                    type: 'pos_sales_hpp',
+                    j1Amount: (float) $order->total_hpp,
+                    reference: $order,
+                    replacements: $replacements
+                );
+            }
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Pembayaran order berhasil diproses dan jurnal tercatat.',
+                'data'    => $order
+            ], 200);
+
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Gagal memproses pembayaran',
+                'error'   => $e->getMessage()
+            ], 500);
         }
     }
 
@@ -258,7 +313,7 @@ class OrderController extends Controller
     public function getOrdersData(): JsonResponse
     {
         try {
-            $orders = Order::with('items.menu')
+            $orders = Order::with('items.menu', 'outlet')
                 ->orderBy('created_at', 'desc')
                 ->get();
 
@@ -448,5 +503,119 @@ class OrderController extends Controller
                 'message' => 'Gagal memuat detail pesanan: ' . $e->getMessage()
             ], 500);
         }
+    }
+
+public function getSummary(Request $request): JsonResponse
+    {
+        $outletId = $request->header('X-Outlet-ID') ?? session('active_outlet_id');
+        $shiftId  = $request->header('X-Shift-ID') ?? session('active_cashier_shift_id');
+
+        $query = Order::where('outlet_id', $outletId)
+            ->where('status', 'paid');
+
+        if ($shiftId) {
+            $query->where('cashier_shift_id', $shiftId);
+        } else {
+            // Atau filter hari ini jika tidak ada shift spesifik
+            $query->whereDate('created_at', today());
+        }
+
+        $orders = $query->with('items')->get();
+
+        // Rincian Pembayaran Tunai (Cash)
+        $cashOrders = $orders->where('payment_method', 'cash');
+        $omzetCash  = $cashOrders->sum('final_total');
+        $notaCash   = $cashOrders->count();
+        $itemsCash  = $cashOrders->sum(function ($order) {
+            return $order->items->sum('quantity');
+        });
+
+        // Rincian Pembayaran QRIS
+        $qrisOrders = $orders->where('payment_method', 'qris');
+        $omzetQris  = $qrisOrders->sum('final_total');
+        $notaQris   = $qrisOrders->count();
+        $itemsQris  = $qrisOrders->sum(function ($order) {
+            return $order->items->sum('quantity');
+        });
+
+        $totalOmzet  = $omzetCash + $omzetQris;
+        $totalNota   = $orders->count();
+        $totalItems  = $totalImageItems ?? $orders->sum(function ($order) {
+            return $order->items->sum('quantity');
+        });
+
+        // 1. Laba Bersih
+        $totalHpp = $orders->sum('total_hpp');
+        $totalOverhead = $orders->sum('total_overhead');
+        $netProfit = $totalOmzet - ($totalHpp + $totalOverhead);
+        $profitMargin = $totalOmzet > 0 ? ($netProfit / $totalOmzet) * 100 : 0;
+
+        // 2. Daftar Produk Terjual (Menggunakan relasi Eloquent 'menu')
+        $orderIds = $orders->pluck('id');
+        $soldProducts = collect();
+        
+        if ($orderIds->isNotEmpty()) {
+            $soldProducts = OrderItem::whereIn('order_id', $orderIds)
+                ->with('menu')
+                ->get()
+                ->groupBy('menu_id')
+                ->map(function ($items) {
+                    $firstItem = $items->first();
+                    return [
+                        'item_name'     => $firstItem->menu->name ?? 'Menu Tidak Ditemukan',
+                        'total_qty'     => $items->sum('quantity'),
+                        'total_revenue' => $items->sum('subtotal'),
+                    ];
+                })
+                ->sort(function ($a, $b) {
+                    if ($b['total_qty'] !== $a['total_qty']) {
+                        return $b['total_qty'] <=> $a['total_qty'];
+                    }
+                    return $b['total_revenue'] <=> $a['total_revenue'];
+                })
+                ->values();
+        }
+
+        // 3. Analisis Jam Ramai
+        $peakHours = $orders->groupBy(function ($order) {
+            return Carbon::parse($order->created_at)->format('H:00');
+        })->map(function ($group) {
+            return [
+                'total_transactions' => $group->count(),
+                'total_omzet'        => $group->sum('final_total')
+            ];
+        })->sortKeys();
+
+        $groupedOrders = $orders->groupBy(function ($order) {
+            return Carbon::parse($order->created_at)->format('H:00');
+        });
+
+        foreach ($groupedOrders as $hour => $group) {
+            if ($peakHours->has($hour)) {
+                $peakHours[$hour] = [
+                    'total_transactions' => $group->count(),
+                    'total_omzet'        => $group->sum('final_total')
+                ];
+            }
+        }
+
+        return response()->json([
+            'success' => true,
+            'data'    => [
+                'total_omzet'   => $totalOmzet,
+                'omzet_cash'    => $omzetCash,
+                'nota_cash'     => $notaCash,
+                'items_cash'    => $itemsCash,
+                'omzet_qris'    => $omzetQris,
+                'nota_qris'     => $notaQris,
+                'items_qris'    => $itemsQris,
+                'total_nota'    => $totalNota,
+                'total_items'   => $totalItems,
+                'net_profit'    => $netProfit,
+                'profit_margin' => round($profitMargin, 1),
+                'sold_products' => $soldProducts,
+                'peak_hours'    => $peakHours
+            ]
+        ]);
     }
 }

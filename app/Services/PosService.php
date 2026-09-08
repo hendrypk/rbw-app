@@ -19,6 +19,7 @@ class PosService
         return DB::transaction(function () use ($orderData, $itemsData) {
             
             $order = Order::create([
+                'outlet_id'        => $orderData['outlet_id'] ?? null,
                 'customer_id'      => $orderData['customer_id'] ?? null,     // <-- TAMBAHKAN INI
                 'voucher_id'      => $orderData['voucher_id'] ?? null,     // <-- TAMBAHKAN INI
                 'customer_name'    => $orderData['customer_name'],
@@ -53,6 +54,7 @@ class PosService
                     $stockAfter = $stockBefore - $totalUsageQty;
 
                     StockLedger::create([
+                        'outlet_id'       => $order->outlet_id,
                         'raw_material_id' => $material->id,
                         'reference_id'    => $order->id,
                         'reference_type'  => Order::class,
@@ -117,6 +119,7 @@ class PosService
 
                     // Catat mutasi pembalikan masuk ke Ledger
                     StockLedger::create([
+                        'outlet_id'       => $order->outlet_id,
                         'raw_material_id' => $material->id,
                         'reference_id'    => $order->id,
                         'reference_type'  => Order::class,

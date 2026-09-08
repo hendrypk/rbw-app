@@ -19,6 +19,7 @@ import PaymentModal from '@/components/pos/PaymentModal.vue';
 import CustomerSelectModal from '@/components/pos/CustomerSelectModal.vue';
 import DiscountModal from '@/components/pos/DiscountModal.vue';
 import CustomerAddModal from '@/components/pos/CustomerAddModal.vue';
+import OutletSelectModal from './OutletSelectModal.vue';
 
 defineOptions({
     layout: PosLayout
@@ -273,8 +274,36 @@ const handleClickOutside = (event: MouseEvent) => {
     }
 };
 
+const props = defineProps<{
+    outlets?: any[];
+    activeOutletId?: string | null;
+}>();
+
+const currentOutletId = ref<string | null>(localStorage.getItem('active_outlet_id') || props.activeOutletId || null);
+const isOutletModalOpen = ref<boolean>(!currentOutletId.value);
+
+const handleOutletSelect = (outlet: any) => {
+    if (!outlet || !outlet.id) {
+        toast.error('Data outlet tidak valid. Gagal memilih outlet.');
+        console.error('Outlet selection error: Outlet object or ID is undefined', outlet);
+        return; 
+    }
+
+    localStorage.setItem('active_outlet_id', outlet.id);
+    
+    localStorage.setItem('active_outlet_name', outlet.name || 'Outlet'); 
+    
+    currentOutletId.value = outlet.id;
+    isOutletModalOpen.value = false;
+    
+    window.location.reload(); 
+};
+
 onMounted(() => {
-    fetchData();
+    if (currentOutletId.value) {
+        localStorage.setItem('active_outlet_id', currentOutletId.value);
+        fetchData();
+    }
     window.addEventListener('resize', updateWindowWidth);
     window.addEventListener('click', handleClickOutside);
 });
@@ -347,7 +376,7 @@ const getInitials = (name: string) => {
         <!-- ========================================================= -->
         <!-- LEFT PANEL: CART & CHECKOUT CONTAINER (SEKARANG DI KIRI)  -->
         <!-- ========================================================= -->
-<div 
+        <div 
             class="fixed lg:relative bottom-0 left-0 right-0 z-30 bg-white dark:bg-zinc-900 border-t lg:border-t-0 border-slate-200 dark:border-zinc-800 flex flex-col shadow-2xl lg:shadow-none transition-all duration-300 ease-out overflow-hidden"
             :style="{ width: windowWidth >= 1024 ? `${catalogWidth}%` : '100%' }"
             :class="[
@@ -735,6 +764,13 @@ const getInitials = (name: string) => {
         @apply-manual="(amount: number) => { discountInput = amount; isDiscountModalOpen = false; }"
         @close="isDiscountModalOpen = false"
     />
+
+<OutletSelectModal 
+    :is-open="isOutletModalOpen"
+    :outlets="outlets || []"
+    @select="handleOutletSelect"
+/>
+    
 </template>
 
 <style scoped>

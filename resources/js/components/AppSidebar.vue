@@ -25,7 +25,7 @@ import account from '@/routes/account';
 import accountMapping from '@/routes/account-mapping';
 import journalEntry from '@/routes/journal';
 import journal from '@/routes/journal';
-import webPos from '@/routes/web-pos';
+import pos from '@/routes/pos';
 
 const mainNavItems: NavItem[] = [
     {
@@ -35,7 +35,7 @@ const mainNavItems: NavItem[] = [
     },
     {
         title: 'POS',
-        href: webPos.index(),
+        href: pos.index(),
         icon: Receipt,
     },
     {

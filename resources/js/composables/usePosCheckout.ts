@@ -182,15 +182,24 @@ export function usePosCheckout() {
             console.log("🚀 PAYLOAD CHECKOUT POS DIKIRIM:", payload);
             console.log("🏷️ Applied Voucher Object:", appliedVoucher.value);
             
-            const response = await axios.post('/api/pos/checkout', payload);
-            const orderData = response.data.data;
+            const activeOutletId = localStorage.getItem('active_outlet_id');
+
+            const response = await axios.post('/api/pos/checkout', payload, {
+                headers: {
+                    'X-Outlet-ID': activeOutletId
+                }
+            });
+            console.log("🔥 [DEBUG CASH] Respons Backend:", response.data);
+            const orderData = response.data.data || response.data;
+            const validOrderNumber = orderData?.order_number || orderData?.orderNumber || orderData?.invoice_no || orderData?.id || '-';
+            // const orderData = response.data.data;
             
             toast.success(`Transaksi ${orderData.order_number} berhasil diproses!`);
 
             // Jika dibayar tunai (pay), simpan data struk dan tampilkan modal sukses universal
             if (type === 'pay') {
                 lastCompletedOrder.value = {
-                    orderNumber: orderData.order_number,
+                    orderNumber: validOrderNumber,
                     customerName: customerName.value || 'Pelanggan Umum',
                     customerId: customerId.value || null,
                     subtotal: cartSubtotal.value,
@@ -209,6 +218,8 @@ export function usePosCheckout() {
             }
         } catch (error: any) {
             toast.error(error.response?.data?.message || 'Gagal memproses transaksi');
+            console.error("❌ Detail Error Checkout:", error.response?.data || error);
+
         }
     };
 
@@ -236,7 +247,13 @@ export function usePosCheckout() {
                 amount_paid: 0
             };
 
-            const registerResponse = await axios.post('/api/pos/checkout', registerPayload);
+            const activeOutletId = localStorage.getItem('active_outlet_id');
+
+            const registerResponse = await axios.post('/api/pos/checkout', registerPayload, {
+                headers: {
+                    'X-Outlet-ID': activeOutletId
+                }
+            });
             if (!registerResponse.data.success) {
                 throw new Error(registerResponse.data.message || 'Gagal membuat tagihan order.');
             }
@@ -246,6 +263,10 @@ export function usePosCheckout() {
             const qrisResponse = await axios.post('/api/payment/qris/generate', {
                 order_number: registeredOrder.order_number,
                 amount: registeredOrder.final_total
+            }, {
+                headers: {
+                    'X-Outlet-ID': activeOutletId
+                }
             });
 
             if (qrisResponse.data.status === 'success') {
@@ -317,7 +338,7 @@ export function usePosCheckout() {
 
     const handleQrisSuccessAction = (orderDetail?: any) => {
         lastCompletedOrder.value = {
-            orderNumber: qrisData.value.invoiceNo || orderDetail?.order_number || '-',
+            orderNumber: orderDetail?.order_number || '-',
             customerName: customerName.value || 'Pelanggan Umum',
             customerId: customerId.value || null,
             subtotal: cartSubtotal.value,
@@ -325,7 +346,7 @@ export function usePosCheckout() {
             pointsUsed: Number(orderDetail?.points_used || orderDetail?.points || 0),
             finalTotal: orderDetail?.final_total ?? finalTotal.value,
             items: [...cart.value],
-            paymentMethod: 'qris'
+            paymentMethod: orderDetail?.payment_method || 'qris'
         };
 
         if (statusInterval) clearInterval(statusInterval);

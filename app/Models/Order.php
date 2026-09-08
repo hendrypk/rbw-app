@@ -2,6 +2,8 @@
 
 namespace App\Models;
 
+use App\Concerns\BelongsToCashierShift;
+use App\Concerns\BelongsToOutlet;
 use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Model;
@@ -12,11 +14,13 @@ use Illuminate\Database\Eloquent\SoftDeletes;
 
 class Order extends Model
 {
-    use HasUuids, SoftDeletes;
+    use HasUuids, SoftDeletes, BelongsToOutlet, BelongsToCashierShift;
 
     protected $fillable = [
         'order_number', 
         'customer_id', 
+        'outlet_id',
+        'cashier_shift_id',
         'voucher_id',
         'customer_name',
         'customer_phone',

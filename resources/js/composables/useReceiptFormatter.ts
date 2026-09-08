@@ -71,7 +71,7 @@ export const mapTransactionToReceiptData = (transaction: any): ReceiptData => {
         instagram: "rotibakar.wisuda",
         cashierName: "Admin POS",
         customerName: transaction.customer_name || 'Pelanggan Umum',
-        orderNumber: transaction.order_number || '-',
+        orderNumber: transaction.order_number || transaction.orderNumber || transaction.invoiceNo || '-',
         queueNumber: transaction.queue_number || transaction.queueNumber || 'A-01',
         dateStr: new Date(transaction.created_at || Date.now()).toLocaleString('id-ID'),
         items: itemsList,
