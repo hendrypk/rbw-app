@@ -12,10 +12,12 @@ return new class extends Migration
     public function up(): void
     {
         Schema::table('orders', function (Blueprint $table) {
-            $table->uuid('outlet_id')->nullable()->change();
-            // Jika ingin pasang foreign key yang benar:
-            // $table->foreign('outlet_id')->references('id')->on('outlets')->onDelete('cascade');
-        });
+            if (!Schema::hasColumn('orders', 'outlet_id')) {
+                $table->uuid('outlet_id')->nullable();
+            } else {
+                // Jika sudah ada, ubah menjadi nullable
+                $table->uuid('outlet_id')->nullable()->change();
+            }        });
     }
 
     /**
@@ -24,7 +26,9 @@ return new class extends Migration
     public function down(): void
     {
         Schema::table('tables', function (Blueprint $table) {
-            //
+            if (Schema::hasColumn('orders', 'outlet_id')) {
+                $table->uuid('outlet_id')->nullable(false)->change();
+            }
         });
     }
 };
