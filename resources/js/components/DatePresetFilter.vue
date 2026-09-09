@@ -34,7 +34,7 @@ onMounted(() => {
 <template>
     <select 
         v-model="selectedPreset" 
-        class="border-gray-300 focus:border-indigo-500 focus:ring-indigo-500 rounded-md shadow-sm sm:text-sm"
+        class="w-full px-2 py-1 rounded-md border border-input bg-secondary text-foreground font-medium text-[11px] outline-none focus:ring-1 focus:ring-ring cursor-pointer truncate"
     >
         <option v-for="preset in presets" :key="preset.value" :value="preset.value">
             {{ preset.label }}

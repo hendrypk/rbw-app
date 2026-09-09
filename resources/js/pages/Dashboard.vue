@@ -105,46 +105,42 @@ onMounted(async () => {
     <Head title="Dashboard Ringkasan Penjualan" />
 
     <div class="flex h-full flex-1 flex-col gap-6 p-4 md:p-6 overflow-x-auto">
-        <!-- Header & Pemilih Outlet + Filter Tanggal -->
-        <div class="flex flex-col xl:flex-row xl:items-center justify-between gap-4 bg-card p-4 rounded-xl border border-border shadow-2xs">
-            <div>
-                <h1 class="font-semibold text-base text-foreground tracking-tight">Panel Analisis Penjualan</h1>
-                <p class="text-xs text-muted-foreground mt-0.5">Pantau performa harian per outlet atau gabungan seluruh outlet.</p>
-            </div>
-            <div class="flex flex-wrap items-center gap-2.5">
-                <!-- FILTER TANGGAL DARI KOMPONEN -->
-                <div class="flex items-center gap-2 border-r border-border pr-3">
-                    <Calendar class="w-4 h-4 text-muted-foreground" />
-                    <DatePresetFilter @change="handleDateChange" class="px-3 py-1.5 rounded-lg border border-input bg-secondary text-foreground font-medium text-xs outline-none focus:ring-2 focus:ring-ring cursor-pointer" />
+        <div class="flex items-center justify-between sm:justify-end gap-1.5 w-full">
+            <div class="flex items-center justify-end gap-1.5 w-full sm:w-auto">
+                <div class="flex items-center shrink-0">
+                    <DatePresetFilter @change="handleDateChange" class="px-2 py-1 rounded-md border border-input bg-secondary text-foreground font-medium text-[11px] outline-none focus:ring-1 focus:ring-ring cursor-pointer" />
                 </div>
 
-                <!-- FILTER OUTLET -->
-                <div class="flex items-center gap-2">
-                    <label class="text-xs font-medium uppercase tracking-wider text-muted-foreground hidden sm:block">Outlet:</label>
+                <div class="flex items-center shrink-0 max-w-[120px] sm:max-w-[160px]">
                     <select 
                         v-model="selectedOutletId" 
                         @change="handleOutletChange"
-                        class="px-3 py-1.5 rounded-lg border border-input bg-secondary text-foreground font-medium text-xs outline-none focus:ring-2 focus:ring-ring cursor-pointer"
+                        class="w-full px-2 py-1 rounded-md border border-input bg-secondary text-foreground font-medium text-[11px] outline-none focus:ring-1 focus:ring-ring cursor-pointer truncate"
                     >
-                        <option value="all">Gabungan Semua Outlet</option>
+                        <option value="all">Semua Outlet</option>
                         <option v-for="outlet in outlets" :key="outlet.id" :value="outlet.id">
                             {{ outlet.name }}
                         </option>
                     </select>
                 </div>
-
-                <button 
-                    @click="fetchDashboardSummary" 
-                    :disabled="isLoading"
-                    class="px-3 py-1.5 text-xs font-medium bg-secondary text-secondary-foreground rounded-lg hover:bg-accent transition-colors cursor-pointer disabled:opacity-50 flex items-center gap-2 border border-input"
-                >
-                    <span v-if="isLoading" class="w-3 h-3 border-2 border-muted-foreground border-t-foreground rounded-full animate-spin"></span>
-                    Muat Ulang
-                </button>
             </div>
+
+            <button 
+                @click="fetchDashboardSummary" 
+                :disabled="isLoading"
+                title="Muat Ulang"
+                class="p-1.5 text-[11px] font-medium bg-secondary text-secondary-foreground rounded-md hover:bg-accent transition-colors cursor-pointer disabled:opacity-50 flex items-center justify-center border border-input shrink-0"
+            >
+                <span v-if="isLoading" class="w-3.5 h-3.5 border-2 border-muted-foreground border-t-foreground rounded-full animate-spin"></span>
+                <svg v-else xmlns="http://www.w3.org/2000/svg" class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/>
+                    <path d="M3 3v5h5"/>
+                    <path d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16"/>
+                    <path d="M16 21h5v-5"/>
+                </svg>
+            </button>
         </div>
 
-        <!-- Kartu Metrik Utama -->
         <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div class="p-5 rounded-xl bg-card border border-border space-y-2 relative overflow-hidden shadow-2xs">
                 <div class="flex items-center justify-between text-muted-foreground relative z-10">
@@ -177,7 +173,6 @@ onMounted(async () => {
             </div>
         </div>
 
-        <!-- Kartu Analisa Laba Bersih -->
         <div class="p-6 rounded-xl bg-card border border-border shadow-2xs flex flex-col md:flex-row items-center justify-between gap-4">
             <div class="space-y-1 text-center md:text-left">
                 <span class="text-xs font-medium uppercase tracking-wider text-muted-foreground flex items-center justify-center md:justify-start gap-1.5">
@@ -194,7 +189,6 @@ onMounted(async () => {
             </div>
         </div>
 
-        <!-- Rincian Metode Pembayaran -->
         <div class="pt-2">
             <h3 class="text-xs font-medium uppercase text-muted-foreground mb-3 tracking-wider flex items-center gap-2">
                 <Banknote class="w-4 h-4" /> Rincian Pembayaran
@@ -234,7 +228,6 @@ onMounted(async () => {
             </div>
         </div>
 
-        <!-- Analisis Jam Ramai -->
         <div class="pt-2 space-y-3">
             <h3 class="text-xs font-medium uppercase text-muted-foreground tracking-wider flex items-center gap-2">
                 <Clock class="w-4 h-4" /> Analisis Jam Ramai Transaksi
@@ -267,7 +260,6 @@ onMounted(async () => {
             </div>
         </div>
 
-        <!-- Daftar Produk Terjual -->
         <div class="pt-2 space-y-3">
             <h3 class="text-xs font-medium uppercase text-muted-foreground tracking-wider flex items-center gap-2">
                 <Award class="w-4 h-4" /> Daftar Produk Terjual
