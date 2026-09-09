@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { Link } from '@inertiajs/vue3';
 import { Toaster } from '@/components/ui/sonner';
-import { ShoppingBag, ClipboardList, Receipt, ShoppingCart, LayoutGrid, Settings, MapPin, Wallet } from '@lucide/vue';
+import { ShoppingBag, ClipboardList, Receipt, ShoppingCart, LayoutGrid, Settings, MapPin, Wallet, Power } from '@lucide/vue';
 import { ref, onMounted, onUnmounted } from 'vue';
 import { NavItem } from '@/types';
 import { dashboard } from '@/routes';
@@ -162,59 +162,51 @@ defineProps<{
 
 <template>
     <div class="h-screen w-screen flex flex-col bg-slate-100 dark:bg-zinc-950 text-slate-900 dark:text-zinc-50 overflow-hidden font-sans">
-        
-        <header class="h-16 bg-white dark:bg-zinc-900 border-b border-slate-200 dark:border-zinc-800 flex items-center px-6 justify-between shrink-0 shadow-xs z-10">
-            <div class="flex items-center gap-3">
-                <div class="p-2 bg-primary text-primary-foreground rounded-lg">
-                    <ShoppingBag class="h-5 w-5" />
+        <header class="h-14 sm:h-16 bg-white dark:bg-zinc-900 border-b border-slate-200 dark:border-zinc-800 flex items-center px-3 sm:px-6 justify-between shrink-0 shadow-xs z-10">
+            <!-- Kiri: Brand & Outlet -->
+            <div class="flex items-center gap-2.5 min-w-0">
+                <div class="p-1.5 sm:p-2 bg-primary text-primary-foreground rounded-xl shrink-0">
+                    <ShoppingBag class="h-4 sm:h-5 w-4 sm:w-5" />
                 </div>
-                <div>
-                    <h1 class="font-bold text-base leading-none">{{ title || 'Roti Bakar Wisuda' }}</h1>
-                    <span class="text-xs text-emerald-600 dark:text-emerald-400 font-medium flex items-center gap-1 mt-0.5">
-                        <MapPin class="h-3 w-3 text-emerald-600" />
-                        <span class="font-bold text-slate-700 dark:text-zinc-300">{{ activeOutletName }}</span>
+                <div class="min-w-0">
+                    <h1 class="font-bold text-xs sm:text-base leading-tight truncate">{{ title || 'Roti Bakar Wisuda' }}</h1>
+                    <span class="text-[10px] sm:text-xs text-emerald-600 dark:text-emerald-400 font-medium flex items-center gap-1">
+                        <MapPin class="h-3 w-3 text-emerald-600 shrink-0" />
+                        <span class="font-bold text-slate-700 dark:text-zinc-300 truncate">{{ activeOutletName }}</span>
                     </span>
                 </div>
             </div>
 
-            <div class="flex items-center gap-2.5">
-                <!-- Tombol Status / Tutup Shift (Ringkas dengan ikon dan nilai modal) -->
+            <!-- Kanan: Aksi (Invoice berlabel, Close Shift icon Power Off merah) -->
+            <div class="flex items-center gap-1.5 sm:gap-2.5 shrink-0">
+                <!-- Tombol Invoice (Pakai Label / Teks) -->
+                <Link 
+                    :href="pos.transactions()" 
+                    class="px-2.5 py-2 bg-slate-50 dark:bg-zinc-800 border border-slate-200 dark:border-zinc-700 rounded-xl text-emerald-600 dark:text-emerald-400 hover:bg-slate-100 dark:hover:bg-zinc-700 transition-colors flex items-center gap-1.5 text-xs font-bold"
+                    title="Riwayat Invoice"
+                >
+                    <Receipt class="h-4 w-4 shrink-0" />
+                    <span>Invoice</span>
+                </Link>
+
+                <!-- Tombol Close Shift (Ikon Power Off Merah) -->
                 <button 
                     v-if="activeShift"
                     @click="openCloseShiftModal"
-                    class="inline-flex items-center gap-1.5 text-xs font-bold px-3 py-2 bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 rounded-xl hover:bg-emerald-100 transition-colors cursor-pointer"
-                    title="Kelola Shift Kasir"
+                    class="p-2 bg-red-50 dark:bg-red-950/40 text-red-600 dark:text-red-400 border border-red-200 dark:border-red-800 rounded-xl hover:bg-red-100 dark:hover:bg-red-900/50 transition-colors cursor-pointer flex items-center justify-center"
+                    title="Close Shift"
                 >
-                    <!-- <Wallet class="h-4 w-4" /> -->
-                    <span class="hidden sm:inline">Close Shift</span>
-                    <!-- <span class="font-extrabold">{{ formatRupiah(activeShift.starting_cash) }}</span> -->
+                    <Power class="h-4 w-4 shrink-0" />
                 </button>
 
-                <Link 
-                    :href="pos.transactions()" 
-                    class="p-2 bg-slate-50 dark:bg-zinc-800 border border-slate-200 dark:border-zinc-700 rounded-xl text-emerald-600 dark:text-emerald-400 hover:bg-slate-100 dark:hover:bg-zinc-700 transition-colors flex items-center gap-1.5 px-3 text-xs font-bold"
-                    title="Riwayat Invoice"
-                >
-                    <Receipt class="h-4 w-4" />
-                    <span class="hidden lg:inline">Invoice</span>
-                </Link>
-
-                <!-- Tombol Pengaturan POS Utama -->
+                <!-- Tombol Pengaturan -->
                 <Link 
                     :href="pos.settings()" 
-                    class="p-2 bg-white dark:bg-zinc-800 border border-slate-200 dark:border-zinc-700 rounded-xl text-slate-600 dark:text-zinc-300 hover:bg-slate-100 dark:hover:bg-zinc-700 transition-colors flex items-center gap-1.5 px-3 text-xs font-bold"
-                    title="Pengaturan POS & Dashboard"
+                    class="p-2 bg-white dark:bg-zinc-800 border border-slate-200 dark:border-zinc-700 rounded-xl text-slate-600 dark:text-zinc-300 hover:bg-slate-100 dark:hover:bg-zinc-700 transition-colors flex items-center justify-center"
+                    title="Pengaturan"
                 >
-                    <Settings class="h-4 w-4 text-primary" />
-                    </Link>
-
-                <div class="h-5 w-px bg-slate-200 dark:bg-zinc-800 hidden xl:block"></div>
-               
-                <div class="text-right hidden xl:block">
-                    <div class="text-xs font-medium text-slate-500 dark:text-zinc-400">
-                        {{ currentDateTime }}
-                    </div>
-                </div>
+                    <Settings class="h-4 w-4 text-primary shrink-0" />
+                </Link>
             </div>
         </header>
 

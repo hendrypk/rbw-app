@@ -47,50 +47,49 @@ export function useVoucher() {
         }
     };
 
-    const validateAndApplyVoucher = async (code: string, cartItems: Array<{ menu_id: string; subtotal: number }>) => {
-        if (!code.trim()) {
-            toast.error('Masukkan kode voucher terlebih dahulu.');
-            return false;
-        }
-
-        isValidating.value = true;
-        try {
-            const response = await axios.post('/api/vouchers/validate', {
-                code: code,
-                items: cartItems
-            });
-
-            if (response.data.success) {
-                const resData = response.data.data;
-                
-                // ⬅️ Pastikan id dari backend dimasukkan ke voucher_id dengan benar
-                appliedVoucher.value = {
-                    voucher_id: resData.id || resData.voucher_id, 
-                    code: resData.code,
-                    name: resData.name,
-                    type: resData.type,
-                    value: resData.value,
-                    discount_amount: resData.discount_amount
-                };
-
-                toast.success(response.data.message);
-                return true;
-            }
-        } catch (error: any) {
-            const errorMsg = error.response?.data?.message || 'Gagal menerapkan voucher.';
-            toast.error(errorMsg);
-            appliedVoucher.value = null;
-            return false;
-        } finally {
-            isValidating.value = false;
-        }
+const validateAndApplyVoucher = async (code: string, cartItems: Array<{ menu_id: string; subtotal: number }>) => {
+    if (!code.trim()) {
+        toast.error('Masukkan kode voucher terlebih dahulu.');
         return false;
-    };
+    }
+
+    isValidating.value = true;
+    try {
+        const response = await axios.post('/api/v1/user/voucher/validate', {
+            code: code,
+            items: cartItems
+        });
+
+        if (response.data.success) {
+            const resData = response.data.data;
+            
+            appliedVoucher.value = {
+                voucher_id: resData.id || resData.voucher_id, 
+                code: resData.code,
+                name: resData.name,
+                type: resData.type,
+                value: resData.value,
+                discount_amount: resData.discount_amount
+            };
+
+            toast.success(response.data.message);
+            return true;
+        }
+    } catch (error: any) {
+        const errorMsg = error.response?.data?.message || 'Gagal menerapkan voucher.';
+        toast.error(errorMsg);
+        appliedVoucher.value = null;
+        return false;
+    } finally {
+        isValidating.value = false;
+    }
+    return false;
+};
 
     const removeVoucher = () => {
         appliedVoucher.value = null;
         voucherCodeInput.value = '';
-        toast.info('Voucher dilepaskan.');
+        // toast.info('Voucher dilepaskan.');
     };
 
     return {
