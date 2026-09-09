@@ -621,25 +621,31 @@ onBeforeUnmount(() => {
                 </div>
             </div>
 
-            <!-- Menu Layout: GRID VIEW -->
-            <div v-if="viewMode === 'grid'" :class="['grid gap-3 pb-24 md:pb-4 transition-all duration-200', gridColumnsClass]">
+<div v-if="viewMode === 'grid'" :class="['grid gap-3 pb-24 md:pb-4 transition-all duration-200', gridColumnsClass]">
                 <div 
                     v-for="menu in filteredMenus" 
                     :key="menu.id" 
                     @click="addToCart(menu)"
-                    class="bg-white dark:bg-zinc-900 p-4 rounded-2xl border border-slate-200 dark:border-zinc-800 shadow-xs cursor-pointer hover:border-primary active:scale-[0.97] transition-all flex flex-col justify-between min-h-[110px] group relative overflow-hidden"
+                    class="bg-white dark:bg-zinc-900 p-4 rounded-2xl border border-slate-200 dark:border-zinc-800 shadow-xs cursor-pointer hover:border-primary active:scale-[0.97] transition-all flex flex-col justify-between min-h-[130px] group relative overflow-hidden"
                 >
                     <!-- Aksen Garis Kiri Minimalis -->
                     <div class="absolute left-0 top-0 bottom-0 w-1.5 bg-primary/40 group-hover:bg-primary transition-colors"></div>
 
-                    <!-- Nama Menu (Sangat Jelas & Besar) -->
-                    <h3 class="font-black text-base sm:text-lg text-slate-900 dark:text-zinc-50 line-clamp-2 leading-snug group-hover:text-primary transition-colors pl-2">
+                    <!-- Atas: Inisial Besar & Kategori -->
+                    <div class="flex items-start justify-between pl-2">
+                        <div class="w-12 h-12 rounded-2xl bg-slate-100 dark:bg-zinc-800/80 flex items-center justify-center font-black text-lg text-slate-800 dark:text-zinc-200 group-hover:bg-primary group-hover:text-primary-foreground transition-all uppercase font-mono shadow-xs">
+                            {{ menu.name.substring(0, 2) }}
+                        </div>
+                        <span class="text-[10px] text-slate-400 font-bold uppercase tracking-wider truncate max-w-[50%] bg-slate-50 dark:bg-zinc-800/50 px-2 py-1 rounded-lg">{{ menu.category?.name || 'Umum' }}</span>
+                    </div>
+
+                    <!-- Tengah: Nama Menu -->
+                    <h3 class="font-bold text-sm sm:text-base text-slate-900 dark:text-zinc-50 line-clamp-2 leading-snug group-hover:text-primary transition-colors pl-2 mt-3">
                         {{ menu.name }}
                     </h3>
 
-                    <!-- Kategori & Harga -->
-                    <div class="flex items-end justify-between mt-3 pt-2 border-t border-slate-100 dark:border-zinc-800 pl-2">
-                        <span class="text-xs text-slate-400 font-bold truncate max-w-[50%] uppercase tracking-wider">{{ menu.category?.name || 'Umum' }}</span>
+                    <!-- Bawah: Harga Bersih -->
+                    <div class="mt-3 pt-2 border-t border-slate-100 dark:border-zinc-800/80 pl-2 flex items-center justify-end">
                         <span class="font-black text-base sm:text-lg text-primary whitespace-nowrap font-mono">
                             Rp {{ Number(getOfflinePriceObject(menu)?.selling_price || 0).toLocaleString('id-ID') }}
                         </span>
