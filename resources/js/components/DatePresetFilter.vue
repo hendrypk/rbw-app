@@ -2,6 +2,12 @@
 import { ref, watch, onMounted } from 'vue';
 import { useDateFilter, type DateRangePreset } from '../composables/useDateFilter';
 
+import Select from '@/components/ui/select/Select.vue';
+import SelectTrigger from '@/components/ui/select/SelectTrigger.vue';
+import SelectValue from '@/components/ui/select/SelectValue.vue';
+import SelectContent from '@/components/ui/select/SelectContent.vue';
+import SelectItem from '@/components/ui/select/SelectItem.vue';
+
 const emit = defineEmits<{
     (e: 'change', range: { start: string; end: string }): void
 }>();
@@ -32,12 +38,14 @@ onMounted(() => {
 </script>
 
 <template>
-    <select 
-        v-model="selectedPreset" 
-        class="w-full px-2 py-1 rounded-md border border-input bg-secondary text-foreground font-medium text-[11px] outline-none focus:ring-1 focus:ring-ring cursor-pointer truncate"
-    >
-        <option v-for="preset in presets" :key="preset.value" :value="preset.value">
-            {{ preset.label }}
-        </option>
-    </select>
+    <Select v-model="selectedPreset">
+        <SelectTrigger class="w-44 h-11 rounded-2xl border-slate-200 dark:border-zinc-800 bg-slate-50 dark:bg-zinc-900 px-4 text-xs font-semibold">
+            <SelectValue placeholder="Pilih Periode" />
+        </SelectTrigger>
+        <SelectContent class="rounded-2xl">
+            <SelectItem v-for="preset in presets" :key="preset.value" :value="preset.value" class="text-xs font-medium">
+                {{ preset.label }}
+            </SelectItem>
+        </SelectContent>
+    </Select>
 </template>

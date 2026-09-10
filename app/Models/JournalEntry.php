@@ -14,7 +14,6 @@ class JournalEntry extends Model
 {
     use HasUuids, SoftDeletes;
 
-    // 1. Tambahkan 'outlet_id' ke dalam fillable
     protected $fillable = ['outlet_id', 'entry_date', 'reference_type', 'reference_id', 'description', 'total_amount'];
     protected $casts = ['entry_date' => 'date', 'total_amount' => 'decimal:2'];
 
@@ -29,7 +28,7 @@ class JournalEntry extends Model
     }
 
     /**
-     * CORE ENGINE: Membuat jurnal otomatis dengan opsi akun dinamis dari user
+     * CORE ENGINE: Membuat jurnal otomatis dengan opsi akun dinamis dan tanggal kustom dari user
      */
     public static function createEntryFromMapping(
         string $type, 
@@ -38,7 +37,8 @@ class JournalEntry extends Model
         ?Model $reference = null, 
         array $replacements = [],
         ?string $customDebitAccountId = null,
-        ?string $customCreditAccountId = null
+        ?string $customCreditAccountId = null,
+        ?string $entryDate = null // ⬅️ Tambahkan parameter tanggal kustom
     ): void {
         // Ambil outlet_id dari reference (misal: Order) atau dari session/request aktif
         $outletId = $reference->outlet_id ?? session('active_outlet_id');
@@ -51,9 +51,9 @@ class JournalEntry extends Model
             
         if (!$mapping) throw new Exception("Mapping untuk tipe '{$type}' belum terdaftar.");
 
-        // Tentukan akun riil yang dipakai
-        $debitAccountJ1 = $mapping->debit_account_id ?? $customDebitAccountId;
-        $creditAccountJ1 = $mapping->credit_account_id ?? $customCreditAccountId;
+        // Tentukan akun riil yang dipakai (Prioritas input user, fallback ke mapping)
+        $debitAccountJ1 = $customDebitAccountId ?? $mapping->debit_account_id;
+        $creditAccountJ1 = $customCreditAccountId ?? $mapping->credit_account_id;
 
         if (!$debitAccountJ1) {
             throw new Exception("Gagal menjurnal: Transaksi '{$type}' membutuhkan input pilihan akun Debet dari user.");
@@ -62,14 +62,17 @@ class JournalEntry extends Model
             throw new Exception("Gagal menjurnal: Transaksi '{$type}' membutuhkan input pilihan akun Kredit dari user.");
         }
 
-        DB::transaction(function () use ($mapping, $j1Amount, $j2Amount, $reference, $replacements, $debitAccountJ1, $creditAccountJ1, $outletId) {
+        // Tentukan tanggal jurnal (Gunakan input user jika ada, jika tidak fallback ke hari ini)
+        $dateToUse = $entryDate ?? now()->toDateString();
+
+        DB::transaction(function () use ($mapping, $j1Amount, $j2Amount, $reference, $replacements, $debitAccountJ1, $creditAccountJ1, $outletId, $dateToUse) {
             
             // --- AYAT JURNAL 1 ---
             if ($j1Amount > 0) {
                 $desc1 = self::parseTemplate($mapping->description_template ?? 'Transaksi', $replacements);
                 $entry1 = self::create([
-                    'outlet_id'      => $outletId, // ⬅️ Simpan outlet_id
-                    'entry_date'     => now(),
+                    'outlet_id'      => $outletId,
+                    'entry_date'     => $dateToUse, // ⬅️ Gunakan tanggal kustom
                     'reference_type' => $reference ? get_class($reference) : null,
                     'reference_id'   => $reference ? $reference->id : null,
                     'description'    => $desc1,
@@ -83,8 +86,8 @@ class JournalEntry extends Model
             if ($j2Amount > 0 && $mapping->j2_debit_account_id && $mapping->j2_credit_account_id) {
                 $desc2 = self::parseTemplate($mapping->j2_description_template ?? 'Transaksi', $replacements);
                 $entry2 = self::create([
-                    'outlet_id'      => $outletId, // ⬅️ Simpan outlet_id
-                    'entry_date'     => now(),
+                    'outlet_id'      => $outletId,
+                    'entry_date'     => $dateToUse, // ⬅️ Gunakan tanggal kustom
                     'reference_type' => $reference ? get_class($reference) : null,
                     'reference_id'   => $reference ? $reference->id : null,
                     'description'    => $desc2,
@@ -111,7 +114,7 @@ class JournalEntry extends Model
 
             foreach ($existingEntries as $oldEntry) {
                 $newEntry = self::create([
-                    'outlet_id'      => $oldEntry->outlet_id, // ⬅️ Pertahankan outlet_id yang sama
+                    'outlet_id'      => $oldEntry->outlet_id,
                     'entry_date'     => now(),
                     'reference_type' => get_class($reference),
                     'reference_id'   => $reference->id,

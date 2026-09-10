@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { Link, usePage } from '@inertiajs/vue3';
-import { BookOpen, Folder, LayoutGrid, Menu, Search } from '@lucide/vue';
-import { computed } from 'vue';
+import { BookOpen, Folder, LayoutGrid, Menu, Search, Store } from '@lucide/vue';
+import { computed, ref, onMounted } from 'vue';
 import AppLogo from '@/components/AppLogo.vue';
 import AppLogoIcon from '@/components/AppLogoIcon.vue';
 import Breadcrumbs from '@/components/Breadcrumbs.vue';
@@ -37,6 +37,7 @@ import { getInitials } from '@/composables/useInitials';
 import { toUrl } from '@/lib/utils';
 import { dashboard } from '@/routes';
 import type { BreadcrumbItem, NavItem } from '@/types';
+import axios from 'axios';
 
 type Props = {
     breadcrumbs?: BreadcrumbItem[];
@@ -49,6 +50,32 @@ const props = withDefaults(defineProps<Props>(), {
 const page = usePage();
 const auth = computed(() => page.props.auth);
 const { isCurrentUrl, whenCurrentUrl } = useCurrentUrl();
+
+const outlets = ref<Array<{ id: string; name: string }>>([]);
+const selectedOutletId = ref<string>('all');
+
+onMounted(async () => {
+    try {
+        const response = await axios.get('/api/outlets');
+        if (response.data) {
+            outlets.value = Array.isArray(response.data) ? response.data : (response.data.data || []);
+        }
+    } catch (error) {
+        console.error("Gagal memuat daftar outlet header", error);
+    }
+
+    const savedOutlet = localStorage.getItem('active_outlet_id');
+    if (savedOutlet) {
+        selectedOutletId.value = savedOutlet;
+    }
+});
+
+const handleOutletChange = () => {
+    localStorage.setItem('active_outlet_id', selectedOutletId.value);
+    window.dispatchEvent(new Event('outlet-changed'));
+    // Reload halaman agar seluruh state & request baru mengambil ID outlet yang diperbarui
+    window.location.reload();
+};
 
 const activeItemStyles =
     'text-neutral-900 dark:bg-neutral-800 dark:text-neutral-100';
@@ -188,7 +215,22 @@ const rightNavItems: NavItem[] = [
                     </NavigationMenu>
                 </div>
 
-                <div class="ml-auto flex items-center space-x-2">
+                <div class="ml-auto flex items-center space-x-3">
+                    <!-- Global Outlet Selector Dropdown di Header -->
+                    <div class="flex items-center gap-1.5 bg-secondary/50 border border-input px-2.5 py-1 rounded-xl">
+                        <Store class="size-4 text-muted-foreground shrink-0" />
+                        <select 
+                            v-model="selectedOutletId" 
+                            @change="handleOutletChange"
+                            class="h-7 bg-transparent text-foreground font-semibold text-xs outline-none cursor-pointer pr-2"
+                        >
+                            <option value="all">🌐 Semua Outlet (Pusat)</option>
+                            <option v-for="outlet in outlets" :key="outlet.id" :value="outlet.id">
+                                {{ outlet.name }}
+                            </option>
+                        </select>
+                    </div>
+
                     <div class="relative flex items-center space-x-1">
                         <Button
                             variant="ghost"

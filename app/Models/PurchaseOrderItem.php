@@ -2,16 +2,17 @@
 
 namespace App\Models;
 
+use App\Concerns\BelongsToOutlet;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class PurchaseOrderItem extends Model
 {
-    use HasUuids;
+    use HasUuids, BelongsToOutlet;
 
     protected $fillable = [
-        'purchase_order_id', 'raw_material_id', 'qty', 'unit_price', 'subtotal',
+        'purchase_order_id', 'raw_material_id', 'qty', 'unit_price', 'subtotal', 'outlet_id',
     ];
 
     protected $casts = [

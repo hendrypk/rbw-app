@@ -19,8 +19,10 @@ class AccountController extends Controller
      */
     public function index(Request $request): JsonResponse
     {
+        $outletId = $request->input('outlet_id', 'all');
+
         $filters = $request->only(['search', 'category']);
-        $accounts = $this->accountService->getAllAccounts($filters);
+        $accounts = $this->accountService->getAllAccounts($filters, $outletId);
         
         return response()->json($accounts);
     }

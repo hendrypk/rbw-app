@@ -61,11 +61,11 @@ Route::prefix('api/v1/user')->group(function () {
 
 Route::middleware(['auth', 'verified'])->prefix('api')->name('api.')->group(function () {
     // 1. FINANCE / BACK OFFICE ONLY
-    Route::middleware(['can:manage-finance'])->prefix('finance')->group(function() {
-        Route::apiResource('accounts', AccountController::class);
-        Route::apiResource('account-mappings', AccountMappingController::class);
-        Route::apiResource('journal-entry', JournalEntryController::class);
-    });
+    // Route::middleware(['can:manage-finance'])->prefix('finance')->group(function() {
+    //     Route::apiResource('accounts', AccountController::class);
+    //     Route::apiResource('account-mappings', AccountMappingController::class);
+    //     Route::apiResource('journal-entry', JournalEntryController::class);
+    // });
 
     // Dashboard & Outlet List
     Route::get('/summary', [ReportController::class, 'getSummary']);
@@ -73,6 +73,12 @@ Route::middleware(['auth', 'verified'])->prefix('api')->name('api.')->group(func
 });
 
 Route::middleware(['auth', 'verified', 'resolve.outlet'])->prefix('api')->name('api.')->group(function () {
+        // 1. FINANCE / BACK OFFICE ONLY
+    Route::prefix('finance')->group(function() {
+        Route::apiResource('accounts', AccountController::class);
+        Route::apiResource('account-mappings', AccountMappingController::class);
+        Route::apiResource('journal-entry', JournalEntryController::class);
+    });
 
     // ----------------------------------------------------
     // 2. MASTER DATA & OPERATIONAL
@@ -82,6 +88,7 @@ Route::middleware(['auth', 'verified', 'resolve.outlet'])->prefix('api')->name('
     Route::apiResource('vouchers', VoucherController::class);
     Route::get('raw-materials/options', [RawMaterialController::class, 'options']);
     Route::apiResource('raw-materials', RawMaterialController::class);
+    Route::post('purchase-orders/{id}/pay-order', [PurchaseOrderController::class, 'payOrder']);
     Route::apiResource('purchase-orders', PurchaseOrderController::class);
     Route::get('menus/overhead-sync-status', [MenuController::class, 'checkOverheadSync']);
     Route::get('menus/recipe-sync-status', [MenuController::class, 'checkRecipeSync']);

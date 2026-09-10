@@ -13,11 +13,28 @@ export interface Material {
     last_cost: number;
 }
 
-export function useMaterials() {
+export function useMaterials(currentOutletId?: any) {
     const materials = ref<Material[]>([]);
     const materialOptions = ref<Material[]>([]);
     const isLoading = ref(false);
     const meta = ref<any>(null);
+
+const getOutletParam = () => {
+        // Cek jika parameter berupa Ref Vue atau fungsi, ambil .value-nya
+        let outletId = null;
+        if (currentOutletId) {
+            outletId = typeof currentOutletId === 'object' && 'value' in currentOutletId 
+                ? currentOutletId.value 
+                : (typeof currentOutletId === 'function' ? currentOutletId() : currentOutletId);
+        }
+        
+        // Fallback ke localStorage jika kosong atau bernilai 'all'
+        if (!outletId || outletId === 'all') {
+            outletId = localStorage.getItem('active_outlet_id');
+        }
+
+        return outletId && outletId !== 'all' ? outletId : null;
+    };
 
     // Untuk halaman master material (pagination)
     const fetchMaterials = async (
@@ -30,14 +47,19 @@ export function useMaterials() {
         isLoading.value = true;
 
         try {
+            const outletId = getOutletParam();
+            const queryParams = outletId ? { ...params, outlet_id: outletId } : params;
+
             const { data } = await axios.get('/api/raw-materials', {
-                params,
+                params: queryParams,
             });
 
             materials.value = data.data;
 
             const { data: _, ...pagination } = data;
             meta.value = pagination;
+        } catch (error) {
+            console.error('Failed to fetch materials data:', error);
         } finally {
             isLoading.value = false;
         }
@@ -45,9 +67,18 @@ export function useMaterials() {
 
     // Untuk dropdown
     const fetchMaterialOptions = async () => {
-        const { data } = await axios.get('/api/raw-materials/options');
+        try {
+            const outletId = getOutletParam();
+            const params = outletId ? { outlet_id: outletId } : {};
 
-        materialOptions.value = data;
+            const { data } = await axios.get('/api/raw-materials/options', {
+                params,
+            });
+
+            materialOptions.value = data;
+        } catch (error) {
+            console.error('Failed to fetch material options:', error);
+        }
     };
 
     return {

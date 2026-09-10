@@ -5,6 +5,7 @@ namespace App\Concerns;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use App\Models\Outlet;
+use Illuminate\Support\Facades\Request;
 
 /**
  * @method static void addGlobalScope(string $identifier, \Closure $scope)
@@ -26,11 +27,12 @@ trait BelongsToOutlet
         });
 
         static::creating(function ($model) {
-            if (empty($model->outlet_id)) {
-                $model->outlet_id = request()->header('X-Outlet-ID') 
-                    ?? session('active_outlet_id') 
-                    ?? app('currentOutletId') 
-                    ?? null;
+if (empty($model->outlet_id)) {
+                $outletId = Request::header('X-Outlet-ID');
+                
+                if ($outletId && $outletId !== 'all') {
+                    $model->outlet_id = $outletId;
+                }
             }
         });
     }

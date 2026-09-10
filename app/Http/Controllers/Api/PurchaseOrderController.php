@@ -16,116 +16,115 @@ class PurchaseOrderController extends Controller
 
     public function index(Request $request): JsonResponse
     {
-        $orders = PurchaseOrder::with('supplier', 'items.rawMaterial')
-            ->when($request->status, fn($q) => $q->byStatus($request->status))
+        $orders = PurchaseOrder::with(['supplier', 'items.rawMaterial', 'journalEntries.items.account'])
+            // ->when($request->status, fn($q) => $q->byStatus($request->status))
             ->when($request->supplier_id, fn($q) => $q->where('supplier_id', $request->supplier_id))
+            ->when($request->start_date && $request->end_date, fn($q) => 
+                $q->whereBetween('order_date', [$request->start_date, $request->end_date])
+            )
+            ->when($request->search, fn($q, $search) => 
+                $q->whereHas('supplier', fn($sq) => $sq->where('name', 'like', "%{$search}%"))
+                ->orWhere('po_number', 'like', "%{$search}%")
+            )
             ->orderByDesc('order_date')
             ->paginate($request->per_page ?? 15);
 
         return response()->json($orders);
     }
 
-public function store(Request $request, StockService $stockService): JsonResponse
-{
-    $data = $request->validate([
-        'supplier_id'             => 'required|uuid|exists:suppliers,id',
-        'order_date'              => 'required|date',
-        'notes'                   => 'nullable|string',
-        'items'                   => 'required|array|min:1',
-        'items.*.raw_material_id' => 'required|uuid|exists:raw_materials,id',
-        'items.*.qty'             => 'required|numeric|min:0.0001',
-        'items.*.unit_price'      => 'required|numeric|min:0',
-        'status'                  => 'required|in:draft,received',
-        
-        // Menangkap request dari form modal vue
-        'payment_account_id'      => 'nullable|uuid|exists:accounts,id',
-        'amount_paid'             => 'nullable|required_with:payment_account_id|numeric|min:0',
-    ]);
-
-    $po = DB::transaction(function () use ($data, $stockService) {
-        // 1. Buat Header PO (Map dari request form ke field asli DB)
-        $po = PurchaseOrder::create([
-            'supplier_id'        => $data['supplier_id'],
-            'order_date'         => $data['order_date'],
-            'notes'              => $data['notes'] ?? null,
-            'status'             => $data['status'],
-            'payment_account_id' => $data['payment_account_id'] ?? null,
-            'total_payment'      => $data['payment_account_id'] ? (float) $data['amount_paid'] : 0, // Set ke total_payment
+    public function store(Request $request, StockService $stockService): JsonResponse
+    {
+        $data = $request->validate([
+            'supplier_id'             => 'required|uuid|exists:suppliers,id',
+            'outlet_id'               => 'required|uuid|exists:outlets,id',
+            'order_date'              => 'required|date',
+            'notes'                   => 'nullable|string',
+            'items'                   => 'required|array|min:1',
+            'items.*.raw_material_id' => 'required|uuid|exists:raw_materials,id',
+            'items.*.qty'             => 'required|numeric|min:0.0001',
+            'items.*.unit_price'      => 'required|numeric|min:0',
+            'status'                  => 'required|in:draft,received',
+            'payment_account_id'      => 'nullable|uuid|exists:accounts,id',
+            'amount_paid'             => 'nullable|numeric|min:0', // Hapus required_with agar lebih fleksibel
         ]);
 
-        // 2. Insert detail items
-        foreach ($data['items'] as $item) {
-            $subtotal = (float) $item['qty'] * (float) $item['unit_price'];
-            $po->items()->create(array_merge($item, ['subtotal' => $subtotal]));
-        }
+        $po = DB::transaction(function () use ($data, $stockService) {
+            $paidAmount = !empty($data['payment_account_id']) ? (float) ($data['amount_paid'] ?? 0) : 0;
 
-        // 3. Kalkulasi Total Bruto PO
-        $totalAmount = (float) $po->items()->sum('subtotal');
-        $po->total_amount = $totalAmount;
+            $po = PurchaseOrder::create([
+                'supplier_id'        => $data['supplier_id'],
+                'outlet_id'          => $data['outlet_id'],
+                'order_date'         => $data['order_date'],
+                'notes'              => $data['notes'] ?? null,
+                'status'             => $data['status'],
+                'payment_account_id' => $paidAmount > 0 ? $data['payment_account_id'] : null,
+                'total_payment'      => $paidAmount,
+            ]);
 
-        // 4. LOGIKA OTOMATIS: Bandingkan total_payment vs total_amount
-        $paid = $po->total_payment;
-        
-        if ($paid <= 0) {
-            $po->payment_status = 'unpaid';
-            $po->total_payment = 0;
-            $po->payment_account_id = null; 
-        } elseif ($paid >= $totalAmount) {
-            $po->payment_status = 'paid';
-            $po->total_payment = $totalAmount; // Cegah overpayment tak sengaja
-        } else {
-            $po->payment_status = 'partial';
-        }
+            foreach ($data['items'] as $item) {
+                $subtotal = (float) $item['qty'] * (float) $item['unit_price'];
+                $po->items()->create(array_merge($item, ['subtotal' => $subtotal]));
+            }
 
-        $po->save();
-        
-        // 5. Jika status operasional langsung 'received' (Barang Masuk Gudang)
-        if ($data['status'] === 'received') {
-            $po->load('items.rawMaterial');
-            $stockService->receivePurchaseOrder($po);
+            $totalAmount = (float) $po->items()->sum('subtotal');
+            $po->total_amount = $totalAmount;
 
-            // 6. OTOMATISASI JURNAL AKUNTANSI (Double-Entry)
-            if ($po->payment_status === 'paid') {
-                // Lunas Direct: Persediaan (D) vs Kas/Bank User (K)
-                JournalEntry::createEntryFromMapping(
-                    type: 'purchase_received_cash',
-                    j1Amount: $totalAmount,
-                    reference: $po,
-                    replacements: ['po_number' => $po->po_number ?? $po->id],
-                    customCreditAccountId: $po->payment_account_id
-                );
+            // Logika Status Pembayaran
+            if ($paidAmount <= 0) {
+                $po->payment_status = 'unpaid';
+                $po->total_payment = 0;
+                $po->payment_account_id = null; 
+            } elseif ($paidAmount >= $totalAmount) {
+                $po->payment_status = 'paid';
+                $po->total_payment = $totalAmount;
             } else {
-                // Unpaid / Partial masuk skema tempo dulu: Persediaan (D) vs Utang Dagang (K)
-                JournalEntry::createEntryFromMapping(
-                    type: 'purchase_received_credit',
-                    j1Amount: $totalAmount,
-                    reference: $po,
-                    replacements: ['po_number' => $po->po_number ?? $po->id]
-                );
+                $po->payment_status = 'partial';
+            }
 
-                // Jika STATUS PARTIAL: Tambahkan potongan jurnal Clearance tunai untuk DP-nya
-                if ($po->payment_status === 'partial') {
+            $po->save();
+            
+            if ($data['status'] === 'received') {
+                $po->load('items.rawMaterial');
+                $stockService->receivePurchaseOrder($po);
+
+                if ($po->payment_status === 'paid') {
                     JournalEntry::createEntryFromMapping(
-                        type: 'purchase_payment_clearance',
-                        j1Amount: $po->total_payment, // Ambil dari kolom database total_payment
+                        type: 'purchase_received_cash',
+                        j1Amount: $totalAmount,
                         reference: $po,
                         replacements: ['po_number' => $po->po_number ?? $po->id],
                         customCreditAccountId: $po->payment_account_id
                     );
+                } else {
+                    JournalEntry::createEntryFromMapping(
+                        type: 'purchase_received_credit',
+                        j1Amount: $totalAmount,
+                        reference: $po,
+                        replacements: ['po_number' => $po->po_number ?? $po->id]
+                    );
+
+                    if ($po->payment_status === 'partial') {
+                        JournalEntry::createEntryFromMapping(
+                            type: 'purchase_payment_clearance',
+                            j1Amount: $po->total_payment,
+                            reference: $po,
+                            replacements: ['po_number' => $po->po_number ?? $po->id],
+                            customCreditAccountId: $po->payment_account_id
+                        );
+                    }
                 }
             }
-        }
 
-        return $po;
-    });
+            return $po;
+        });
 
-    return response()->json($po->load(['supplier', 'items.rawMaterial']), 201);
-}
+        return response()->json($po->load(['supplier', 'items.rawMaterial']), 201);
+    }
 
     public function show(PurchaseOrder $purchaseOrder): JsonResponse
     {
         return response()->json(
-            $purchaseOrder->load(['supplier', 'items.rawMaterial'])
+            $purchaseOrder->load(['supplier', 'items.rawMaterial', 'journalEntries.items.account'])
         );
     }
 
@@ -133,6 +132,7 @@ public function store(Request $request, StockService $stockService): JsonRespons
     {
         $data = $request->validate([
             'supplier_id'             => 'sometimes|uuid|exists:suppliers,id',
+            'outlet_id'               => 'sometimes|uuid|exists:outlets,id',
             'order_date'              => 'sometimes|date',
             'notes'                   => 'nullable|string',
             'status'                  => 'required|in:draft,received',
@@ -140,34 +140,78 @@ public function store(Request $request, StockService $stockService): JsonRespons
             'items.*.raw_material_id' => 'required_with:items|uuid|exists:raw_materials,id',
             'items.*.qty'             => 'required_with:items|numeric|min:0.0001',
             'items.*.unit_price'      => 'required_with:items|numeric|min:0',
+            
+            // PERBAIKAN: Validasi ini wajib ada agar data dari frontend tidak dibuang
+            'payment_account_id'      => 'nullable|uuid|exists:accounts,id',
+            'amount_paid'             => 'nullable|numeric|min:0', 
         ]);
 
         $oldStatus = $purchaseOrder->status;
         $newStatus = $data['status'];
 
         DB::transaction(function () use ($purchaseOrder, $data, $oldStatus, $newStatus) {
-            // 1. JIKA STATUS LAMA RECEIVED: Revert dulu (buang stok lama)
-            // Lakukan ini sebelum update data apapun agar stok kembali ke angka awal
+            // 1. Revert stok lama jika status sebelumnya received
             if ($oldStatus === 'received') {
                 $this->stockService->reverseReceivePurchaseOrder($purchaseOrder);
             }
 
-            // 2. Update Data PO
-            $purchaseOrder->update($data);
+            // 2. Ambil nominal pembayaran baru (jika tidak ada di request, gunakan yang lama)
+            $paidAmount = array_key_exists('amount_paid', $data) 
+                ? (float) $data['amount_paid'] 
+                : (float) $purchaseOrder->total_payment;
+            
+            $accountId = array_key_exists('payment_account_id', $data) 
+                ? $data['payment_account_id'] 
+                : $purchaseOrder->payment_account_id;
 
-            // 3. Update Items
+            // Jika account diubah jadi kosong (Beli Tempo), pastikan paid = 0
+            if (empty($accountId)) {
+                $paidAmount = 0;
+            }
+
+            // 3. Update data dasar PO
+            $purchaseOrder->update([
+                'supplier_id'        => $data['supplier_id'] ?? $purchaseOrder->supplier_id,
+                'outlet_id'          => $data['outlet_id'] ?? $purchaseOrder->outlet_id,
+                'order_date'         => $data['order_date'] ?? $purchaseOrder->order_date,
+                'notes'              => $data['notes'] ?? $purchaseOrder->notes,
+                'status'             => $newStatus,
+            ]);
+
+            // 4. Update detail Items
             if (isset($data['items'])) {
                 $purchaseOrder->items()->delete();
                 foreach ($data['items'] as $item) {
-                    $purchaseOrder->items()->create($item);
+                    $subtotal = (float) $item['qty'] * (float) $item['unit_price'];
+                    $purchaseOrder->items()->create(array_merge($item, ['subtotal' => $subtotal]));
                 }
-                $purchaseOrder->recalculateTotal();
             }
 
-            // 4. JIKA STATUS BARU RECEIVED: Tambah stok
+            // 5. PERBAIKAN: Hitung ulang total PO dan logika status pembayarannya (seperti di Create)
+            $totalAmount = (float) $purchaseOrder->items()->sum('subtotal');
+            $purchaseOrder->total_amount = $totalAmount;
+
+            if ($paidAmount <= 0) {
+                $purchaseOrder->payment_status = 'unpaid';
+                $purchaseOrder->total_payment = 0;
+                $purchaseOrder->payment_account_id = null;
+            } elseif ($paidAmount >= $totalAmount) {
+                $purchaseOrder->payment_status = 'paid';
+                $purchaseOrder->total_payment = $totalAmount;
+                $purchaseOrder->payment_account_id = $accountId;
+            } else {
+                $purchaseOrder->payment_status = 'partial';
+                $purchaseOrder->total_payment = $paidAmount;
+                $purchaseOrder->payment_account_id = $accountId;
+            }
+
+            $purchaseOrder->save();
+
+            // 6. Masukkan stok baru jika statusnya received
             if ($newStatus === 'received') {
-                $purchaseOrder->load('items.rawMaterial'); // WAJIB load ulang setelah items diupdate
+                $purchaseOrder->load('items.rawMaterial');
                 $this->stockService->receivePurchaseOrder($purchaseOrder);
+                // Note: Jika butuh update jurnal saat edit, logika jurnal disisipkan di sini.
             }
         });
 
@@ -179,6 +223,7 @@ public function store(Request $request, StockService $stockService): JsonRespons
         $request->validate([
             'payment_account_id' => 'required|uuid|exists:accounts,id',
             'amount'             => 'required|numeric|min:0',
+            'payment_date'       => 'nullable|date', // Tambahkan validasi ini
         ]);
 
         $po = PurchaseOrder::findOrFail($id);

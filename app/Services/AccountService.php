@@ -11,9 +11,13 @@ class AccountService
     /**
      * Ambil semua COA dengan filter pencarian & kategori
      */
-    public function getAllAccounts(array $filters = [])
+    public function getAllAccounts(array $filters = [], ?string $outletId = null)
     {
         $query = Account::query();
+
+        if ($outletId && $outletId !== 'all') {
+            $query->where('outlet_id', $outletId);
+        }
 
         if (!empty($filters['search'])) {
             $search = $filters['search'];

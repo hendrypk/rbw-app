@@ -26,6 +26,7 @@ import overhead from '@/routes/overhead';
 // Import komponen modul menu
 import MenuModule from '@/components/pos/MenuModule.vue';
 import DashboardModule from '@/components/pos/DashboardModule.vue';
+import PurchaseModule from '@/components/pos/PurchaseModule.vue';
 
 defineOptions({
     layout: PosLayout
@@ -36,9 +37,8 @@ const menuItems = [
     { key: 'orders', title: 'Pesanan (Unpaid)', href: pos.orders(), icon: ClipboardList, desc: 'Kelola pesanan tertunda kasir.' },
     { key: 'invoices', title: 'Riwayat Invoice', href: pos.invoices(), icon: Receipt, desc: 'Laporan transaksi yang sudah lunas.' },
     { key: 'menus', title: 'Menu', component: MenuModule, href: menus.index(), icon: Utensils, desc: 'Manajemen daftar menu makanan dan minuman.' },
-    { key: 'suppliers', title: 'Supplier', href: suppliers.index(), icon: Truck, desc: 'Kelola data mitra pemasok bahan.' },
+    { key: 'purchases', title: 'Purchase', component: PurchaseModule, href: purchase.index(), icon: Utensils, desc: 'Kelola Pembelian.' },
     { key: 'materials', title: 'Material', href: materials.index(), icon: Box, desc: 'Stok inventaris bahan baku.' },
-    { key: 'purchase', title: 'Purchase', href: purchase.index(), icon: ShoppingCart, desc: 'Pembelian dan pengadaan barang.' },
     { key: 'overhead', title: 'Overhead', href: overhead.index(), icon: Calculator, desc: 'Biaya operasional dan pengeluaran.' },
 ];
 
