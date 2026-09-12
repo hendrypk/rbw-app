@@ -1,30 +1,53 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue';
+import { ref, onMounted, watch, onUnmounted } from 'vue';
 import AppSidebarLayout from '@/layouts/app/AppSidebarLayout.vue';
 import Button from '@/components/ui/button/Button.vue';
 import Input from '@/components/ui/input/Input.vue';
 import { useSwal } from '@/composables/useSwal';
-import { useOverheadCosts } from '@/composables/useOverheadCosts'; // 1. Import Composable
+import { useOverheadCosts } from '@/composables/useOverheadCosts';
+import { useOutlet } from '@/composables/useOutlet';
 import axios from 'axios';
 import OverheadCostModal from './OverheadCostModal.vue';
 import OverheadCostDetailModal from './OverheadCostDetailModal.vue';
 
 defineOptions({ layout: AppSidebarLayout });
 
-const { confirm, success, error } = useSwal();
-// 2. Gunakan Destructuring State dari Composable
 const { overheads, isLoading, fetchOverheads } = useOverheadCosts();
+const { success, error } = useSwal();
 
 const showModal = ref(false);
 const showViewModal = ref(false);
-const activeOverhead = ref<any>(null);
+const activeOverhead = ref(null);
 const selectedIds = ref<string[]>([]);
+const selectedOutletId = ref<string>(localStorage.getItem('active_outlet_id') || 'all');
+
 
 const openCreate = () => { activeOverhead.value = null; showModal.value = true; };
 const openEdit = (item: any) => { activeOverhead.value = item; showModal.value = true; };
 const openView = (item: any) => { activeOverhead.value = item; showViewModal.value = true; };
 
-onMounted(() => fetchOverheads());
+
+const loadData = () => {
+    const currentActiveOutlet = localStorage.getItem('active_outlet_id') || 'all';
+    const params = { outlet_id: currentActiveOutlet };
+    fetchOverheads(params);
+};
+
+const handleOutletChanged = () => {
+    selectedOutletId.value = localStorage.getItem('active_outlet_id') || 'all';
+    loadData();
+};
+
+
+onMounted(async () => {
+    fetchOverheads();
+    window.addEventListener('outlet-changed', handleOutletChanged);
+
+});
+
+onUnmounted(() => {
+    window.removeEventListener('outlet-changed', handleOutletChanged);
+});
 
 const toggleSelectAll = () => {
     selectedIds.value = selectedIds.value.length === overheads.value.length 
@@ -49,7 +72,7 @@ const bulkDelete = async () => {
             await axios.post('/api/overhead-costs/bulk-delete', { ids: selectedIds.value });
             selectedIds.value = [];
             success('Berhasil', 'Data overhead berhasil dihapus.');
-            fetchOverheads(); // Memanggil ulang via composable
+            fetchOverheads();
         } catch (err: any) {
             error('Gagal', err.response?.data?.message || 'Terjadi kesalahan.');
         }
@@ -63,7 +86,7 @@ const bulkDelete = async () => {
             <div>
                 <h1 class="text-2xl font-semibold text-gray-900 dark:text-gray-100">Master Overhead Costs</h1>
                 <p class="mt-2 text-sm text-gray-600 dark:text-gray-400">
-                    Kelola data komponen biaya tidak langsung untuk kalkulasi HPP otomatis menu.
+                    Kelola data komponen biaya tidak langsung untuk kalkulasi HPP otomatis menu berdasarkan outlet aktif.
                 </p>
             </div>
             <div class="mt-4 sm:mt-0">
@@ -111,12 +134,12 @@ const bulkDelete = async () => {
                             <td class="px-6 py-4 font-semibold text-red-600">Rp {{ Number(item.amount).toLocaleString() }}</td>
                             <td class="px-6 py-4 capitalize text-muted-foreground">{{ item.type || 'per_porsi' }}</td>
                             <td class="px-6 py-4">
-                                <button @click="toggleStatus(item)" :class="item.is_active ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-700'" class="px-2.5 py-1 text-xs font-medium rounded-full inline-flex items-center gap-1.5 transition-colors">
+                                <button @click="toggleStatus(item)" :class="item.is_active ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-700'" class="px-2.5 py-1 text-xs font-medium rounded-full inline-flex items-center gap-1.5 transition-colors cursor-pointer">
                                     <span :class="item.is_active ? 'bg-green-500' : 'bg-gray-400'" class="w-1.5 h-1.5 rounded-full"></span>
                                     {{ item.is_active ? 'Active' : 'Inactive' }}
                                 </button>
                             </td>
-                            <td class="px-6 py-4 text-right">
+                            <td class="px-6 py-4 text-right space-x-2">
                                 <Button variant="outline" size="sm" @click="openView(item)">Detail</Button>
                                 <Button variant="ghost" size="sm" @click="openEdit(item)">Edit</Button>
                             </td>
@@ -128,10 +151,10 @@ const bulkDelete = async () => {
 
         <div v-else class="flex flex-col items-center justify-center py-20 mt-8 text-center border rounded-lg bg-card border-dashed border-border">
             <h3 class="text-lg font-semibold text-foreground">Belum ada overhead cost</h3>
-            <p class="mt-1 text-sm text-muted-foreground">Yuk tambahkan komponen master biaya pertama Anda!</p>
+            <p class="mt-1 text-sm text-muted-foreground">Yuk tambahkan komponen master biaya pertama Anda untuk outlet ini!</p>
         </div>
     </div>
     
     <OverheadCostModal :show="showModal" :overhead="activeOverhead" @close="showModal = false" @saved="fetchOverheads" />
-    <OverheadCostDetailModal :show="showViewModal" :overhead="activeOverhead" @close="showViewModal = false" />
+    <OverheadCostDetailModal :show="showViewModal" :overheads="activeOverhead" @close="showViewModal = false" />
 </template>

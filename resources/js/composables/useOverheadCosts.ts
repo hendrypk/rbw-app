@@ -1,8 +1,10 @@
 import { ref } from 'vue';
 import axios from 'axios';
+import { useOutlet } from './useOutlet';
 
 export interface OverheadCost {
     id: string;
+    outlet_id: string;
     name: string;
     amount: number;
     type: string;
@@ -13,26 +15,19 @@ export function useOverheadCosts() {
     const overheads = ref<OverheadCost[]>([]);
     const isLoading = ref(false);
     const meta = ref<any>(null);
+    const { getOutletParam } = useOutlet();
 
-    const fetchOverheads = async (params: { page?: number; search?: string; status?: string } = {}) => {
+    const fetchOverheads = async (params: { page?: number; search?: string; type?: string } = {}) => {
         isLoading.value = true;
         try {
-            const response = await axios.get('/api/overhead-costs', { params });
-            
-            // Karena backend menggunakan ->paginate(), data array berada di dalam .data.data
-            if (response.data && response.data.data) {
-                overheads.value = response.data.data;
-                
-                // Simpan info paginasi (current_page, last_page, dll) ke dalam meta
-                const { data, ...paginationInfo } = response.data;
-                meta.value = paginationInfo;
-            } else {
-                // Fallback jika backend mengembalikan direct array []
-                overheads.value = Array.isArray(response.data) ? response.data : [];
-                meta.value = null;
-            }
+            const outletParam = getOutletParam();
+            const queryParams = { ...params, ...outletParam };
+            const response = await axios.get('/api/overhead-costs', { params: queryParams });
+            overheads.value = response.data.data;
+            const { data, ...paginationInfo } = response.data;
+            meta.value = paginationInfo;
         } catch (error) {
-            console.error("Gagal mengambil data overhead cost:", error);
+            console.error("Gagal memuat overhead costs:", error);
         } finally {
             isLoading.value = false;
         }

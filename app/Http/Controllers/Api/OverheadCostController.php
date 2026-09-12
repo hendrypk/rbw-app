@@ -9,15 +9,19 @@ use Illuminate\Http\Request;
 
 class OverheadCostController extends Controller
 {
+
     public function index(Request $request): JsonResponse
     {
         $overheads = OverheadCost::query()
+            ->when($request->filled('outlet_id'), fn($q) => $q->where('outlet_id', $request->outlet_id))
+            ->when($request->search, fn($q, $search) => $q->where('name', 'like', "%{$search}%"))
+            ->when($request->type, fn($q, $type) => $q->where('type', $type))
             ->orderByDesc('created_at')
             ->paginate($request->per_page ?? 15);
 
         return response()->json($overheads);
     }
-
+    
     public function store(Request $request): JsonResponse
     {
         $data = $request->validate([

@@ -2,13 +2,14 @@
 
 namespace App\Models;
 
+use App\Concerns\BelongsToOutlet;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
 class OverheadCost extends Model
 {
-    use SoftDeletes, HasUuids;
+    use SoftDeletes, HasUuids, BelongsToOutlet;
 
     protected $fillable = [
         'name',
