@@ -22,6 +22,7 @@ class RawMaterial extends Model
         'last_cost', 
         'min_stock', 
         'is_active',
+        'outlet_id',
     ];
 
     protected $attributes = [

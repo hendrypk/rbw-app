@@ -22,11 +22,11 @@ class MenuService
                 $qty      = (float) $r['qty_usage'];
 
                 MenuRecipe::create([
-                    'menu_id'             => $menu->id,
-                    'raw_material_id'     => $r['raw_material_id'],
-                    'qty_usage'           => $qty,
-                    'unit_cost_snapshot'  => $snapshot,
-                    'subtotal_cost'       => round($qty * $snapshot, 4),
+                    'menu_id' => $menu->id,
+                    'raw_material_id' => $r['raw_material_id'],
+                    'qty_usage' => $qty,
+                    'unit_cost_snapshot' => $snapshot,
+                    'subtotal_cost' => round($qty * $snapshot, 4),
                 ]);
             }
 

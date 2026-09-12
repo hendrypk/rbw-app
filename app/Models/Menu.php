@@ -15,7 +15,7 @@ class Menu extends Model
     use HasUuids, SoftDeletes;
 
     protected $fillable = [
-        'name', 'category_id', 'description', 'image_path', 'hpp', 'is_active', 'overhead_cost'
+        'name', 'category_id', 'description', 'image_path', 'hpp', 'is_active', 'overhead_cost', 'outlet_id'
     ];
 
     protected $casts = [
@@ -59,4 +59,9 @@ class Menu extends Model
                     ->using(VoucherMenu::class)
                     ->withTimestamps();
     }
+
+    public function orderItems(): HasMany
+    {
+        return $this->hasMany(OrderItem::class);
+    }   
 }

@@ -39,7 +39,7 @@ onMounted(() => {
 
 <template>
     <Select v-model="selectedPreset">
-        <SelectTrigger class="w-44 h-11 rounded-2xl border-slate-200 dark:border-zinc-800 bg-slate-50 dark:bg-zinc-900 px-4 text-xs font-semibold">
+        <SelectTrigger class="w-auto h-8 rounded-2xl border-slate-200 dark:border-zinc-800 bg-slate-50 dark:bg-zinc-900 px-4 text-xs font-semibold">
             <SelectValue placeholder="Pilih Periode" />
         </SelectTrigger>
         <SelectContent class="rounded-2xl">

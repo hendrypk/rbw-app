@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue';
+import { ref, onMounted, onUnmounted } from 'vue';
 import { Head } from '@inertiajs/vue3';
 import { dashboard } from '@/routes';
 import { DollarSign, Receipt, ShoppingCart, Banknote, QrCode, TrendingUp, PackageOpen, Award, Clock, Calendar } from '@lucide/vue';
@@ -17,8 +17,7 @@ defineOptions({
     },
 });
 
-const outlets = ref<Array<{ id: string; name: string }>>([]);
-const selectedOutletId = ref<string>('all');
+const selectedOutletId = ref<string>(localStorage.getItem('active_outlet_id') || 'all');
 const isLoading = ref(true);
 const dateRange = ref({ start: '', end: '' });
 
@@ -38,31 +37,18 @@ const summary = ref({
     peak_hours: {} as Record<string, { total_transactions: number; total_omzet: number }>
 });
 
-// FUNGSI UNTUK MENANGANI PERUBAHAN TANGGAL
 const handleDateChange = (range: { start: string; end: string }) => {
     dateRange.value = range;
-    fetchDashboardSummary(); // Panggil ulang API dengan parameter tanggal baru
+    fetchDashboardSummary();
 };
 
-// Ambil daftar outlet
-const fetchOutlets = async () => {
-    try {
-        const response = await axios.get('/api/outlets');
-        if (response.data.success) {
-            outlets.value = response.data.data;
-        }
-    } catch (error) {
-        console.error("Gagal mengambil daftar outlet", error);
-    }
-};
-
-// Ambil data ringkasan dashboard dari ReportController
 const fetchDashboardSummary = async () => {
     isLoading.value = true;
     try {
+        const currentActiveOutlet = localStorage.getItem('active_outlet_id') || 'all';
         const response = await axios.get('/api/summary', {
             headers: { 
-                'X-Outlet-ID': selectedOutletId.value 
+                'X-Outlet-ID': currentActiveOutlet 
             },
             params: {
                 start_date: dateRange.value.start,
@@ -80,7 +66,8 @@ const fetchDashboardSummary = async () => {
     }
 };
 
-const handleOutletChange = () => {
+const handleOutletChanged = () => {
+    selectedOutletId.value = localStorage.getItem('active_outlet_id') || 'all';
     fetchDashboardSummary();
 };
 
@@ -94,10 +81,12 @@ const formatHourRange = (hourStr: string) => {
     return `${String(startHour).padStart(2, '0')}:00 - ${String(endHour).padStart(2, '0')}:00`;
 };
 
-onMounted(async () => {
-    await fetchOutlets();
-    // fetchDashboardSummary() tidak perlu dipanggil di sini karena komponen DatePresetFilter 
-    // akan memicu event 'change' saat pertama kali dimuat yang otomatis menjalankan fetchDashboardSummary().
+onMounted(() => {
+    window.addEventListener('outlet-changed', handleOutletChanged);
+});
+
+onUnmounted(() => {
+    window.removeEventListener('outlet-changed', handleOutletChanged);
 });
 </script>
 
@@ -109,19 +98,6 @@ onMounted(async () => {
             <div class="flex items-center justify-end gap-1.5 w-full sm:w-auto">
                 <div class="flex items-center shrink-0">
                     <DatePresetFilter @change="handleDateChange" class="px-2 py-1 rounded-md border border-input bg-secondary text-foreground font-medium text-[11px] outline-none focus:ring-1 focus:ring-ring cursor-pointer" />
-                </div>
-
-                <div class="flex items-center shrink-0 max-w-[120px] sm:max-w-[160px]">
-                    <select 
-                        v-model="selectedOutletId" 
-                        @change="handleOutletChange"
-                        class="w-full px-2 py-1 rounded-md border border-input bg-secondary text-foreground font-medium text-[11px] outline-none focus:ring-1 focus:ring-ring cursor-pointer truncate"
-                    >
-                        <option value="all">Semua Outlet</option>
-                        <option v-for="outlet in outlets" :key="outlet.id" :value="outlet.id">
-                            {{ outlet.name }}
-                        </option>
-                    </select>
                 </div>
             </div>
 

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted, computed } from 'vue';
+import { ref, onMounted, onUnmounted, computed } from 'vue';
 import AppSidebarLayout from '@/layouts/app/AppSidebarLayout.vue';
 import Button from '@/components/ui/button/Button.vue';
 import Input from '@/components/ui/input/Input.vue';
@@ -11,6 +11,13 @@ import { useMenus } from '@/composables/useMenus';
 import { useMaterials } from '@/composables/useMaterials';
 import { useCategories } from '@/composables/useCategories';
 import axios from 'axios';
+
+import Select from '@/components/ui/select/Select.vue';
+import SelectTrigger from '@/components/ui/select/SelectTrigger.vue';
+import SelectValue from '@/components/ui/select/SelectValue.vue';
+import SelectContent from '@/components/ui/select/SelectContent.vue';
+import SelectItem from '@/components/ui/select/SelectItem.vue';
+import ConifrmModal from '@/components/ConifrmModal.vue';
 
 defineOptions({ layout: AppSidebarLayout });
 
@@ -25,11 +32,18 @@ const showCategoryModal = ref(false);
 const showCategorySortModal = ref(false);
 const activeMenu = ref<any>(null);
 const selectedCategoryForSort = ref<any>(null);
+const isConfirmModalOpen = ref(false);
+const confirmModalConfig = ref({
+    title: 'Hapus Menu?',
+    message: 'Tindakan ini tidak dapat dibatalkan. Menu akan dihapus permanen.',
+    confirmText: 'Ya, Hapus',
+    loading: false,
+    action: async () => {}
+});
 
 // State Navigasi & Filter
 const activeCategoryId = ref<string>('all');
-const selectedOutletId = ref<string>('all');
-const outlets = ref<Array<{ id: string; name: string }>>([]);
+const selectedOutletId = ref<string>(localStorage.getItem('active_outlet_id') || 'all');
 
 // State Search & Sort
 const searchQuery = ref('');
@@ -46,29 +60,16 @@ const isSyncingRecipe = ref(false);
 const isRecipeOutOfSync = ref(false);
 const showRecipeBanner = ref(false);
 
-// Ambil daftar outlet untuk filter dropdown lokal halaman ini
-const fetchOutlets = async () => {
-    try {
-        const res = await axios.get('/api/outlets');
-        if (res.data.success) {
-            outlets.value = res.data.data;
-            const saved = localStorage.getItem('selected_outlet_id');
-            if (saved) selectedOutletId.value = saved;
-        }
-    } catch (err) {
-        console.error('Gagal memuat outlet', err);
-    }
-};
-
-const handleOutletChange = () => {
-    localStorage.setItem('selected_outlet_id', selectedOutletId.value);
-    loadData();
-};
-
 const loadData = () => {
-    const params = { outlet_id: selectedOutletId.value };
+    const currentActiveOutlet = localStorage.getItem('active_outlet_id') || 'all';
+    const params = { outlet_id: currentActiveOutlet };
     fetchMenus(params);
-    fetchCategories(params); // Pastikan fetchCategories menangkap parameter ini
+    fetchCategories(params);
+};
+
+const handleOutletChanged = () => {
+    selectedOutletId.value = localStorage.getItem('active_outlet_id') || 'all';
+    loadData();
 };
 
 const handleCategoryUpdated = () => {
@@ -101,7 +102,8 @@ const checkRecipeSyncStatus = async () => {
 };
 
 const executeRecipeSync = async () => {
-    if (await confirm('Sinkronkan Resep & HPP?', 'Semua resep dan kalkulasi HPP menu aktif akan diperbarui menggunakan avg_cost terbaru.')) {
+    const isConfirmed = await confirm('Sinkronkan Resep & HPP?', 'Semua resep dan kalkulasi HPP menu aktif akan diperbarui menggunakan avg_cost terbaru.');
+    if (isConfirmed) {
         isSyncingRecipe.value = true;
         try {
             await axios.post('/api/menus/sync-recipes');
@@ -176,33 +178,61 @@ const toggleSelectAll = (event: Event) => {
     selectedIds.value = checked ? filteredAndSortedMenus.value.map(m => m.id) : [];
 };
 
-const bulkDelete = async () => {
-    if (await confirm('Hapus semua menu yang dipilih?', 'Tindakan ini tidak dapat dibatalkan.')) {
-        try {
-            await axios.post('/api/menus/bulk-destroy', { ids: selectedIds.value });
-            selectedIds.value = [];
-            loadData();
-            success('Berhasil', 'Menu terpilih berhasil dihapus.');
-        } catch (e) {
-            error('Gagal', 'Gagal menghapus menu.');
+const handleDelete = (menu: any) => {
+    confirmModalConfig.value = {
+        title: 'Hapus Menu?',
+        message: `Menu "${menu.name}" akan dihapus permanen dari sistem.`,
+        confirmText: 'Ya, Hapus',
+        loading: false,
+        action: async () => {
+            confirmModalConfig.value.loading = true;
+            try {
+                await axios.delete(`/api/menus/${menu.id}`);
+                loadData();
+                success('Berhasil', 'Menu berhasil dihapus.');
+                isConfirmModalOpen.value = false;
+            } catch (e: any) {
+                const message = e.response?.data?.message || 'Gagal menghapus menu.';
+                error('Gagal', message);
+                isConfirmModalOpen.value = false;
+
+            } finally {
+                confirmModalConfig.value.loading = false;
+            }
         }
-    }
+    };
+    isConfirmModalOpen.value = true;
 };
 
-const handleDelete = async (menu: any) => {
-    if (await confirm('Yakin ingin menghapus menu ini?', `Menu "${menu.name}" akan dihapus permanen.`)) {
-        try {
-            await axios.delete(`/api/menus/${menu.id}`);
-            loadData();
-            success('Berhasil', 'Menu berhasil dihapus.');
-        } catch (e) {
-            error('Gagal', 'Gagal menghapus menu.');
+// Handler Hapus Massal (Bulk Delete)
+const bulkDelete = () => {
+    confirmModalConfig.value = {
+        title: 'Hapus Menu Terpilih?',
+        message: `Sebanyak ${selectedIds.value.length} menu yang dipilih akan dihapus permanen.`,
+        confirmText: 'Ya, Hapus Semua',
+        loading: false,
+        action: async () => {
+            confirmModalConfig.value.loading = true;
+            try {
+                await axios.post('/api/menus/bulk-destroy', { ids: selectedIds.value });
+                selectedIds.value = [];
+                loadData();
+                success('Berhasil', 'Menu terpilih berhasil dihapus.');
+                isConfirmModalOpen.value = false;
+            } catch (e: any) {
+                const message = e.response?.data?.message || 'Gagal menghapus menu.';
+                error('Gagal', message);
+            } finally {
+                confirmModalConfig.value.loading = false;
+            }
         }
-    }
+    };
+    isConfirmModalOpen.value = true;
 };
 
 const handleSyncNow = async () => {
-    if (await confirm('Sinkronkan Overhead?', `Nilai overhead di semua menu akan disesuaikan menjadi Rp ${masterOverheadTotal.value.toLocaleString()}.`)) {
+    const isConfirmed = await confirm('Sinkronkan Overhead?', `Nilai overhead di semua menu akan disesuaikan menjadi Rp ${masterOverheadTotal.value.toLocaleString()}.`);
+    if (isConfirmed) {
         isSyncing.value = true;
         try {
             await axios.post('/api/menus/overhead-sync');
@@ -218,277 +248,232 @@ const handleSyncNow = async () => {
     }
 };
 
-const openCategorySortModal = (category: any, event: Event) => {
-    event.stopPropagation();
-    selectedCategoryForSort.value = category;
-    showCategorySortModal.value = true;
-};
-
-onMounted(async () => {
-    await fetchOutlets();
+onMounted(() => {
     loadData();
     fetchMaterialOptions();
     checkSyncStatus();
     checkRecipeSyncStatus();
+    window.addEventListener('outlet-changed', handleOutletChanged);
+});
+
+onUnmounted(() => {
+    window.removeEventListener('outlet-changed', handleOutletChanged);
 });
 </script>
 
 <template>
-    <div class="p-4 sm:p-6 space-y-6 max-w-full overflow-x-hidden">
-        <!-- Header Halaman & Filter Outlet -->
-        <div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between border-b pb-5 border-border">
+    <div class="p-6 sm:p-8 space-y-8 max-w-full overflow-x-hidden font-sans">
+        <!-- Header Halaman -->
+        <div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between pb-2">
             <div>
-                <h1 class="text-xl font-bold tracking-tight text-foreground">Daftar Menu Produksi</h1>
-                <p class="text-xs text-muted-foreground mt-0.5">
+                <h1 class="text-xl sm:text-2xl font-bold tracking-tight text-foreground">Daftar Menu Produksi</h1>
+                <p class="text-xs sm:text-sm text-muted-foreground mt-1">
                     Kelola data resep, kalkulasi overhead cost, dan optimasi harga jual multi-channel secara real-time.
                 </p>
             </div>
             
-            <div class="flex items-center gap-2 sm:shrink-0 flex-wrap justify-end">
-                <!-- Dropdown Filter Outlet -->
-                <div class="flex items-center gap-2 mr-1">
-                    <select 
-                        v-model="selectedOutletId" 
-                        @change="handleOutletChange"
-                        class="h-9 px-3 rounded-lg border border-input bg-secondary text-foreground font-medium text-xs outline-none focus:ring-2 focus:ring-ring cursor-pointer"
-                    >
-                        <option value="all">🌐 Semua Outlet</option>
-                        <option v-for="outlet in outlets" :key="outlet.id" :value="outlet.id">
-                            {{ outlet.name }}
-                        </option>
-                    </select>
-                </div>
-
+            <div class="flex items-center gap-2.5 sm:shrink-0 flex-wrap justify-end">
                 <Button 
                     v-if="isOutOfSync" 
                     variant="outline"
-                    class="h-9 border-amber-500/40 text-amber-700 hover:bg-amber-50 dark:text-amber-400 dark:hover:bg-amber-950/20 font-medium text-xs flex items-center gap-2 animate-pulse"
+                    class="h-9 px-4 rounded-xl border-amber-500/30 text-amber-600 hover:bg-amber-50 dark:text-amber-400 dark:hover:bg-amber-950/30 font-semibold text-xs transition-all flex items-center gap-2"
                     :disabled="isSyncing"
                     @click="handleSyncNow"
                 >
-                    <span class="w-1.5 h-1.5 rounded-full bg-amber-500"></span>
+                    <span class="w-2 h-2 rounded-full bg-amber-500 animate-pulse"></span>
                     {{ isSyncing ? 'Syncing...' : 'Sync Overhead' }}
                 </Button>
 
                 <Button 
                     v-if="isRecipeOutOfSync" 
                     variant="outline"
-                    class="h-9 border-amber-500/40 text-amber-700 hover:bg-amber-50 dark:text-amber-400 dark:hover:bg-amber-950/20 font-medium text-xs flex items-center gap-2 animate-pulse"
+                    class="h-9 px-4 rounded-xl border-amber-500/30 text-amber-600 hover:bg-amber-50 dark:text-amber-400 dark:hover:bg-amber-950/30 font-semibold text-xs transition-all flex items-center gap-2"
                     :disabled="isSyncingRecipe"
                     @click="executeRecipeSync"
                 >
-                    <span class="w-1.5 h-1.5 rounded-full bg-amber-500"></span>
+                    <span class="w-2 h-2 rounded-full bg-amber-500 animate-pulse"></span>
                     {{ isSyncingRecipe ? 'Syncing...' : 'Sync Bahan & HPP' }}
                 </Button>
                 
-                <Button variant="outline" size="sm" class="h-9 text-xs font-medium" @click="showCategoryModal = true">
+                <Button variant="outline" size="sm" class="h-9 px-4 rounded-xl text-xs font-semibold shadow-xs" @click="showCategoryModal = true">
                     📂 Kategori
                 </Button>
                 
-                <Button size="sm" class="h-9 text-xs font-medium shadow-2xs" @click="openCreate">
+                <Button size="sm" class="h-9 px-5 rounded-xl text-xs font-bold shadow-sm bg-foreground text-background hover:opacity-90 transition-all" @click="openCreate">
                     + New Menu
                 </Button>
             </div>
         </div>
 
-        <!-- Layout Utama: Grid Kiri (Kategori) & Kanan (Tabel Menu) -->
-        <div class="grid grid-cols-1 md:grid-cols-4 lg:grid-cols-5 gap-6 items-start">
-            
-            <!-- Sidebar Kategori -->
-            <div class="md:col-span-1 bg-card border border-border rounded-xl p-2 shadow-2xs space-y-1 sticky top-4">
-                <h4 class="text-[11px] font-medium text-muted-foreground uppercase tracking-wider px-3 py-2">Kategori Menu</h4>
-                
-                <button
-                    @click="activeCategoryId = 'all'"
-                    :class="[
-                        'w-full flex items-center justify-between px-3 py-2 rounded-lg text-xs font-medium transition-colors text-left',
-                        activeCategoryId === 'all' 
-                            ? 'bg-primary text-primary-foreground font-semibold shadow-2xs' 
-                            : 'hover:bg-accent text-muted-foreground hover:text-foreground'
-                    ]"
-                >
-                    <span>Semua Menu</span>
-                    <span class="text-[10px] opacity-80 px-1.5 py-0.5 rounded bg-secondary text-secondary-foreground">{{ menus.length }}</span>
-                </button>
+        <div class="space-y-4">
+            <!-- Filter & Search Toolbar -->
+            <div class="flex flex-col sm:flex-row items-center gap-3 p-3 bg-card rounded-2xl border border-border/60 shadow-xs backdrop-blur-md">
+                <div class="w-full sm:w-72">
+                    <Select v-model="activeCategoryId">
+                        <SelectTrigger>
+                            <SelectValue placeholder="Pilih Kategori" />
+                        </SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value="all">
+                                Semua Menu ({{ menus.length }})
+                            </SelectItem>
+                            <SelectItem 
+                                v-for="cat in sortedCategories" 
+                                :key="cat.id" 
+                                :value="cat.id" 
+                                :class="['text-xs font-semibold rounded-xl cursor-pointer py-2 px-3', !cat.is_visible ? 'opacity-50 line-through' : '']"
+                            >
+                                {{ cat.name }}
+                            </SelectItem>
+                        </SelectContent>
+                    </Select>
+                </div>
 
-                <div v-for="cat in sortedCategories" :key="cat.id" class="group relative">
-                    <button
-                        @click="activeCategoryId = cat.id"
-                        :class="[
-                            'w-full flex items-center justify-between px-3 py-2 rounded-lg text-xs font-medium transition-colors text-left pr-10',
-                            activeCategoryId === cat.id 
-                                ? 'bg-primary text-primary-foreground font-semibold shadow-2xs' 
-                                : 'hover:bg-accent text-muted-foreground hover:text-foreground',
-                            !cat.is_visible ? 'opacity-50 line-through' : ''
-                        ]"
-                    >
-                        <span class="truncate">{{ cat.name }}</span>
-                    </button>
-
-                    <button
-                        type="button"
-                        @click="openCategorySortModal(cat, $event)"
-                        title="Urutkan menu"
-                        :class="[
-                            'absolute right-1.5 top-1/2 -translate-y-1/2 p-1 rounded text-[10px] transition-all opacity-0 group-hover:opacity-100 flex items-center',
-                            activeCategoryId === cat.id ? 'opacity-100 text-primary-foreground bg-white/10 hover:bg-white/20' : 'text-muted-foreground hover:text-foreground hover:bg-accent'
-                        ]"
-                    >
-                        ↕️
-                    </button>
+                <div class="w-full relative">
+                    <Input 
+                        v-model="searchQuery" 
+                        placeholder="Cari nama menu produksi..." 
+                        class="w-full text-xs h-10 pl-4 pr-10 bg-secondary/60 border-border/80 rounded-xl font-medium focus:ring-1 focus:ring-ring"
+                    />
+                    <span v-if="searchQuery" @click="searchQuery = ''" class="absolute right-3.5 top-2.5 text-muted-foreground hover:text-foreground cursor-pointer text-base font-bold">&times;</span>
                 </div>
             </div>
 
-            <!-- Konten Utama: Search & Tabel Menu -->
-            <div class="md:col-span-3 lg:col-span-4 space-y-4">
-                
-                <div class="flex items-center gap-2.5 p-2 bg-card rounded-xl border border-border shadow-2xs">
-                    <div class="w-full relative">
-                        <Input 
-                            v-model="searchQuery" 
-                            placeholder="Cari nama menu produksi..." 
-                            class="w-full text-xs h-8 pl-3 pr-8 bg-secondary border-input"
-                        />
-                        <span v-if="searchQuery" @click="searchQuery = ''" class="absolute right-2.5 top-1.5 text-muted-foreground hover:text-foreground cursor-pointer text-sm font-bold">&times;</span>
-                    </div>
+            <!-- Alert Bulk Delete -->
+            <div 
+                v-if="selectedIds.length > 0" 
+                class="flex items-center justify-between rounded-2xl bg-destructive/10 px-5 py-3 border border-destructive/20 animate-in fade-in zoom-in-95 duration-200 shadow-xs"
+            >
+                <div class="flex items-center gap-2.5 text-xs">
+                    <span class="inline-flex items-center justify-center h-6 px-2 rounded-lg bg-destructive text-destructive-foreground font-bold text-xs">
+                        {{ selectedIds.length }}
+                    </span>
+                    <span class="font-semibold text-foreground">menu dipilih untuk dimodifikasi secara massal</span>
                 </div>
-
-                <!-- Alert Bulk Delete -->
-                <div 
-                    v-if="selectedIds.length > 0" 
-                    class="flex items-center justify-between rounded-xl bg-destructive/10 px-4 py-2.5 border border-destructive/20 animate-in fade-in zoom-in-95 duration-200 shadow-2xs"
-                >
-                    <div class="flex items-center gap-2 text-xs">
-                        <span class="inline-flex items-center justify-center h-5 px-1.5 rounded bg-destructive text-destructive-foreground font-bold text-[10px]">
-                            {{ selectedIds.length }}
-                        </span>
-                        <span class="font-medium text-foreground">menu dipilih untuk dimodifikasi secara massal</span>
-                    </div>
-                    <div class="flex items-center gap-3">
-                        <button @click="selectedIds = []" class="text-muted-foreground hover:text-foreground text-xs font-medium">
-                            Batal
-                        </button>
-                        <Button variant="destructive" size="sm" class="h-8 text-xs font-semibold px-3" @click="bulkDelete">
-                            Hapus Terpilih
-                        </Button>
-                    </div>
-                </div>
-
-                <!-- Banner Overhead Out of Sync -->
-                <div v-if="showBanner" class="flex flex-col md:flex-row md:items-center justify-between gap-4 rounded-xl bg-card px-5 py-4 border border-amber-500/30 shadow-2xs">
-                    <div class="flex items-start gap-3.5">
-                        <div class="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-amber-500 text-white text-xs font-bold">⚠️</div>
-                        <div class="space-y-0.5">
-                            <h5 class="text-xs font-bold uppercase tracking-wider text-amber-600 dark:text-amber-400">Perubahan Master Overhead Terdeteksi</h5>
-                            <p class="text-xs text-muted-foreground">Total nominal biaya overhead aktif saat ini berubah menjadi <span class="font-bold text-foreground">{{ currency(masterOverheadTotal) }}</span>.</p>
-                        </div>
-                    </div>
-                    <Button size="sm" class="bg-amber-600 hover:bg-amber-700 text-white text-xs h-8" :disabled="isSyncing" @click="handleSyncNow">
-                        {{ isSyncing ? 'Syncing...' : 'Sync Sekarang' }}
+                <div class="flex items-center gap-3">
+                    <button @click="selectedIds = []" class="text-muted-foreground hover:text-foreground text-xs font-semibold">
+                        Batal
+                    </button>
+                    <Button variant="destructive" size="sm" class="h-8 rounded-xl text-xs font-bold px-4" @click="bulkDelete">
+                        Hapus Terpilih
                     </Button>
                 </div>
+            </div>
 
-                <!-- Banner Recipe Out of Sync -->
-                <div v-if="showRecipeBanner" class="flex flex-col md:flex-row md:items-center justify-between gap-4 rounded-xl bg-card px-5 py-4 border border-amber-500/30 shadow-2xs">
-                    <div class="flex items-start gap-3.5">
-                        <div class="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-amber-500 text-white text-xs font-bold">⚠️</div>
-                        <div class="space-y-0.5">
-                            <h5 class="text-xs font-bold uppercase tracking-wider text-amber-600 dark:text-amber-400">Perubahan Harga Bahan Baku Terdeteksi</h5>
-                            <p class="text-xs text-muted-foreground">Terdapat perubahan avg_cost pada master bahan baku yang belum disinkronkan ke resep menu.</p>
-                        </div>
+            <!-- Banner Overhead Out of Sync -->
+            <div v-if="showBanner" class="flex flex-col md:flex-row md:items-center justify-between gap-4 rounded-2xl bg-card px-6 py-4 border border-amber-500/30 shadow-xs">
+                <div class="flex items-start gap-3.5">
+                    <div class="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-amber-500 text-white text-xs font-bold">⚠️</div>
+                    <div class="space-y-0.5">
+                        <h5 class="text-xs font-bold uppercase tracking-wider text-amber-600 dark:text-amber-400">Perubahan Master Overhead Terdeteksi</h5>
+                        <p class="text-xs text-muted-foreground">Total nominal biaya overhead aktif saat ini berubah menjadi <span class="font-bold text-foreground">{{ currency(masterOverheadTotal) }}</span>.</p>
                     </div>
-                    <Button size="sm" class="bg-amber-600 hover:bg-amber-700 text-white text-xs h-8" :disabled="isSyncingRecipe" @click="executeRecipeSync">
-                        {{ isSyncingRecipe ? 'Syncing...' : 'Sync Resep Sekarang' }}
-                    </Button>
                 </div>
+                <Button size="sm" class="bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs h-9 rounded-xl px-4" :disabled="isSyncing" @click="handleSyncNow">
+                    {{ isSyncing ? 'Syncing...' : 'Sync Sekarang' }}
+                </Button>
+            </div>
 
-                <!-- Loading State -->
-                <div v-if="isLoading" class="mt-8 text-center text-muted-foreground text-xs">
-                    Memuat data menu...
+            <!-- Banner Recipe Out of Sync -->
+            <div v-if="showRecipeBanner" class="flex flex-col md:flex-row md:items-center justify-between gap-4 rounded-2xl bg-card px-6 py-4 border border-amber-500/30 shadow-xs">
+                <div class="flex items-start gap-3.5">
+                    <div class="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-amber-500 text-white text-xs font-bold">⚠️</div>
+                    <div class="space-y-0.5">
+                        <h5 class="text-xs font-bold uppercase tracking-wider text-amber-600 dark:text-amber-400">Perubahan Harga Bahan Baku Terdeteksi</h5>
+                        <p class="text-xs text-muted-foreground">Terdapat perubahan avg_cost pada master bahan baku yang belum disinkronkan ke resep menu.</p>
+                    </div>
                 </div>
+                <Button size="sm" class="bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs h-9 rounded-xl px-4" :disabled="isSyncingRecipe" @click="executeRecipeSync">
+                    {{ isSyncingRecipe ? 'Syncing...' : 'Sync Resep Sekarang' }}
+                </Button>
+            </div>
 
-                <!-- Tabel Data Menu -->
-                <div v-else-if="filteredAndSortedMenus.length > 0" class="w-full">
-                    <div class="overflow-x-auto rounded-xl border border-border bg-card shadow-2xs w-full">
-                        <table class="w-full text-sm text-left min-w-[750px]">
-                            <thead class="bg-secondary text-muted-foreground text-xs border-b border-border">
-                                <tr>
-                                    <th class="px-4 py-3 w-10">
-                                        <input type="checkbox" :checked="selectedIds.length === filteredAndSortedMenus.length && filteredAndSortedMenus.length > 0" @change="toggleSelectAll" class="rounded border-input" />
-                                    </th>
-                                    <th class="px-4 py-3 font-medium cursor-pointer select-none hover:text-foreground transition-colors" @click="toggleSort('name')">
-                                        Nama Menu <span v-if="sortBy === 'name'">{{ sortDirection === 'asc' ? '▲' : '▼' }}</span>
-                                    </th>
-                                    <th class="px-4 py-3 font-medium">Kategori</th>
-                                    <th class="px-4 py-3 font-medium">Overhead Terpasang</th>
-                                    <th class="px-4 py-3 font-medium cursor-pointer select-none hover:text-foreground transition-colors" @click="toggleSort('hpp')">
-                                        HPP <span v-if="sortBy === 'hpp'">{{ sortDirection === 'asc' ? '▲' : '▼' }}</span>
-                                    </th>
-                                    <th class="px-4 py-3 font-medium">Harga Jual Kanal (Margin)</th>
-                                    <th class="px-4 py-3 font-medium">Status</th>
-                                    <th class="px-4 py-3 font-medium text-right">Aksi</th>
-                                </tr>
-                            </thead>
-                            <tbody class="divide-y divide-border text-xs">
-                                <tr v-for="menu in filteredAndSortedMenus" :key="menu.id" class="hover:bg-secondary/40 transition-colors">
-                                    <td class="px-4 py-3">
-                                        <input type="checkbox" v-model="selectedIds" :value="menu.id" class="rounded border-input" />
-                                    </td>
-                                    <td class="px-4 py-3 font-medium text-foreground whitespace-nowrap">{{ menu.name }}</td>
-                                    <td class="px-4 py-3 text-muted-foreground">
-                                        <div class="flex flex-wrap gap-1">
-                                            <span v-for="cat in menu.categories" :key="cat.id" class="px-1.5 py-0.5 rounded bg-secondary text-secondary-foreground text-[10px] font-medium">
-                                                {{ cat.name }}
-                                            </span>
-                                            <span v-if="!menu.categories || menu.categories.length === 0">-</span>
-                                        </div>
-                                    </td>
-                                    <td class="px-4 py-3 font-medium whitespace-nowrap text-foreground">
-                                        Rp {{ Number(menu.overhead_cost || 0).toLocaleString() }}
-                                        <span v-if="Number(menu.overhead_cost) !== masterOverheadTotal" class="ml-1.5 inline-block text-[10px] bg-destructive/10 text-destructive px-1.5 py-0.5 rounded font-medium">
-                                            Outdated
+            <!-- Loading State -->
+            <div v-if="isLoading" class="mt-12 text-center text-muted-foreground text-xs font-medium">
+                Memuat data menu...
+            </div>
+
+            <!-- Tabel Data Menu -->
+            <div v-else-if="filteredAndSortedMenus.length > 0" class="w-full">
+                <div class="overflow-x-auto rounded-2xl border border-border/70 bg-card shadow-xs w-full">
+                    <table class="w-full text-sm text-left min-w-[750px]">
+                        <thead class="bg-secondary/60 text-muted-foreground text-xs border-b border-border/70">
+                            <tr>
+                                <th class="px-5 py-3.5 w-10">
+                                    <input type="checkbox" :checked="selectedIds.length === filteredAndSortedMenus.length && filteredAndSortedMenus.length > 0" @change="toggleSelectAll" class="rounded border-border accent-primary cursor-pointer" />
+                                </th>
+                                <th class="px-5 py-3.5 font-bold cursor-pointer select-none hover:text-foreground transition-colors" @click="toggleSort('name')">
+                                    Nama Menu <span v-if="sortBy === 'name'">{{ sortDirection === 'asc' ? '▲' : '▼' }}</span>
+                                </th>
+                                <th class="px-5 py-3.5 font-bold">Kategori</th>
+                                <th class="px-5 py-3.5 font-bold">Overhead Terpasang</th>
+                                <th class="px-5 py-3.5 font-bold cursor-pointer select-none hover:text-foreground transition-colors" @click="toggleSort('hpp')">
+                                    HPP <span v-if="sortBy === 'hpp'">{{ sortDirection === 'asc' ? '▲' : '▼' }}</span>
+                                </th>
+                                <th class="px-5 py-3.5 font-bold">Harga Jual Kanal (Margin)</th>
+                                <th class="px-5 py-3.5 font-bold">Status</th>
+                                <th class="px-5 py-3.5 font-bold text-right">Aksi</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-border/60 text-xs">
+                            <tr v-for="menu in filteredAndSortedMenus" :key="menu.id" class="hover:bg-secondary/40 transition-colors">
+                                <td class="px-5 py-4">
+                                    <input type="checkbox" v-model="selectedIds" :value="menu.id" class="rounded border-border accent-primary cursor-pointer" />
+                                </td>
+                                <td class="px-5 py-4 font-bold text-foreground whitespace-nowrap">{{ menu.name }}</td>
+                                <td class="px-5 py-4 text-muted-foreground">
+                                    <div class="flex flex-wrap gap-1.5">
+                                        <span v-for="cat in menu.categories" :key="cat.id" class="px-2 py-0.5 rounded-lg bg-secondary text-secondary-foreground text-[10px] font-bold">
+                                            {{ cat.name }}
                                         </span>
-                                    </td>
-                                    <td class="px-4 py-3 text-muted-foreground font-medium whitespace-nowrap">{{ currency(menu.hpp) }}</td>
-                                    
-                                    <td class="px-4 py-3">
-                                        <div v-if="Array.isArray(menu.prices) && menu.prices.length > 0" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2 w-full min-w-[260px]">
-                                            <div v-for="price in (menu.prices as any[])" :key="price.id" class="px-2.5 py-1.5 rounded-lg border border-border bg-secondary/50 text-[11px] flex flex-col justify-between shadow-2xs">
-                                                <div class="flex items-center justify-between border-b border-border pb-0.5">
-                                                    <span class="text-[9px] uppercase font-bold tracking-wider text-muted-foreground">{{ price.channel }}</span>
-                                                    <span class="text-[9px] text-muted-foreground mt-0.5">{{ price.margin_percent }}%</span>
-                                                </div>
-                                                <div class="flex flex-col mt-1.5">
-                                                    <span class="font-bold text-xs tracking-tight text-foreground">{{ currency(price.selling_price) }}</span>
-                                                    <span class="text-[9px] text-muted-foreground mt-0.5">Margin: {{ currency(price.nett_price * (price.margin_percent / 100)) }}</span>
-                                                </div>
+                                        <span v-if="!menu.categories || menu.categories.length === 0">-</span>
+                                    </div>
+                                </td>
+                                <td class="px-5 py-4 font-bold whitespace-nowrap text-foreground font-mono">
+                                    Rp {{ Number(menu.overhead_cost || 0).toLocaleString() }}
+                                    <span v-if="Number(menu.overhead_cost) !== masterOverheadTotal" class="ml-2 inline-block text-[10px] bg-destructive/10 text-destructive px-2 py-0.5 rounded-md font-bold">
+                                        Outdated
+                                    </span>
+                                </td>
+                                <td class="px-5 py-4 text-muted-foreground font-semibold whitespace-nowrap font-mono">{{ currency(menu.hpp) }}</td>
+                                
+                                <td class="px-5 py-4">
+                                    <div v-if="Array.isArray(menu.prices) && menu.prices.length > 0" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5 w-full min-w-[280px]">
+                                        <div v-for="price in (menu.prices as any[])" :key="price.id" class="px-3 py-2 rounded-xl border border-border/80 bg-secondary/40 text-[11px] flex flex-col justify-between shadow-2xs">
+                                            <div class="flex items-center justify-between border-b border-border/60 pb-1">
+                                                <span class="text-[9px] uppercase font-bold tracking-wider text-muted-foreground">{{ price.channel }}</span>
+                                                <span class="text-[10px] font-bold text-foreground">{{ price.margin_percent }}%</span>
+                                            </div>
+                                            <div class="flex flex-col mt-2">
+                                                <span class="font-extrabold text-xs tracking-tight text-foreground font-mono">{{ currency(price.selling_price) }}</span>
+                                                <span class="text-[9px] text-muted-foreground mt-0.5 font-medium">Margin: {{ currency(price.nett_price * (price.margin_percent / 100)) }}</span>
                                             </div>
                                         </div>
-                                        <span v-else class="text-xs text-muted-foreground italic">Belum disetting</span>
-                                    </td>
+                                    </div>
+                                    <span v-else class="text-xs text-muted-foreground italic">Belum disetting</span>
+                                </td>
 
-                                    <td class="px-4 py-3 whitespace-nowrap">
-                                        <span :class="menu.is_active ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400' : 'bg-secondary text-muted-foreground'" class="px-2 py-0.5 rounded-full text-[10px] font-medium">
-                                            {{ menu.is_active ? 'Active' : 'Inactive' }}
-                                        </span>
-                                    </td>
-                                    <td class="px-4 py-3 text-right whitespace-nowrap">
-                                        <div class="flex items-center justify-end gap-1.5">
-                                            <Button variant="outline" size="sm" class="h-7 px-2 text-[11px] font-medium" @click="openEdit(menu)">Edit</Button>
-                                            <Button variant="destructive" size="sm" class="h-7 px-2 text-[11px] font-medium" @click="handleDelete(menu)">Hapus</Button>
-                                        </div>
-                                    </td>
-                                </tr>
-                            </tbody>
-                        </table>
-                    </div>
+                                <td class="px-5 py-4 whitespace-nowrap">
+                                    <span :class="menu.is_active ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 font-bold' : 'bg-secondary text-muted-foreground font-semibold'" class="px-2.5 py-1 rounded-full text-[10px]">
+                                        {{ menu.is_active ? 'Active' : 'Inactive' }}
+                                    </span>
+                                </td>
+                                <td class="px-5 py-4 text-right whitespace-nowrap">
+                                    <div class="flex items-center justify-end gap-2">
+                                        <Button variant="outline" size="sm" class="h-8 px-3 rounded-xl text-xs font-semibold" @click="openEdit(menu)">Edit</Button>
+                                        <Button variant="destructive" size="sm" class="h-8 px-3 rounded-xl text-xs font-semibold" @click="handleDelete(menu)">Hapus</Button>
+                                    </div>
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
                 </div>
+            </div>
 
-                <!-- Empty State -->
-                <div v-else class="flex flex-col items-center justify-center py-20 text-center border rounded-xl bg-card border-dashed border-border">
-                    <h3 class="text-sm font-semibold text-foreground">Data tidak ditemukan</h3>
-                    <p class="mt-1 text-xs text-muted-foreground">Tidak ada menu produksi yang cocok dengan kriteria pencarian Anda.</p>
-                </div>
+            <!-- Empty State -->
+            <div v-else class="flex flex-col items-center justify-center py-24 text-center border border-dashed rounded-3xl bg-card border-border/80 shadow-xs">
+                <h3 class="text-sm font-bold text-foreground">Data tidak ditemukan</h3>
+                <p class="mt-1 text-xs text-muted-foreground">Tidak ada menu produksi yang cocok dengan kriteria pencarian Anda.</p>
             </div>
         </div>
     </div>
@@ -496,4 +481,14 @@ onMounted(async () => {
     <MenuModal :show="showModal" :menu="activeMenu" :masterOverhead="masterOverheadTotal" @close="showModal = false" @saved="handleSaved" />
     <CategoryModal :show="showCategoryModal" @close="showCategoryModal = false" @updated="handleCategoryUpdated" />
     <CategorySortModal :show="showCategorySortModal" :category="selectedCategoryForSort" @close="showCategorySortModal = false" @updated="loadData" />
+    <!-- Komponen Modal Konfirmasi Reusable -->
+    <ConifrmModal 
+        :show="isConfirmModalOpen"
+        :title="confirmModalConfig.title"
+        :message="confirmModalConfig.message"
+        :confirmText="confirmModalConfig.confirmText"
+        :loading="confirmModalConfig.loading"
+        @close="isConfirmModalOpen = false"
+        @confirm="confirmModalConfig.action"
+    />
 </template>

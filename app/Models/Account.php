@@ -17,7 +17,8 @@ class Account extends Model
         'name', 
         'normal_balance', 
         'balance',
-        'is_active'
+        'is_active',
+        'opening_balance'
     ];
 
     protected $casts = [

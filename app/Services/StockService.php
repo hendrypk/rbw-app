@@ -216,4 +216,5 @@ class StockService
             'created_at'       => now(),
         ]);
     }
+    
 }

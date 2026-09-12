@@ -1,16 +1,16 @@
 <script setup lang="ts">
 import { ref, watch } from 'vue';
-import axios from 'axios';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useSwal } from '@/composables/useSwal';
+import { useCategories } from '@/composables/useCategories';
+import ConifrmModal from '@/components/ConifrmModal.vue';
 
 const props = defineProps<{ show: boolean }>();
 const emit = defineEmits(['close', 'updated']);
 
-const { confirm, success, error } = useSwal();
-const categories = ref<any[]>([]);
-const isLoading = ref(false);
+const { success, error } = useSwal();
+const { categories, isLoading, fetchCategories, createCategory, updateCategory, deleteCategory, sortCategories } = useCategories();
 
 // State untuk Form Add/Edit
 const newCategoryName = ref('');
@@ -20,16 +20,14 @@ const editingName = ref('');
 // State untuk Drag and Drop
 const draggedIndex = ref<number | null>(null);
 
-const fetchCategories = async () => {
-    isLoading.value = true;
-    try {
-        const res = await axios.get('/api/categories');
-        categories.value = res.data.sort((a: any, b: any) => (a.sort ?? 0) - (b.sort ?? 0));
-    } catch (err) {
-        console.error('Gagal memuat kategori', err);
-    } finally {
-        isLoading.value = false;
-    }
+// State untuk Confirm Modal
+const isConfirmModalOpen = ref(false);
+const isDeleting = ref(false);
+const itemToDelete = ref<any>(null);
+
+const loadData = async () => {
+    await fetchCategories();
+    categories.value = categories.value.sort((a: any, b: any) => (a.sort ?? 0) - (b.sort ?? 0));
 };
 
 const handleAdd = async () => {
@@ -37,12 +35,13 @@ const handleAdd = async () => {
     try {
         const nextSort = categories.value.length > 0 ? Math.max(...categories.value.map(c => c.sort || 0)) + 1 : 0;
         
-        await axios.post('/api/categories', { 
+        await createCategory({ 
             name: newCategoryName.value,
             sort: nextSort
         });
+
         newCategoryName.value = '';
-        fetchCategories();
+        await loadData();
         emit('updated');
         success('Berhasil', 'Kategori baru berhasil ditambahkan.');
     } catch (err: any) {
@@ -58,10 +57,11 @@ const startEdit = (item: any) => {
 const handleUpdateName = async (id: string) => {
     if (!editingName.value.trim()) return;
     try {
-        await axios.put(`/api/categories/${id}`, { name: editingName.value });
+        await updateCategory(id, { name: editingName.value });
         editingId.value = null;
-        fetchCategories();
+        await loadData();
         emit('updated');
+        success('Berhasil', 'Nama kategori diperbarui.');
     } catch (err: any) {
         error('Gagal', err.response?.data?.message || 'Gagal mengubah nama kategori.');
     }
@@ -69,11 +69,11 @@ const handleUpdateName = async (id: string) => {
 
 const toggleVisibility = async (item: any) => {
     try {
-        await axios.put(`/api/categories/${item.id}`, { 
+        await updateCategory(item.id, { 
             name: item.name, 
             is_visible: !item.is_visible 
         });
-        fetchCategories();
+        await loadData();
         emit('updated');
     } catch (err) {
         error('Gagal', 'Gagal merubah visibilitas kategori.');
@@ -86,48 +86,55 @@ const onDragStart = (index: number) => {
 };
 
 const onDragOver = (event: DragEvent) => {
-    event.preventDefault(); // Diperlukan agar event drop diizinkan
+    event.preventDefault();
 };
 
 const onDrop = async (targetIndex: number) => {
     if (draggedIndex.value === null || draggedIndex.value === targetIndex) return;
 
-    // Geser elemen di dalam array lokal secara reaktif
     const movedItem = categories.value.splice(draggedIndex.value, 1)[0];
     categories.value.splice(targetIndex, 0, movedItem);
     draggedIndex.value = null;
 
-    // Susun ulang indeks urutan baru berdasarkan posisi array terkini untuk dikirim ke backend
     const payloadItems = categories.value.map((cat, idx) => ({
         id: cat.id,
         sort: idx
     }));
 
     try {
-        await axios.post('/api/categories/sort', { items: payloadItems });
+        await sortCategories(payloadItems);
         emit('updated');
     } catch (err) {
         error('Gagal', 'Gagal menyimpan urutan kategori.');
-        fetchCategories(); // Rollback ke data server jika gagal
+        await loadData();
     }
 };
 
-const handleDelete = async (item: any) => {
-    if (await confirm('Hapus Kategori?', `Apakah Anda yakin ingin menghapus kategori "${item.name}"?`)) {
-        try {
-            await axios.delete(`/api/categories/${item.id}`);
-            fetchCategories();
-            emit('updated');
-            success('Berhasil', 'Kategori berhasil dihapus.');
-        } catch (err: any) {
-            error('Gagal Menghapus', err.response?.data?.message || 'Kategori ini sedang digunakan.');
-        }
+const confirmDelete = (item: any) => {
+    itemToDelete.value = item;
+    isConfirmModalOpen.value = true;
+};
+
+const handleDelete = async () => {
+    if (!itemToDelete.value) return;
+    isDeleting.value = true;
+    try {
+        await deleteCategory(itemToDelete.value.id);
+        await loadData();
+        emit('updated');
+        success('Berhasil', 'Kategori berhasil dihapus.');
+        isConfirmModalOpen.value = false;
+    } catch (err: any) {
+        error('Gagal Menghapus', err.response?.data?.message || 'Kategori ini sedang digunakan.');
+    } finally {
+        isDeleting.value = false;
+        itemToDelete.value = null;
     }
 };
 
 watch(() => props.show, (newVal) => {
     if (newVal) {
-        fetchCategories();
+        loadData();
         newCategoryName.value = '';
         editingId.value = null;
     }
@@ -169,7 +176,6 @@ watch(() => props.show, (newVal) => {
                     @drop="onDrop(index)"
                     class="flex items-center justify-between p-2 rounded-lg bg-muted/40 border border-border/40 hover:bg-muted/70 transition-colors cursor-grab active:cursor-grabbing"
                 >
-                    <!-- Indikator Drag (Grip Icon) -->
                     <div class="text-muted-foreground/50 hover:text-muted-foreground mr-2 shrink-0 flex items-center select-none">
                         ⠿
                     </div>
@@ -202,7 +208,7 @@ watch(() => props.show, (newVal) => {
                         
                         <button 
                             type="button" 
-                            @click="handleDelete(item)"
+                            @click="confirmDelete(item)"
                             class="text-muted-foreground hover:text-destructive font-semibold text-sm px-1.5"
                         >
                             &times;
@@ -220,4 +226,14 @@ watch(() => props.show, (newVal) => {
             </div>
         </div>
     </div>
+
+    <ConifrmModal 
+        :show="isConfirmModalOpen"
+        title="Hapus Kategori?"
+        :message="`Apakah Anda yakin ingin menghapus kategori '${itemToDelete?.name || ''}'? Tindakan ini tidak dapat dibatalkan.`"
+        confirmText="Ya, Hapus"
+        :loading="isDeleting"
+        @close="isConfirmModalOpen = false"
+        @confirm="handleDelete"
+    />
 </template>

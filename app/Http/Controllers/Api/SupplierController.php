@@ -23,10 +23,11 @@ class SupplierController extends Controller
     public function store(Request $request): JsonResponse
     {
         $data = $request->validate([
-            'name'    => 'required|string|max:255',
-            'phone'   => 'nullable|string|max:20',
-            'email'   => 'nullable|email',
-            'address' => 'nullable|string',
+            'name'      => 'required|string|max:255',
+            'phone'     => 'nullable|string|max:20',
+            'email'     => 'nullable|email',
+            'address'   => 'nullable|string',
+            'is_active' => 'boolean',
         ]);
 
         $supplier = Supplier::create($data);
@@ -38,6 +39,7 @@ class SupplierController extends Controller
     {
         return response()->json($supplier->load('purchaseOrders'));
     }
+
 
     public function update(Request $request, Supplier $supplier): JsonResponse
     {
@@ -54,22 +56,37 @@ class SupplierController extends Controller
         return response()->json($supplier);
     }
 
-    public function destroy(Supplier $supplier): JsonResponse
+public function destroy(Supplier $supplier): JsonResponse
     {
+        if ($supplier->purchaseOrders()->exists()) {
+            return response()->json([
+                'message' => 'Supplier tidak dapat dihapus karena sudah memiliki riwayat transaksi pembelian.'
+            ], 422);
+        }
+
         $supplier->delete();
 
-        return response()->json(['message' => 'Supplier dihapus.']);
+        return response()->json(['message' => 'Supplier berhasil dihapus.']);
     }
 
     public function bulkDestroy(Request $request): JsonResponse
     {
-        // Ubah validasi agar menerima numeric (string angka tetap dianggap valid)
-    $request->validate([
+        $request->validate([
             'ids' => 'required|array',
             'ids.*' => 'required|uuid|exists:suppliers,id', 
         ]);
 
-        // Laravel secara otomatis akan mengubah string "1" menjadi integer 1 saat query
+        // Cek apakah ada supplier dari daftar ID yang memiliki relasi purchase orders
+        $suppliersWithPurchases = \App\Models\Supplier::whereIn('id', $request->ids)
+            ->has('purchaseOrders')
+            ->pluck('name');
+
+        if ($suppliersWithPurchases->isNotEmpty()) {
+            return response()->json([
+                'message' => 'Beberapa supplier terpilih tidak dapat dihapus karena sudah memiliki riwayat transaksi pembelian: ' . $suppliersWithPurchases->implode(', ')
+            ], 422);
+        }
+
         \App\Models\Supplier::whereIn('id', $request->ids)->delete();
 
         return response()->json(['message' => 'Supplier terpilih berhasil dihapus.']);

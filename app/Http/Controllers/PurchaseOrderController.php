@@ -10,4 +10,9 @@ class PurchaseOrderController extends Controller
     {
         return inertia('purchase/Index');
     }
+
+    public function show()
+    {
+        return inertia('purchase/Show');
+    }
 }

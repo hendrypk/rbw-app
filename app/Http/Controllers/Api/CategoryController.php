@@ -26,15 +26,17 @@ class CategoryController extends Controller
     public function store(Request $request)
     {
         $validated = $request->validate([
-            'name' => 'required|string|max:100|unique:categories,name',
-            'sort' => 'nullable|integer|min:0'
+            'name'      => 'required|string|max:100|unique:categories,name',
+            'sort'      => 'nullable|integer|min:0',
+            'outlet_id' => 'nullable|string|exists:outlets,id',
         ]);
 
         $category = Category::create([
             'id'         => (string) Str::uuid(),
             'name'       => $validated['name'],
             'is_visible' => true,
-            'sort'       => $validated['sort'] ?? 0
+            'sort'       => $validated['sort'] ?? 0,
+            'outlet_id'  => $validated['outlet_id'] ?? null,
         ]);
 
         return response()->json($category, 201);

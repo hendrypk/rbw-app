@@ -9,6 +9,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
 use Exception;
+use Illuminate\Support\Facades\DB;
 
 class AccountController extends Controller
 {
@@ -114,4 +115,97 @@ class AccountController extends Controller
             ], 422);
         }
     }
+public function updateOpeningBalances(Request $request): JsonResponse
+{
+    $request->validate([
+        'balances' => 'required|array',
+        'balances.*.id' => 'required|exists:accounts,id',
+        'balances.*.opening_balance' => 'required|numeric|min:0',
+        'effective_date' => 'required|date',
+    ]);
+
+    try {
+        // Validasi Kronologis: Tanggal saldo awal tidak boleh lebih baru dari jurnal terlama yang sudah ada
+        $oldestJournalDate = \App\Models\JournalEntry::min('entry_date');
+        
+        if ($oldestJournalDate && $request->effective_date > $oldestJournalDate) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Tanggal efektif saldo awal (' . $request->effective_date . ') tidak boleh lebih baru dari tanggal transaksi jurnal terlama (' . $oldestJournalDate . '). Saldo awal harus mendahului seluruh transaksi.'
+            ], 422);
+        }
+
+        DB::transaction(function () use ($request) {
+            $totalDebit = 0;
+            $totalCredit = 0;
+            $journalItemsData = [];
+
+            foreach ($request->balances as $item) {
+                $account = Account::find($item['id']);
+                if (!$account) continue;
+
+                $newOpening = (float) $item['opening_balance'];
+                $oldOpening = (float) $account->opening_balance;
+                $selisih = $newOpening - $oldOpening;
+
+                // Update opening_balance dan balance berjalan di model Account
+                $account->opening_balance = $newOpening;
+                $account->balance = (float) $account->balance + $selisih;
+                $account->save();
+
+                if ($newOpening > 0) {
+                    $isDebit = $account->normal_balance === 'debit';
+                    
+                    if ($isDebit) {
+                        $totalDebit += $newOpening;
+                    } else {
+                        $totalCredit += $newOpening;
+                    }
+
+                    // Format array disesuaikan dengan skema JournalItem (type & amount)
+                    $journalItemsData[] = [
+                        'account_id' => $account->id,
+                        'type'       => $isDebit ? 'debit' : 'credit',
+                        'amount'     => $newOpening,
+                    ];
+                }
+            }
+
+            // Validasi Keseimbangan (Double-Entry Balance Check)
+            if (round($totalDebit, 2) !== round($totalCredit, 2)) {
+                throw new \InvalidArgumentException("Total saldo Debit (" . number_format($totalDebit, 2, ',', '.') . ") dan Kredit (" . number_format($totalCredit, 2, ',', '.') . ") harus seimbang.");
+            }
+
+            // Simpan Jurnal Utama
+            $journalEntry = \App\Models\JournalEntry::create([
+                'outlet_id'      => session('active_outlet_id'),
+                'entry_date'     => $request->effective_date,
+                'description'    => 'Saldo Awal Periode Akuntansi',
+                'reference_type' => Account::class,
+                'reference_id'   => null,
+                'total_amount'   => $totalDebit,
+            ]);
+
+            // Simpan Item Jurnal
+            foreach ($journalItemsData as $jItem) {
+                $journalEntry->items()->create($jItem);
+            }
+        });
+    } catch (\InvalidArgumentException $e) {
+        return response()->json([
+            'success' => false,
+            'message' => $e->getMessage()
+        ], 422);
+    } catch (\Throwable $e) {
+        return response()->json([
+            'success' => false,
+            'message' => 'Gagal mencatat jurnal saldo awal: ' . $e->getMessage()
+        ], 500);
+    }
+
+    return response()->json([
+        'success' => true,
+        'message' => 'Saldo awal berhasil dicatat ke jurnal dan neraca seimbang.'
+    ]);
+}
 }

@@ -1,5 +1,6 @@
 import { ref } from 'vue';
 import axios from 'axios';
+import { useOutlet } from '@/composables/useOutlet';
 
 export interface Material {
     id: string;
@@ -19,43 +20,18 @@ export function useMaterials(currentOutletId?: any) {
     const isLoading = ref(false);
     const meta = ref<any>(null);
 
-const getOutletParam = () => {
-        // Cek jika parameter berupa Ref Vue atau fungsi, ambil .value-nya
-        let outletId = null;
-        if (currentOutletId) {
-            outletId = typeof currentOutletId === 'object' && 'value' in currentOutletId 
-                ? currentOutletId.value 
-                : (typeof currentOutletId === 'function' ? currentOutletId() : currentOutletId);
-        }
-        
-        // Fallback ke localStorage jika kosong atau bernilai 'all'
-        if (!outletId || outletId === 'all') {
-            outletId = localStorage.getItem('active_outlet_id');
-        }
+    const { getOutletParam } = useOutlet(currentOutletId);
 
-        return outletId && outletId !== 'all' ? outletId : null;
-    };
-
-    // Untuk halaman master material (pagination)
-    const fetchMaterials = async (
-        params: {
-            page?: number;
-            search?: string;
-            active?: boolean;
-        } = {}
-    ) => {
+    const fetchMaterials = async (params: Record<string, any> = {}) => {
         isLoading.value = true;
-
         try {
-            const outletId = getOutletParam();
-            const queryParams = outletId ? { ...params, outlet_id: outletId } : params;
+            const queryParams = getOutletParam(params);
 
             const { data } = await axios.get('/api/raw-materials', {
                 params: queryParams,
             });
 
             materials.value = data.data;
-
             const { data: _, ...pagination } = data;
             meta.value = pagination;
         } catch (error) {
@@ -65,11 +41,9 @@ const getOutletParam = () => {
         }
     };
 
-    // Untuk dropdown
     const fetchMaterialOptions = async () => {
         try {
-            const outletId = getOutletParam();
-            const params = outletId ? { outlet_id: outletId } : {};
+            const params = getOutletParam();
 
             const { data } = await axios.get('/api/raw-materials/options', {
                 params,

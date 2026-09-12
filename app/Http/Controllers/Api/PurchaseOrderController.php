@@ -317,4 +317,48 @@ class PurchaseOrderController extends Controller
             'message' => 'Data PO terpilih berhasil dihapus.'
         ]);
     }
+
+public function purchaseReturn(Request $request, PurchaseOrder $purchaseOrder, \App\Services\StockService $stockService): JsonResponse
+    {
+        $request->validate([
+            'return_date' => 'required|date',
+            'notes' => 'nullable|string|max:255',
+            'items' => 'required|array|min:1',
+            'items.*.purchase_order_item_id' => 'required|exists:purchase_order_items,id',
+            'items.*.qty' => 'required|numeric|min:0',
+        ]);
+
+        try {
+            $stockService->purchaseReturn(
+                purchaseOrder: $purchaseOrder,
+                itemsData: $request->items,
+                returnDate: $request->return_date,
+                notes: $request->notes
+            );
+        } catch (\InvalidArgumentException $e) {
+            return response()->json([
+                'success' => false,
+                'message' => $e->getMessage()
+            ], 422);
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::error('Gagal Retur PO: ' . $e->getMessage(), [
+                'file' => $e->getFile(),
+                'line' => $e->getLine(),
+                'po_id' => $purchaseOrder->id,
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Terjadi kesalahan sistem: ' . $e->getMessage()
+            ], 500);
+        }
+
+        $purchaseOrder->load(['supplier', 'items.rawMaterial', 'journalEntries.items.account']);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Retur pembelian per item berhasil dicatat.',
+            'data' => $purchaseOrder
+        ]);
+    }
 }

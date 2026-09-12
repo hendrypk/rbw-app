@@ -75,6 +75,7 @@ Route::middleware(['auth', 'verified'])->prefix('api')->name('api.')->group(func
 Route::middleware(['auth', 'verified', 'resolve.outlet'])->prefix('api')->name('api.')->group(function () {
         // 1. FINANCE / BACK OFFICE ONLY
     Route::prefix('finance')->group(function() {
+        Route::post('accounts/opening-balances', [AccountController::class, 'updateOpeningBalances']);
         Route::apiResource('accounts', AccountController::class);
         Route::apiResource('account-mappings', AccountMappingController::class);
         Route::apiResource('journal-entry', JournalEntryController::class);
@@ -86,8 +87,11 @@ Route::middleware(['auth', 'verified', 'resolve.outlet'])->prefix('api')->name('
     Route::apiResource('suppliers', SupplierController::class);
     Route::apiResource('customers', CustomerController::class);
     Route::apiResource('vouchers', VoucherController::class);
+    Route::post('/raw-materials/{rawMaterial}/adjust-stock', [RawMaterialController::class, 'adjustStock']);
+    Route::get('/raw-materials/{rawMaterial}/ledger', [App\Http\Controllers\Api\RawMaterialController::class, 'ledger']);
     Route::get('raw-materials/options', [RawMaterialController::class, 'options']);
     Route::apiResource('raw-materials', RawMaterialController::class);
+    Route::post('purchase-orders/{id}/return', [PurchaseOrderController::class, 'purchaseReturn']);
     Route::post('purchase-orders/{id}/pay-order', [PurchaseOrderController::class, 'payOrder']);
     Route::apiResource('purchase-orders', PurchaseOrderController::class);
     Route::get('menus/overhead-sync-status', [MenuController::class, 'checkOverheadSync']);

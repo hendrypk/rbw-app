@@ -8,6 +8,7 @@ import InputError from '@/components/InputError.vue';
 import { useAccount } from '@/composables/useAccount';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import DatePicker from '@/components/pos/DatePicker.vue';
+import { useSwal } from '@/composables/useSwal';
 
 const props = defineProps<{ 
     show: boolean, 
@@ -20,6 +21,7 @@ const { accounts, fetchAccounts } = useAccount();
 
 const processing = ref(false);
 const showPaymentForm = ref(false);
+const showReturnForm = ref(false); 
 const errors = ref<Record<string, any>>({});
 const activeTab = ref<'items' | 'payments'>('items');
 
@@ -40,6 +42,13 @@ const form = ref({
     payment_account_id: '',
     amount: 0,
     payment_date: getTodayLocal(),
+});
+
+// Form khusus untuk Retur Pembelian berbasis item
+const returnForm = ref({
+    return_date: getTodayLocal(),
+    notes: '',
+    items: [] as { purchase_order_item_id: string; raw_material_name: string; max_qty: number; qty: number; unit_price: number }[]
 });
 
 const cashBankAccounts = computed(() => {
@@ -73,6 +82,21 @@ watch(() => showPaymentForm.value, (isOpen) => {
     }
 });
 
+watch(() => showReturnForm.value, (isOpen) => {
+    if (isOpen && currentPo.value?.items) {
+        returnForm.value.return_date = getTodayLocal();
+        returnForm.value.notes = '';
+        returnForm.value.items = currentPo.value.items.map((item: any) => ({
+            purchase_order_item_id: item.id,
+            raw_material_name: item.raw_material?.name || 'Material',
+            max_qty: Number(item.qty || 0),
+            qty: 0,
+            unit_price: Number(item.unit_price || 0)
+        }));
+        errors.value = {};
+    }
+});
+
 const submitPayment = async () => {
     processing.value = true;
     errors.value = {};
@@ -86,6 +110,44 @@ const submitPayment = async () => {
     } catch (e: any) {
         if (e.response?.status === 422) {
             errors.value = e.response.data.errors;
+        }
+    } finally {
+        processing.value = false;
+    }
+};
+
+const { success, error: showError } = useSwal(); // Pastikan error di-rename agar tidak bentrok
+
+const submitReturn = async () => {
+    processing.value = true;
+    errors.value = {};
+
+    try {
+        const payload = {
+            return_date: returnForm.value.return_date,
+            notes: returnForm.value.notes,
+            items: returnForm.value.items.map(item => ({
+                purchase_order_item_id: item.purchase_order_item_id,
+                qty: Number(item.qty) || 0
+            }))
+        };
+
+        const response = await axios.post(`/api/purchase-orders/${currentPo.value.id}/return`, payload);
+        currentPo.value = response.data.data;
+        success('Berhasil', response.data.message || 'Retur berhasil dicatat.');
+        emit('saved', currentPo.value);
+        showReturnForm.value = false;
+        activeTab.value = 'payments';
+    } catch (e: any) {
+        if (e.response?.status === 422) {
+            if (e.response.data.errors) {
+                errors.value = e.response.data.errors;
+            }
+            if (e.response.data.message) {
+                showError('Gagal Validasi', e.response.data.message);
+            }
+        } else {
+            showError('Gagal', e.response?.data?.message || 'Terjadi kesalahan pada server.');
         }
     } finally {
         processing.value = false;
@@ -254,20 +316,90 @@ const submitPayment = async () => {
                     </div>
                 </div>
 
+                <!-- Return Form Card (Modal Input Retur Per Item) -->
+                <div v-if="showReturnForm" class="p-5 rounded-3xl bg-amber-50/50 dark:bg-zinc-900/80 border border-amber-200/60 dark:border-zinc-800 space-y-4">
+                    <h4 class="text-xs font-bold text-amber-900 dark:text-amber-400 tracking-wider">Form Retur Pembelian Per Item</h4>
+                    
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
+                        <div class="space-y-1.5">
+                            <Label class="font-semibold text-slate-500">Tanggal Retur</Label>
+                            <DatePicker v-model="returnForm.return_date" />
+                            <InputError :message="errors.return_date?.[0]" />
+                        </div>
+                        <div class="space-y-1.5 sm:col-span-2">
+                            <Label class="font-semibold text-slate-500">Catatan / Alasan Retur</Label>
+                            <Input v-model="returnForm.notes" placeholder="Contoh: Barang rusak / tidak sesuai spesifikasi" class="h-11 rounded-2xl border-slate-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 px-4" />
+                            <InputError :message="errors.notes?.[0]" />
+                        </div>
+                    </div>
+
+                    <!-- Tabel Item untuk Input Qty Retur -->
+                    <div class="space-y-2">
+                        <Label class="font-bold text-slate-700 dark:text-zinc-300">Daftar Qty Item yang Diretur</Label>
+                        <div class="rounded-2xl border border-amber-200/60 dark:border-zinc-800 overflow-hidden bg-card">
+                            <table class="w-full text-left border-collapse text-xs">
+                                <thead class="bg-amber-100/50 dark:bg-zinc-900 text-muted-foreground font-bold border-b border-amber-200/60 dark:border-zinc-800">
+                                    <tr>
+                                        <th class="px-4 py-3">Nama Material</th>
+                                        <th class="px-4 py-3 text-right w-24">Max Qty</th>
+                                        <th class="px-4 py-3 text-right w-32">Qty Retur</th>
+                                    </tr>
+                                </thead>
+                                <tbody class="divide-y divide-amber-100 dark:divide-zinc-800/60">
+                                    <tr v-for="(item, index) in returnForm.items" :key="item.purchase_order_item_id" class="hover:bg-amber-50/30 transition-colors">
+                                        <td class="px-4 py-3 font-semibold text-foreground">{{ item.raw_material_name }}</td>
+                                        <td class="px-4 py-3 text-right font-mono text-muted-foreground">{{ item.max_qty }}</td>
+<td class="px-4 py-3 text-right">
+    <Input 
+        type="number" 
+        :model-value="item.qty" 
+        @update:model-value="(val) => item.qty = Number(val) || 0"
+        :max="item.max_qty" 
+        min="0" 
+        step="any"
+        class="h-9 w-24 text-right font-mono font-bold rounded-xl bg-white dark:bg-zinc-900 ml-auto" 
+    />
+    <InputError :message="errors[`items.${index}.qty`]?.[0]" />
+</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <div class="flex justify-end gap-2 pt-1">
+                        <Button type="button" size="sm" variant="ghost" @click="showReturnForm = false" class="h-10 px-4 rounded-2xl text-xs font-semibold text-slate-500 hover:text-slate-900 cursor-pointer">Batal</Button>
+                        <Button type="button" size="sm" :disabled="processing" @click="submitReturn" class="h-10 px-5 rounded-2xl text-xs font-bold bg-amber-600 hover:bg-amber-700 text-white shadow-sm cursor-pointer">
+                            {{ processing ? 'Memproses...' : 'Konfirmasi Retur' }}
+                        </Button>
+                    </div>
+                </div>
+
             </div>
 
             <!-- Footer Actions -->
             <div class="px-6 py-4 border-t border-slate-100 dark:border-zinc-900 flex justify-between items-center shrink-0 bg-white dark:bg-zinc-950">
-                <div>
+                <div class="flex items-center gap-2">
                     <Button 
-                        v-if="currentPo?.status === 'received' && remainingDebt > 0 && !showPaymentForm" 
+                        v-if="currentPo?.status === 'received' && remainingDebt > 0 && !showPaymentForm && !showReturnForm" 
                         type="button" 
                         variant="outline" 
                         size="sm"
-                        @click="showPaymentForm = true"
+                        @click="showPaymentForm = true; showReturnForm = false;"
                         class="h-10 px-4 text-xs font-bold rounded-2xl border-slate-200 dark:border-zinc-800 cursor-pointer"
                     >
                         + Tambah Pembayaran Utang
+                    </Button>
+
+                    <Button 
+                        v-if="currentPo?.status === 'received' && !showReturnForm && !showPaymentForm" 
+                        type="button" 
+                        variant="outline" 
+                        size="sm"
+                        @click="showReturnForm = true; showPaymentForm = false;"
+                        class="h-10 px-4 text-xs font-bold rounded-2xl border-amber-200 text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-500/10 cursor-pointer"
+                    >
+                        Retur Pembelian
                     </Button>
                 </div>
                 <div>

@@ -16,6 +16,7 @@ class Category extends Model
         'id',
         'name',
         'is_visible',
+        'outlet_id',
     ];
 
     // Karena id menggunakan UUID (string), nonaktifkan auto-incrementing integer bawaan Eloquent
