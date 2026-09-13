@@ -18,10 +18,11 @@ import SelectValue from '@/components/ui/select/SelectValue.vue';
 import SelectContent from '@/components/ui/select/SelectContent.vue';
 import SelectItem from '@/components/ui/select/SelectItem.vue';
 import ConifrmModal from '@/components/ConifrmModal.vue';
+import { useOutlet } from '@/composables/useOutlet.js';
 
 defineOptions({ layout: AppSidebarLayout });
 
-const { confirm, success, error } = useSwal();
+const { success, error } = useSwal();
 const { menus, isLoading, fetchMenus } = useMenus();
 const { fetchMaterialOptions } = useMaterials();
 const { categories, fetchCategories } = useCategories();
@@ -60,16 +61,21 @@ const isSyncingRecipe = ref(false);
 const isRecipeOutOfSync = ref(false);
 const showRecipeBanner = ref(false);
 
+const { getOutletId, getOutletParam } = useOutlet();
+
 const loadData = () => {
-    const currentActiveOutlet = localStorage.getItem('active_outlet_id') || 'all';
-    const params = { outlet_id: currentActiveOutlet };
+    const params = getOutletParam();
     fetchMenus(params);
     fetchCategories(params);
+    checkSyncStatus();
+    checkRecipeSyncStatus();
 };
 
 const handleOutletChanged = () => {
-    selectedOutletId.value = localStorage.getItem('active_outlet_id') || 'all';
+    selectedOutletId.value = getOutletId() || 'all';
     loadData();
+    checkSyncStatus();
+    checkRecipeSyncStatus();
 };
 
 const handleCategoryUpdated = () => {
@@ -79,10 +85,10 @@ const handleCategoryUpdated = () => {
 const sortedCategories = computed(() => {
     return [...categories.value].sort((a, b) => (a.sort ?? 0) - (b.sort ?? 0));
 });
-
 const checkSyncStatus = async () => {
     try {
-        const res = await axios.get('/api/menus/overhead-sync-status');
+        const params = getOutletParam();
+        const res = await axios.get('/api/menus/overhead-sync-status', { params });
         isOutOfSync.value = res.data.is_out_of_sync;
         if (res.data.is_out_of_sync) showBanner.value = true; 
         masterOverheadTotal.value = res.data.master_total;
@@ -91,9 +97,29 @@ const checkSyncStatus = async () => {
     }
 };
 
+const handleSyncNow = async () => {
+    const isConfirmed = await confirm('Sinkronkan Overhead?', `Nilai overhead di semua menu akan disesuaikan menjadi Rp ${masterOverheadTotal.value.toLocaleString()}.`);
+    if (isConfirmed) {
+        isSyncing.value = true;
+        try {
+            const payload = getOutletParam();
+            await axios.post('/api/menus/overhead-sync', payload);
+            success('Berhasil', 'Seluruh menu berhasil disinkronkan.');
+            isOutOfSync.value = false;
+            showBanner.value = false;
+            loadData();
+        } catch (err) {
+            error('Gagal', 'Terjadi kesalahan saat sinkronisasi.');
+        } finally {
+            isSyncing.value = false;
+        }
+    }
+};
+
 const checkRecipeSyncStatus = async () => {
     try {
-        const res = await axios.get('/api/menus/recipe-sync-status');
+        const params = getOutletParam();
+        const res = await axios.get('/api/menus/recipe-sync-status', { params });
         isRecipeOutOfSync.value = res.data.is_out_of_sync;
         if (res.data.is_out_of_sync) showRecipeBanner.value = true; 
     } catch (err) {
@@ -106,7 +132,8 @@ const executeRecipeSync = async () => {
     if (isConfirmed) {
         isSyncingRecipe.value = true;
         try {
-            await axios.post('/api/menus/sync-recipes');
+            const payload = getOutletParam();
+            await axios.post('/api/menus/sync-recipes', payload);
             showRecipeBanner.value = false;
             isRecipeOutOfSync.value = false;
             success('Berhasil', 'Seluruh resep menu berhasil disinkronkan.');
@@ -118,7 +145,6 @@ const executeRecipeSync = async () => {
         }
     }
 };
-
 const filteredAndSortedMenus = computed(() => {
     let result = [...menus.value];
 
@@ -230,23 +256,7 @@ const bulkDelete = () => {
     isConfirmModalOpen.value = true;
 };
 
-const handleSyncNow = async () => {
-    const isConfirmed = await confirm('Sinkronkan Overhead?', `Nilai overhead di semua menu akan disesuaikan menjadi Rp ${masterOverheadTotal.value.toLocaleString()}.`);
-    if (isConfirmed) {
-        isSyncing.value = true;
-        try {
-            await axios.post('/api/menus/overhead-sync');
-            success('Berhasil', 'Seluruh menu berhasil disinkronkan.');
-            isOutOfSync.value = false;
-            showBanner.value = false;
-            loadData();
-        } catch (err) {
-            error('Gagal', 'Terjadi kesalahan saat sinkronisasi.');
-        } finally {
-            isSyncing.value = false;
-        }
-    }
-};
+
 
 onMounted(() => {
     loadData();

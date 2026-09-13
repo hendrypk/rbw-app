@@ -418,7 +418,7 @@ onBeforeUnmount(() => {
 
                 <!-- Cart Items List -->
                 <div class="flex-1 overflow-y-auto custom-scrollbar px-3 py-2">
-                    <div v-if="cart.length === 0" class="flex flex-col items-center justify-center h-full text-slate-400 gap-3 opacity-60 min-h-[150px]">
+                    <div v-if="cart.length === 0" class="flex flex-col items-center justify-center h-full text-slate-400 gap-3 opacity-60 min-h-37.5">
                         <svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="21" r="1"/><circle cx="19" cy="21" r="1"/><path d="M2.05 2.05h2l2.66 12.42a2 2 0 0 0 2 1.58h9.78a2 2 0 0 0 1.95-1.57l1.65-7.43H5.12"/></svg>
                         <span class="text-sm font-medium">Keranjang kosong</span>
                     </div>
@@ -630,7 +630,7 @@ onBeforeUnmount(() => {
                 >
                     <!-- Placeholder Foto Menu (Simulasi Gambar ala Apple Card) -->
                     <div class="w-full h-32 bg-slate-100 dark:bg-zinc-800 relative overflow-hidden flex items-center justify-center">
-                        <div class="absolute inset-0 bg-gradient-to-t from-black/40 via-transparent to-transparent opacity-60 z-10"></div>
+                        <div class="absolute inset-0 bg-linear-to-t from-black/40 via-transparent to-transparent opacity-60 z-10"></div>
                         <!-- Inisial besar di tengah placeholder foto -->
                         <span class="text-3xl font-black text-slate-300 dark:text-zinc-700 tracking-tighter uppercase font-mono group-hover:scale-110 transition-transform duration-300">
                             {{ menu.name.substring(0, 2) }}

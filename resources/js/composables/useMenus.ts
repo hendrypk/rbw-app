@@ -1,6 +1,6 @@
-// resources/js/composables/useMenus.ts
 import { ref } from 'vue';
 import axios from 'axios';
+import { useOutlet } from './useOutlet';
 
 export interface MenuPrice {
     id: string;
@@ -12,6 +12,7 @@ export interface MenuPrice {
 
 export interface Menu {
     id: string;
+    outlet_id: string;
     name: string;
     category?: {
         id: string;
@@ -32,16 +33,29 @@ export interface Menu {
     prices?: MenuPrice[];
 }
 
-export function useMenus() {
+interface MenuFilters {
+    search?: string;
+    category_id?: string;
+    [key: string]: any;
+}
+
+export function useMenus(currentOutletId?: any) {
     const menus = ref<Menu[]>([]); 
     const isLoading = ref(false);
     const meta = ref<any>(null);
+    const { getOutletParam } = useOutlet(currentOutletId);
 
-    const fetchMenus = async (params: { page?: number; search?: string } = {}) => {
+    const fetchMenus = async (filters: MenuFilters = {}) => {
         isLoading.value = true;
         try {
-            const response = await axios.get('/api/menus', { params });
-            menus.value = response.data;
+            const outletParam = getOutletParam();
+            const queryParams = { ...filters, ...outletParam };
+            const response = await axios.get('/api/menus', { params: queryParams });
+            menus.value = response.data.data ?? response.data;
+            if (response.data.data && response.data.current_page) {
+                const { data, ...paginationInfo } = response.data;
+                meta.value = paginationInfo;
+            }
         } catch (error) {
             console.error("Gagal mengambil data menu:", error);
         } finally {
@@ -49,5 +63,10 @@ export function useMenus() {
         }
     };
 
-    return { menus, isLoading, meta, fetchMenus };
+    return { 
+        menus, 
+        isLoading, 
+        meta, 
+        fetchMenus 
+    };
 }

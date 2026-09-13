@@ -13,7 +13,7 @@ import PurchaseOrderDetailModal from './PurchaseOrderDetailModal.vue';
 defineOptions({ layout: AppSidebarLayout });
 
 const { purchaseOrders, isLoading, fetchPurchaseOrders } = usePurchaseOrders();
-const { confirm, success, error } = useSwal();
+const { success, error } = useSwal();
 
 const showModal = ref(false);
 const showViewModal = ref(false); // Tambahkan ini

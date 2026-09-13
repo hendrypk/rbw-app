@@ -35,9 +35,10 @@ watch([searchQuery, selectedCategoryFilter], () => {
 const categoryLabels: Record<string, string> = {
     '1': 'Kas & Bank',
     '2': 'Pendapatan',
-    '3': 'Kewajiban',
-    '4': 'Ekuitas',
-    '5': 'Biaya',
+    '3': 'Harga Pokok Pendapatan',
+    '4': 'Kewajiban',
+    '5': 'Ekuitas',
+    '6': 'Biaya',
 };
 
 const getCategoryLabel = (category: string) => categoryLabels[category] ?? '-';

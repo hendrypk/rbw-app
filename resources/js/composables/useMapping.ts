@@ -1,15 +1,15 @@
 import { ref } from 'vue';
 import axios from 'axios';
 import { toast } from 'vue-sonner';
+import { useOutlet } from './useOutlet';
 
-// Struktur data tunggal terstandarisasi sesuai database
 export interface Mapping {
     id: string;
+    outlet_id?: string;
     transaction_type: string;
     debit_account_id: string;
     credit_account_id: string;
     description_template: string;
-    // Tambahkan relasi opsional jika dari backend mereturn object COA untuk tampilan tabel
     debit_account?: {
         id: string;
         code: string;
@@ -22,16 +22,19 @@ export interface Mapping {
     };
 }
 
-export function useMapping() {
+export function useMapping(currentOutletId?: any) {
     const mappings = ref<Mapping[]>([]);
     const loading = ref(false);
+    const { getOutletParam } = useOutlet(currentOutletId);
 
-    // Ambil data seluruh data mapping dari backend
-    const fetchMappings = async () => {
+    const fetchMappings = async (filters: Record<string, any> = {}) => {
         try {
             loading.value = true;
-            const response = await axios.get('/api/finance/account-mappings');
-            // Menyesuaikan jika API Anda membungkus data di response.data.data
+            const outletParam = getOutletParam();
+            const queryParams = { ...filters, ...outletParam };
+            const response = await axios.get('/api/finance/account-mappings', {
+                params: queryParams,
+            });
             mappings.value = response.data.data || response.data;
         } catch (error: any) {
             toast.error('Gagal mengambil data mapping akun');
@@ -41,11 +44,13 @@ export function useMapping() {
         }
     };
 
-    // Update data mapping berdasarkan UUID
     const updateMapping = async (id: string, payload: Partial<Mapping>) => {
         try {
-            const response = await axios.put(`/api/finance/account-mappings/${id}`, payload);
+            const outletParam = getOutletParam();
+            const dataToSubmit = { ...payload, ...outletParam };
+            const response = await axios.put(`/api/finance/account-mappings/${id}`, dataToSubmit);
             toast.success('Pemetaan akun berhasil diperbarui!');
+            await fetchMappings();
             return response.data;
         } catch (error: any) {
             const errMsg = error.response?.data?.message || 'Gagal menyimpan perubahan pemetaan';

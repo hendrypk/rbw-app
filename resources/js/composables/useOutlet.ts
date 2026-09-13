@@ -10,9 +10,9 @@ export function useOutlet(targetOutlet?: MaybeRef<string | null | undefined>) {
         let outletId = unref(targetOutlet);
 
         // Jika berupa fungsi (getter), eksekusi
-        if (typeof targetOutlet === 'function') {
-            outletId = targetOutlet();
-        }
+        // if (typeof targetOutlet === 'function') {
+        //     outletId = targetOutlet();
+        // }
 
         // Fallback ke localStorage jika kosong atau bernilai 'all'
         if (!outletId || outletId === 'all') {

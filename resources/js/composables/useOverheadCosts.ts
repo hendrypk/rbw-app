@@ -11,21 +11,29 @@ export interface OverheadCost {
     is_active: boolean;
 }
 
-export function useOverheadCosts() {
+interface OverheadFilters {
+    search?: string;
+    type?: string;
+    [key: string]: any;
+}
+
+export function useOverheadCosts(currentOutletId?: any) {
     const overheads = ref<OverheadCost[]>([]);
     const isLoading = ref(false);
     const meta = ref<any>(null);
-    const { getOutletParam } = useOutlet();
+    const { getOutletParam } = useOutlet(currentOutletId);
 
-    const fetchOverheads = async (params: { page?: number; search?: string; type?: string } = {}) => {
+    const fetchOverheads = async (filters: OverheadFilters = {}) => {
         isLoading.value = true;
         try {
             const outletParam = getOutletParam();
-            const queryParams = { ...params, ...outletParam };
+            const queryParams = { ...filters, ...outletParam };
             const response = await axios.get('/api/overhead-costs', { params: queryParams });
-            overheads.value = response.data.data;
-            const { data, ...paginationInfo } = response.data;
-            meta.value = paginationInfo;
+            overheads.value = response.data.data ?? response.data;
+            if (response.data.data && response.data.current_page) {
+                const { data, ...paginationInfo } = response.data;
+                meta.value = paginationInfo;
+            }
         } catch (error) {
             console.error("Gagal memuat overhead costs:", error);
         } finally {
@@ -33,5 +41,10 @@ export function useOverheadCosts() {
         }
     };
 
-    return { overheads, isLoading, meta, fetchOverheads };
+    return {
+        overheads,
+        isLoading,
+        meta,
+        fetchOverheads,
+    };
 }

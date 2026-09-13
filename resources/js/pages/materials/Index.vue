@@ -208,7 +208,7 @@ const bulkDelete = () => {
 
             <div v-else-if="materials.length > 0" class="w-full">
                 <div class="overflow-x-auto rounded-2xl border border-border/70 bg-card shadow-xs w-full">
-                    <table class="w-full text-sm text-left min-w-[850px]">
+                    <table class="w-full text-sm text-left min-w-212.5">
                         <thead class="bg-secondary/60 text-muted-foreground text-xs border-b border-border/70">
                             <tr>
                                 <th class="px-5 py-3.5 w-10">

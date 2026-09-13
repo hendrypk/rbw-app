@@ -14,11 +14,14 @@ defineOptions({ layout: AppSidebarLayout });
 
 const { overheads, isLoading, fetchOverheads } = useOverheadCosts();
 const { success, error } = useSwal();
+const { getOutletId, getOutletParam } = useOutlet();
+
 
 const showModal = ref(false);
 const showViewModal = ref(false);
 const activeOverhead = ref(null);
 const selectedIds = ref<string[]>([]);
+const activeCategoryId = ref<string>('all');
 const selectedOutletId = ref<string>(localStorage.getItem('active_outlet_id') || 'all');
 
 
@@ -28,13 +31,12 @@ const openView = (item: any) => { activeOverhead.value = item; showViewModal.val
 
 
 const loadData = () => {
-    const currentActiveOutlet = localStorage.getItem('active_outlet_id') || 'all';
-    const params = { outlet_id: currentActiveOutlet };
+    const params = getOutletParam();
     fetchOverheads(params);
 };
 
 const handleOutletChanged = () => {
-    selectedOutletId.value = localStorage.getItem('active_outlet_id') || 'all';
+    selectedOutletId.value = getOutletId() || 'all';
     loadData();
 };
 

@@ -232,36 +232,54 @@ class MenuController extends Controller
     }
 
     // 1. Method untuk cek apakah nominal overhead di menu sama dengan master yang aktif
-    public function checkOverheadSync(): JsonResponse
+    public function checkOverheadSync(Request $request): JsonResponse
     {
-        // Hitung total nominal semua master overhead yang sedang aktif saat ini
-        $currentMasterTotal = (float) OverheadCost::where('is_active', true)->sum('amount');
+        $outletId = $request->input('outlet_id');
 
-        // Cek apakah ada menu aktif yang nilai overhead_cost-nya tidak sama dengan total master aktif
-        $isOutofSync = Menu::where('is_active', true)
-            ->where('overhead_cost', '!=', $currentMasterTotal)
-            ->exists();
+        $query = OverheadCost::where('is_active', true);
+        if ($outletId && $outletId !== 'all') {
+            $query->where('outlet_id', $outletId);
+        }
+        $currentMasterTotal = (float) $query->sum('amount');
+
+        $menuQuery = Menu::where('is_active', true)
+            ->where('overhead_cost', '!=', $currentMasterTotal);
+        
+        if ($outletId && $outletId !== 'all') {
+            $menuQuery->where('outlet_id', $outletId);
+        }
+        
+        $isOutofSync = $menuQuery->exists();
 
         return response()->json([
             'is_out_of_sync' => $isOutofSync,
             'master_total' => $currentMasterTotal
         ]);
     }
-
-    // 2. Method untuk eksekusi sync massal dan kalkulasi ulang HPP & Harga Jual tiap menu
-    public function syncOverhead(): JsonResponse
+    
+    public function syncOverhead(Request $request): JsonResponse
     {
-        $currentMasterTotal = (float) OverheadCost::where('is_active', true)->sum('amount');
+        $outletId = $request->input('outlet_id');
+
+        $query = OverheadCost::where('is_active', true);
         
-        // Ambil semua menu yang perlu diupdate
-        $menusToUpdate = Menu::where('is_active', true)->get();
+        if ($outletId && $outletId !== 'all') {
+            $query->where('outlet_id', $outletId);
+        }
+
+        $currentMasterTotal = (float) $query->sum('amount');
+        
+        $menuQuery = Menu::where('is_active', true);
+        
+        if ($outletId && $outletId !== 'all') {
+            $menuQuery->where('outlet_id', $outletId);
+        }
+
+        $menusToUpdate = $menuQuery->get();
 
         foreach ($menusToUpdate as $menu) {
-            // Update nominal overhead di menu
             $menu->update(['overhead_cost' => $currentMasterTotal]);
 
-            // Panggil kembali MenuService Anda untuk kalkulasi ulang resep + harga jual per channel
-            // Asumsi struktur service Anda: $this->menuService->recalculateMenuPrices($menu);
             $this->menuService->saveRecipesAndPrices(
                 $menu, 
                 $menu->recipes->toArray(), 
@@ -273,10 +291,9 @@ class MenuController extends Controller
         }
 
         return response()->json([
-            'message' => 'Berhasil menyinkronkan overhead cost ke seluruh menu produksi.'
+            'message' => 'Berhasil menyinkronkan overhead cost ke seluruh menu produksi pada outlet ini.'
         ]);
     }
-
     public function checkRecipeSync(): JsonResponse
     {
         $isOutofSync = Menu::where('menus.is_active', true)

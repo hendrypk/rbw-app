@@ -14,14 +14,19 @@ class AccountMappingController extends Controller
      * Menampilkan daftar semua pemetaan akun beserta relasi COA-nya.
      * Dipanggil oleh `fetchMappings` di frontend.
      */
-    public function index(): JsonResponse
+public function index(Request $request): JsonResponse
     {
         try {
-            // Load relasi debitAccount dan creditAccount agar frontend bisa mereturn nama & kode akun
-            $mappings = AccountMapping::with(['debitAccount', 'creditAccount'])->get();
+            $outletId = $request->input('outlet_id');
 
-            // Transformasi key agar sesuai dengan camelCase/snakeCase interface di Vue (jika diperlukan)
-            // Di sini kita return langsung karena frontend sudah disesuaikan dengan snake_case bawaan Eloquent
+            $query = AccountMapping::with(['debitAccount', 'creditAccount']);
+
+            if ($outletId && $outletId !== 'all') {
+                $query->where('outlet_id', $outletId);
+            }
+
+            $mappings = $query->get();
+
             return response()->json([
                 'success' => true,
                 'data'    => $mappings
@@ -36,28 +41,28 @@ class AccountMappingController extends Controller
             ], 500);
         }
     }
-
     /**
      * Memperbarui pemetaan akun (Debet, Kredit, dan Template Keterangan).
      * Dipanggil oleh `updateMapping` di frontend.
      */
+
     public function update(Request $request, string $id): JsonResponse
     {
-        // 1. Validasi input disesuaikan dengan key database penampung relasi COA Anda
         $validated = $request->validate([
-            'debit_account_id'     => 'nullable|uuid|exists:accounts,id',
-            'credit_account_id'    => 'nullable|uuid|exists:accounts,id',
-            'description_template' => 'nullable|string|max:500', // Ditangkap dari Vue
+            'outlet_id'            => 'nullable|string',
+            'debit_account_id'     => 'nullable|string',
+            'credit_account_id'    => 'nullable|string',
+            'description_template' => 'nullable|string|max:500',
         ]);
 
         try {
             $accountMapping = AccountMapping::findOrFail($id);
 
-            // 2. Map payload Vue 'description_template' ke kolom fisik DB 'template'
             $accountMapping->update([
-                'debit_account_id'  => $validated['debit_account_id'],
-                'credit_account_id' => $validated['credit_account_id'],
-                'description_template'          => $validated['description_template'], // Disimpan ke kolom 'template'
+                'debit_account_id'     => !empty($validated['debit_account_id']) ? $validated['debit_account_id'] : null,
+                'credit_account_id'    => !empty($validated['credit_account_id']) ? $validated['credit_account_id'] : null,
+                'description_template' => $validated['description_template'] ?? null,
+                'outlet_id'            => !empty($validated['outlet_id']) ? $validated['outlet_id'] : $accountMapping->outlet_id,
             ]);
 
             return response()->json([
@@ -67,11 +72,11 @@ class AccountMappingController extends Controller
             ], 200);
 
         } catch (\Exception $e) {
-            Log::error('Error updating account mapping UUID ' . $id . ': ' . $e->getMessage());
+            Log::error('Error updating account mapping UUID ' . $id . ': ' . $e->getMessage() . ' | Trace: ' . $e->getTraceAsString());
 
             return response()->json([
                 'success' => false,
-                'message' => 'Gagal menyimpan perubahan aturan pemetaan akun.'
+                'message' => 'Gagal menyimpan perubahan aturan pemetaan akun: ' . $e->getMessage()
             ], 500);
         }
     }

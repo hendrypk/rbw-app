@@ -3,10 +3,11 @@ import axios from 'axios';
 import { useOutlet } from './useOutlet';
 
 export interface Account {
-    id: string;
+    id?: string;
+    outlet_id?: string;
     category: string;
-    account_number: string;
-    code: string;
+    account_number?: string;
+    code?: string;
     name: string;
     normal_balance: 'debit' | 'credit';
     balance?: number | string;

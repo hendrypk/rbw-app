@@ -1,22 +1,41 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue';
+import { ref, onMounted, watch } from 'vue';
 import Button from '@/components/ui/button/Button.vue';
 import MappingModal from './MappingModal.vue';
 import { useMapping, type Mapping } from '@/composables/useMapping';
+import { useOutlet } from '@/composables/useOutlet';
 
-// Menggunakan logika state terpusat dari composable
+const { getOutletId, getOutletParam } = useOutlet();
 const { mappings, loading, fetchMappings, updateMapping } = useMapping();
+const selectedOutletId = ref<string>(localStorage.getItem('active_outlet_id') || 'all');
 
 const showModal = ref(false);
 const selectedMapping = ref<Mapping | null>(null);
 
-onMounted(() => {
+const loadData = () => {
+    const params = getOutletParam();
+    fetchMappings(params);
+};
+
+const handleOutletChanged = () => {
+    selectedOutletId.value = getOutletId() || 'all';
+    loadData();
+};
+
+
+onMounted(async () => {
+    window.addEventListener('outlet-changed', handleOutletChanged);
     fetchMappings();
+});
+
+watch(getOutletId, () => {
+    loadData();
 });
 
 const editMapping = (mapping: Mapping) => {
     selectedMapping.value = {
         id: mapping.id,
+        outlet_id: mapping.outlet_id,
         transaction_type: mapping.transaction_type,
         debit_account_id: mapping.debit_account_id || mapping.debit_account?.id || '',
         credit_account_id: mapping.credit_account_id || mapping.credit_account?.id || '',
@@ -28,6 +47,7 @@ const editMapping = (mapping: Mapping) => {
 const saveMapping = async (updated: Mapping) => {
     try {
         await updateMapping(updated.id, {
+            outlet_id: updated.outlet_id,
             debit_account_id: updated.debit_account_id,
             credit_account_id: updated.credit_account_id,
             description_template: updated.description_template
@@ -37,6 +57,7 @@ const saveMapping = async (updated: Mapping) => {
         console.error('Gagal memperbarui pemetaan akun:', error);
     }
 };
+
 </script>
 
 <template>
@@ -44,7 +65,7 @@ const saveMapping = async (updated: Mapping) => {
         <div class="border-b pb-5 border-border/60">
             <h1 class="text-2xl font-bold tracking-tight text-foreground">Account Mapping</h1>
             <p class="text-xs text-muted-foreground mt-1">
-                Atur relasi otomasi jurnal berpasangan dari setiap aktivitas pemicu (*system trigger*) agar pembukuan otomatis berjalan.
+                Atur relasi otomasi jurnal berpasangan dari setiap aktivitas pemicu (*system trigger*) agar pembukuan otomatis berjalan berdasarkan outlet aktif.
             </p>
         </div>
 

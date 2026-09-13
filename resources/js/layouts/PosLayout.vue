@@ -239,7 +239,7 @@ defineProps<{
         </main>
 
         <div v-if="isOutletModalOpen" class="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-            <div class="bg-white dark:bg-zinc-950 rounded-[2rem] max-w-md w-full p-6 border border-slate-200 dark:border-zinc-800 shadow-2xl space-y-5 animate-in fade-in zoom-in-95 duration-200">
+            <div class="bg-white dark:bg-zinc-950 rounded-4xl max-w-md w-full p-6 border border-slate-200 dark:border-zinc-800 shadow-2xl space-y-5 animate-in fade-in zoom-in-95 duration-200">
                 <div class="flex items-center gap-3 border-b border-slate-100 dark:border-zinc-900 pb-4">
                     <div class="p-3 bg-primary/10 text-primary rounded-2xl">
                         <Store class="h-6 w-6" />

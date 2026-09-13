@@ -246,7 +246,7 @@ watch(() => props.show, (newVal) => {
             </div>
 
             <div v-else-if="historyList.length > 0" class="overflow-x-auto rounded-2xl border border-border/70 bg-card shadow-xs">
-                <table class="w-full text-left min-w-[750px]">
+                <table class="w-full text-left min-w-187.5">
                     <thead class="bg-secondary/60 text-muted-foreground border-b border-border/70 text-xs">
                         <tr>
                             <th class="px-5 py-4 font-bold">Waktu</th>

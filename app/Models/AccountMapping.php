@@ -2,16 +2,18 @@
 
 namespace App\Models;
 
+use App\Concerns\BelongsToOutlet;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class AccountMapping extends Model
 {
-    use HasUuids;
+    use HasUuids, BelongsToOutlet;
 
     protected $fillable = [
         'transaction_event',   // Sesuai seeder & data dummy
+        'outlet_id',
         'debit_account_id',
         'credit_account_id',
         'template'             // Ganti description_template menjadi template agar match ke DB

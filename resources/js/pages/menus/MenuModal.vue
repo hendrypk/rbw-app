@@ -247,7 +247,7 @@ const removeRecipe = (index: number) => form.value.recipes.splice(index, 1);
                         
                         <div class="md:col-span-7 space-y-2">
                             <Label class="text-xs font-semibold text-slate-500 tracking-wide">Kategori Menu (Multi-select)</Label>
-                            <div class="flex flex-wrap gap-1.5 p-2.5 border border-slate-200 dark:border-zinc-800 rounded-2xl bg-slate-50/60 dark:bg-zinc-900/50 min-h-[44px] max-h-32 overflow-y-auto shadow-2xs">
+                            <div class="flex flex-wrap gap-1.5 p-2.5 border border-slate-200 dark:border-zinc-800 rounded-2xl bg-slate-50/60 dark:bg-zinc-900/50 min-h-11 max-h-32 overflow-y-auto shadow-2xs">
                                 <label 
                                     v-for="cat in userCategories" 
                                     :key="cat.id" 
@@ -279,10 +279,10 @@ const removeRecipe = (index: number) => form.value.recipes.splice(index, 1);
                                 <span class="text-[11px] font-semibold text-slate-400 font-mono">Total HPP: {{ currency(totalHpp) }}</span>
                             </div>
                     
-                            <div class="space-y-2 max-h-[300px] overflow-y-auto pr-1 custom-scrollbar">
+                            <div class="space-y-2 max-h-75 overflow-y-auto pr-1 custom-scrollbar">
                                 <div v-for="(rec, index) in form.recipes" :key="index" class="flex items-center gap-2 bg-slate-50/60 dark:bg-zinc-900/40 p-2.5 rounded-2xl border border-slate-200/80 dark:border-zinc-800/80 shadow-2xs">
                                     <Select v-model="rec.raw_material_id">
-                                        <SelectTrigger class="h-9 rounded-xl border-slate-200 dark:border-zinc-800 bg-slate-50 dark:bg-zinc-900 px-3 text-xs font-bold hover:bg-slate-100 dark:hover:bg-zinc-800 transition-colors w-[180px] shadow-sm">
+                                        <SelectTrigger class="h-9 rounded-xl border-slate-200 dark:border-zinc-800 bg-slate-50 dark:bg-zinc-900 px-3 text-xs font-bold hover:bg-slate-100 dark:hover:bg-zinc-800 transition-colors w-45 shadow-sm">
                                             <div class="flex items-center gap-2 truncate text-slate-700 dark:text-zinc-200">
                                                 <SelectValue placeholder="Pilih Bahan" class="truncate" />
                                             </div>
