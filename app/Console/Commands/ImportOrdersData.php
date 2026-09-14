@@ -74,7 +74,7 @@ class ImportOrdersData extends Command
                     'transaction_at' => $transDate,
                     'final_total'    => $first['Amount'] ?? 0,
                     'created_at'     => $createdAt,
-                    'updated_at'     => now(),
+                    'updated_at'     => $createdAt,
                     'outlet_id'      => $outletId
                 ]);
 
@@ -89,8 +89,8 @@ class ImportOrdersData extends Command
                         'menu_id'      => $menu ? $menu->id : null,
                         'quantity'     => $item['Qty'] ?? 1,
                         'price'        => $item['Price'] ?? 0,
-                        'created_at'   => now(),
-                        'updated_at'   => now(),
+                        'created_at'   => $createdAt,
+                        'updated_at'   => $createdAt,
                     ];
                 }
 
