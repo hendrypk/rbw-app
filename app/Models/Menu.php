@@ -15,7 +15,7 @@ class Menu extends Model
     use HasUuids, SoftDeletes;
 
     protected $fillable = [
-        'name', 'category_id', 'description', 'image_path', 'hpp', 'is_active', 'overhead_cost', 'outlet_id'
+        'name', 'code', 'category_id', 'description', 'image_path', 'hpp', 'is_active', 'overhead_cost', 'outlet_id'
     ];
 
     protected $casts = [
@@ -48,7 +48,7 @@ class Menu extends Model
     public function categories(): BelongsToMany
     {
         return $this->belongsToMany(Category::class, 'category_menu', 'menu_id', 'category_id')
-                    ->using(CategoryMenu::class) 
+                    ->using(CategoryMenu::class)
                     ->withPivot('sort')
                     ->withTimestamps();
     }
@@ -63,5 +63,5 @@ class Menu extends Model
     public function orderItems(): HasMany
     {
         return $this->hasMany(OrderItem::class);
-    }   
+    }
 }

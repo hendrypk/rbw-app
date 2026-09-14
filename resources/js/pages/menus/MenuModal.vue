@@ -343,7 +343,7 @@ const removeRecipe = (index: number) => form.value.recipes.splice(index, 1);
                         <div class="lg:col-span-6 space-y-4">
                             <h3 class="text-xs font-bold uppercase tracking-wider text-slate-400">Harga Jual & Margin (Multi-Channel)</h3>
                             
-                            <div class="space-y-2.5 max-h-[350px] overflow-y-auto pr-1 custom-scrollbar">
+                            <div class="space-y-2.5 max-h-87.5 overflow-y-auto pr-1 custom-scrollbar">
                                 <div v-for="price in form.prices" :key="price.channel" class="flex items-center justify-between p-3 bg-slate-50/60 dark:bg-zinc-900/40 rounded-2xl border border-slate-200/80 dark:border-zinc-800/80 shadow-2xs gap-3">
                                     <div class="w-28 shrink-0">
                                         <span class="font-bold text-xs capitalize text-slate-800 dark:text-zinc-200 block">{{ price.channel }}</span>

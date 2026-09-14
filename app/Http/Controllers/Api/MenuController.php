@@ -25,14 +25,14 @@ class MenuController extends Controller
 
         return response()->json($menus);
     }
-    
+
     public function store(Request $request): JsonResponse
     {
         $outletId = $request->input('outlet_id');
 
         $data = $request->validate([
             'name' => 'required|string|max:255',
-            'category_ids' => 'required|array|min:1', 
+            'category_ids' => 'required|array|min:1',
             'category_ids.*' => [
                 'string',
                 'exists:categories,id',
@@ -65,7 +65,7 @@ class MenuController extends Controller
             'prices' => 'required|array|min:1',
             'prices.*.channel' => 'required|in:offline,shopeefood,grabfood,gofood',
             'prices.*.selling_price' => 'required|numeric|min:0',
-            'prices.*.margin_percent' => 'nullable|numeric', 
+            'prices.*.margin_percent' => 'nullable|numeric',
             'outlet_id' => 'nullable|uuid|exists:outlets,id',
         ]);
 
@@ -74,12 +74,12 @@ class MenuController extends Controller
                 'name' => $data['name'],
                 'description' => $data['description'] ?? null,
                 'overhead_cost' => $data['overhead_cost'] ?? 0,
-                'outlet_id' => $outletId ?? null, 
+                'outlet_id' => $outletId ?? null,
             ]);
 
             $categorySyncData = [];
             foreach ($data['category_ids'] as $index => $categoryId) {
-                $categorySyncData[$categoryId] = ['sort' => $index]; 
+                $categorySyncData[$categoryId] = ['sort' => $index];
             }
             $menu->categories()->sync($categorySyncData);
 
@@ -128,7 +128,7 @@ class MenuController extends Controller
             'prices' => 'sometimes|array|min:1',
             'prices.*.channel' => 'required_with:prices|in:offline,shopeefood,grabfood,gofood',
             'prices.*.selling_price' => 'sometimes|required_with:prices|numeric|min:0',
-            'prices.*.margin_percent' => 'nullable|numeric', 
+            'prices.*.margin_percent' => 'nullable|numeric',
             'outlet_id' => 'nullable|uuid|exists:outlets,id',
         ]);
 
@@ -172,7 +172,7 @@ class MenuController extends Controller
             $menu->load(['recipes.rawMaterial', 'prices'])
         );
     }
-    
+
     public function destroy(Menu $menu): JsonResponse
     {
         // Cek apakah menu sudah pernah digunakan dalam transaksi (order items)
@@ -244,11 +244,11 @@ class MenuController extends Controller
 
         $menuQuery = Menu::where('is_active', true)
             ->where('overhead_cost', '!=', $currentMasterTotal);
-        
+
         if ($outletId && $outletId !== 'all') {
             $menuQuery->where('outlet_id', $outletId);
         }
-        
+
         $isOutofSync = $menuQuery->exists();
 
         return response()->json([
@@ -256,21 +256,21 @@ class MenuController extends Controller
             'master_total' => $currentMasterTotal
         ]);
     }
-    
+
     public function syncOverhead(Request $request): JsonResponse
     {
         $outletId = $request->input('outlet_id');
 
         $query = OverheadCost::where('is_active', true);
-        
+
         if ($outletId && $outletId !== 'all') {
             $query->where('outlet_id', $outletId);
         }
 
         $currentMasterTotal = (float) $query->sum('amount');
-        
+
         $menuQuery = Menu::where('is_active', true);
-        
+
         if ($outletId && $outletId !== 'all') {
             $menuQuery->where('outlet_id', $outletId);
         }
@@ -281,11 +281,11 @@ class MenuController extends Controller
             $menu->update(['overhead_cost' => $currentMasterTotal]);
 
             $this->menuService->saveRecipesAndPrices(
-                $menu, 
-                $menu->recipes->toArray(), 
+                $menu,
+                $menu->recipes->toArray(),
                 $menu->prices->map(fn($p) => [
                     'channel' => $p->channel,
-                    'margin_percent' => $p->margin_percent
+                    'selling_price' => $p->selling_price
                 ])->toArray()
             );
         }
@@ -294,6 +294,7 @@ class MenuController extends Controller
             'message' => 'Berhasil menyinkronkan overhead cost ke seluruh menu produksi pada outlet ini.'
         ]);
     }
+
     public function checkRecipeSync(): JsonResponse
     {
         $isOutofSync = Menu::where('menus.is_active', true)
@@ -315,7 +316,7 @@ class MenuController extends Controller
             $recipesData = $menu->recipes->map(function ($recipe) {
                 return [
                     'raw_material_id' => $recipe->raw_material_id,
-                    'qty_usage' => $recipe->qty_usage, 
+                    'qty_usage' => $recipe->qty_usage,
                 ];
             })->toArray();
 
@@ -349,7 +350,7 @@ public function userIndex(Request $request)
         ->with([
             'categories' => function ($query) {
                 $query->orderBy('category_menu.sort', 'asc');
-            }, 
+            },
             'prices' => function ($query) {
                 $query->where('channel', 'offline')->where('is_active', true);
             }
@@ -362,7 +363,7 @@ public function userIndex(Request $request)
         ->get()
         ->map(function ($menu) {
             $priceOffline = $menu->prices->first();
-            
+
             $mappedCategories = $menu->categories->map(function ($cat) {
                 return [
                     'id' => $cat->id,
