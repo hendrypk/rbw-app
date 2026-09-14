@@ -323,7 +323,7 @@ class MenuController extends Controller
             $pricesData = $menu->prices->map(function ($price) {
                 return [
                     'channel' => $price->channel,
-                    'margin_percent' => $price->margin_percent,
+                    'selling_price' => $price->selling_price,
                 ];
             })->toArray();
 
