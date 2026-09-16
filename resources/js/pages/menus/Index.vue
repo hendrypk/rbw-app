@@ -33,6 +33,7 @@ const showCategoryModal = ref(false);
 const showCategorySortModal = ref(false);
 const activeMenu = ref<any>(null);
 const selectedCategoryForSort = ref<any>(null);
+const selectedChannelFilter = ref<string>('offline');
 const isConfirmModalOpen = ref(false);
 const confirmModalConfig = ref({
     title: 'Hapus Menu?',
@@ -48,13 +49,13 @@ const selectedOutletId = ref<string>(localStorage.getItem('active_outlet_id') ||
 
 // State Search & Sort
 const searchQuery = ref('');
-const sortBy = ref('name'); 
-const sortDirection = ref<'asc' | 'desc'>('asc'); 
+const sortBy = ref('name');
+const sortDirection = ref<'asc' | 'desc'>('asc');
 const selectedIds = ref<string[]>([]);
 
 // State Sync Overhead & Resep
 const isOutOfSync = ref(false);
-const showBanner = ref(false); 
+const showBanner = ref(false);
 const masterOverheadTotal = ref(0);
 const isSyncing = ref(false);
 const isSyncingRecipe = ref(false);
@@ -90,7 +91,7 @@ const checkSyncStatus = async () => {
         const params = getOutletParam();
         const res = await axios.get('/api/menus/overhead-sync-status', { params });
         isOutOfSync.value = res.data.is_out_of_sync;
-        if (res.data.is_out_of_sync) showBanner.value = true; 
+        if (res.data.is_out_of_sync) showBanner.value = true;
         masterOverheadTotal.value = res.data.master_total;
     } catch (err) {
         console.error('Gagal mengecek overhead', err);
@@ -121,7 +122,7 @@ const checkRecipeSyncStatus = async () => {
         const params = getOutletParam();
         const res = await axios.get('/api/menus/recipe-sync-status', { params });
         isRecipeOutOfSync.value = res.data.is_out_of_sync;
-        if (res.data.is_out_of_sync) showRecipeBanner.value = true; 
+        if (res.data.is_out_of_sync) showRecipeBanner.value = true;
     } catch (err) {
         console.error('Gagal mengecek HPP bahan', err);
     }
@@ -151,6 +152,14 @@ const filteredAndSortedMenus = computed(() => {
     if (searchQuery.value.trim()) {
         const query = searchQuery.value.toLowerCase().trim();
         result = result.filter(menu => menu.name.toLowerCase().includes(query));
+    }
+
+    if (selectedChannelFilter.value !== 'all') {
+        result = result.filter(menu => {
+            if (!menu.prices || !Array.isArray(menu.prices)) return false;
+            const channelPrice = menu.prices.find((p: any) => p.channel === selectedChannelFilter.value);
+            return channelPrice && Number(channelPrice.selling_price) > 0;
+        });
     }
 
     if (activeCategoryId.value !== 'all') {
@@ -191,8 +200,8 @@ const toggleSort = (field: string) => {
     }
 };
 
-const currency = (n: number) => new Intl.NumberFormat('id-ID', { 
-    style: 'currency', currency: 'IDR', minimumFractionDigits: 0 
+const currency = (n: number) => new Intl.NumberFormat('id-ID', {
+    style: 'currency', currency: 'IDR', minimumFractionDigits: 0
 }).format(n ?? 0);
 
 const openCreate = () => { activeMenu.value = null; showModal.value = true; };
@@ -281,10 +290,10 @@ onUnmounted(() => {
                     Kelola data resep, kalkulasi overhead cost, dan optimasi harga jual multi-channel secara real-time.
                 </p>
             </div>
-            
+
             <div class="flex items-center gap-2.5 sm:shrink-0 flex-wrap justify-end">
-                <Button 
-                    v-if="isOutOfSync" 
+                <Button
+                    v-if="isOutOfSync"
                     variant="outline"
                     class="h-9 px-4 rounded-xl border-amber-500/30 text-amber-600 hover:bg-amber-50 dark:text-amber-400 dark:hover:bg-amber-950/30 font-semibold text-xs transition-all flex items-center gap-2"
                     :disabled="isSyncing"
@@ -294,8 +303,8 @@ onUnmounted(() => {
                     {{ isSyncing ? 'Syncing...' : 'Sync Overhead' }}
                 </Button>
 
-                <Button 
-                    v-if="isRecipeOutOfSync" 
+                <Button
+                    v-if="isRecipeOutOfSync"
                     variant="outline"
                     class="h-9 px-4 rounded-xl border-amber-500/30 text-amber-600 hover:bg-amber-50 dark:text-amber-400 dark:hover:bg-amber-950/30 font-semibold text-xs transition-all flex items-center gap-2"
                     :disabled="isSyncingRecipe"
@@ -304,11 +313,11 @@ onUnmounted(() => {
                     <span class="w-2 h-2 rounded-full bg-amber-500 animate-pulse"></span>
                     {{ isSyncingRecipe ? 'Syncing...' : 'Sync Bahan & HPP' }}
                 </Button>
-                
+
                 <Button variant="outline" size="sm" class="h-9 px-4 rounded-xl text-xs font-semibold shadow-xs" @click="showCategoryModal = true">
                     📂 Kategori
                 </Button>
-                
+
                 <Button size="sm" class="h-9 px-5 rounded-xl text-xs font-bold shadow-sm bg-foreground text-background hover:opacity-90 transition-all" @click="openCreate">
                     + New Menu
                 </Button>
@@ -327,10 +336,10 @@ onUnmounted(() => {
                             <SelectItem value="all">
                                 Semua Menu ({{ menus.length }})
                             </SelectItem>
-                            <SelectItem 
-                                v-for="cat in sortedCategories" 
-                                :key="cat.id" 
-                                :value="cat.id" 
+                            <SelectItem
+                                v-for="cat in sortedCategories"
+                                :key="cat.id"
+                                :value="cat.id"
                                 :class="['text-xs font-semibold rounded-xl cursor-pointer py-2 px-3', !cat.is_visible ? 'opacity-50 line-through' : '']"
                             >
                                 {{ cat.name }}
@@ -338,11 +347,25 @@ onUnmounted(() => {
                         </SelectContent>
                     </Select>
                 </div>
+                <div class="flex items-center gap-2">
+                    <Select v-model="selectedChannelFilter">
+                        <SelectTrigger class="w-[180px]">
+                            <SelectValue placeholder="Pilih Channel Harga" />
+                        </SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value="all">Semua Channel</SelectItem>
+                            <SelectItem value="offline">Offline</SelectItem>
+                            <SelectItem value="gofood">GoFood</SelectItem>
+                            <SelectItem value="grabfood">GrabFood</SelectItem>
+                            <SelectItem value="shopeefood">ShopeeFood</SelectItem>
+                        </SelectContent>
+                    </Select>
+                </div>
 
                 <div class="w-full relative">
-                    <Input 
-                        v-model="searchQuery" 
-                        placeholder="Cari nama menu produksi..." 
+                    <Input
+                        v-model="searchQuery"
+                        placeholder="Cari nama menu produksi..."
                         class="w-full text-xs h-10 pl-4 pr-10 bg-secondary/60 border-border/80 rounded-xl font-medium focus:ring-1 focus:ring-ring"
                     />
                     <span v-if="searchQuery" @click="searchQuery = ''" class="absolute right-3.5 top-2.5 text-muted-foreground hover:text-foreground cursor-pointer text-base font-bold">&times;</span>
@@ -350,8 +373,8 @@ onUnmounted(() => {
             </div>
 
             <!-- Alert Bulk Delete -->
-            <div 
-                v-if="selectedIds.length > 0" 
+            <div
+                v-if="selectedIds.length > 0"
                 class="flex items-center justify-between rounded-2xl bg-destructive/10 px-5 py-3 border border-destructive/20 animate-in fade-in zoom-in-95 duration-200 shadow-xs"
             >
                 <div class="flex items-center gap-2.5 text-xs">
@@ -446,19 +469,15 @@ onUnmounted(() => {
                                     </span>
                                 </td>
                                 <td class="px-5 py-4 text-muted-foreground font-semibold whitespace-nowrap font-mono">{{ currency(menu.hpp) }}</td>
-                                
+
                                 <td class="px-5 py-4">
-                                    <div v-if="Array.isArray(menu.prices) && menu.prices.length > 0" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5 w-full min-w-[280px]">
-                                        <div v-for="price in (menu.prices as any[])" :key="price.id" class="px-3 py-2 rounded-xl border border-border/80 bg-secondary/40 text-[11px] flex flex-col justify-between shadow-2xs">
-                                            <div class="flex items-center justify-between border-b border-border/60 pb-1">
-                                                <span class="text-[9px] uppercase font-bold tracking-wider text-muted-foreground">{{ price.channel }}</span>
-                                                <span class="text-[10px] font-bold text-foreground">{{ price.margin_percent }}%</span>
-                                            </div>
-                                            <div class="flex flex-col mt-2">
-                                                <span class="font-extrabold text-xs tracking-tight text-foreground font-mono">{{ currency(price.selling_price) }}</span>
-                                                <span class="text-[9px] text-muted-foreground mt-0.5 font-medium">Margin: {{ currency(price.nett_price * (price.margin_percent / 100)) }}</span>
-                                            </div>
+                                    <div v-if="Array.isArray(menu.prices) && menu.prices.length > 0" class="flex flex-wrap gap-2">
+                                        <div v-for="price in (menu.prices as any[]).filter(p => selectedChannelFilter === 'all' || p.channel === selectedChannelFilter)" :key="price.id" class="px-3 py-1.5 rounded-xl border border-border/80 bg-secondary/40 text-[11px] flex items-center gap-2 shadow-2xs">
+                                            <span class="uppercase font-bold tracking-wider text-muted-foreground text-[9px]">{{ price.channel }}:</span>
+                                            <span class="font-extrabold text-foreground font-mono">{{ currency(price.selling_price) }}</span>
+                                            <span class="text-[10px] text-muted-foreground font-medium">({{ price.margin_percent }}%)</span>
                                         </div>
+                                        <span v-if="(menu.prices as any[]).filter(p => selectedChannelFilter === 'all' || p.channel === selectedChannelFilter).length === 0" class="text-xs text-muted-foreground italic">Tidak ada harga untuk channel ini</span>
                                     </div>
                                     <span v-else class="text-xs text-muted-foreground italic">Belum disetting</span>
                                 </td>
@@ -492,7 +511,7 @@ onUnmounted(() => {
     <CategoryModal :show="showCategoryModal" @close="showCategoryModal = false" @updated="handleCategoryUpdated" />
     <CategorySortModal :show="showCategorySortModal" :category="selectedCategoryForSort" @close="showCategorySortModal = false" @updated="loadData" />
     <!-- Komponen Modal Konfirmasi Reusable -->
-    <ConifrmModal 
+    <ConifrmModal
         :show="isConfirmModalOpen"
         :title="confirmModalConfig.title"
         :message="confirmModalConfig.message"
