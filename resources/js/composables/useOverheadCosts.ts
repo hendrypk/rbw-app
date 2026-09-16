@@ -8,6 +8,7 @@ export interface OverheadCost {
     name: string;
     amount: number;
     type: string;
+    started_at?: string | null;
     is_active: boolean;
 }
 

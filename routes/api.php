@@ -69,11 +69,13 @@ Route::middleware(['auth', 'verified'])->prefix('api')->name('api.')->group(func
 
     // Dashboard & Outlet List
     Route::get('/summary', [ReportController::class, 'getSummary']);
-    Route::get('/outlets', [OutletController::class, 'index']);
+    // Route::get('/outlets', [OutletController::class, 'index']);
 });
 
 Route::middleware(['auth', 'verified', 'resolve.outlet'])->prefix('api')->name('api.')->group(function () {
         // 1. FINANCE / BACK OFFICE ONLY
+    Route::apiResource('outlets', OutletController::class);
+
     Route::prefix('finance')->group(function() {
         Route::post('accounts/opening-balances', [AccountController::class, 'updateOpeningBalances']);
         Route::apiResource('accounts', AccountController::class);
@@ -100,7 +102,10 @@ Route::middleware(['auth', 'verified', 'resolve.outlet'])->prefix('api')->name('
     Route::post('menus/sync-recipes', [MenuController::class, 'syncRecipes']);
     Route::post('menus/bulk-destroy', [MenuController::class, 'bulkDestroy']);
     Route::patch('menus/{menu}/status', [MenuController::class, 'updateStatus']);
+    Route::post('/menus/{menu}/copy', [\App\Http\Controllers\Api\MenuController::class, 'copyToOutlets']);
     Route::apiResource('menus', MenuController::class);
+    Route::patch('/overhead-costs/{overheadCost}/status', [OverheadCostController::class, 'updateStatus']);
+    Route::post('/overhead-costs/{overheadCost}/sync-menus', [OverheadCostController::class, 'syncMenus']);
     Route::apiResource('overhead-costs', OverheadCostController::class);
     Route::apiResource('categories', CategoryController::class);
 

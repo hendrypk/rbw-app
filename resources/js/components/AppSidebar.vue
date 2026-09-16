@@ -25,7 +25,8 @@ import account from '@/routes/account';
 import accountMapping from '@/routes/account-mapping';
 import journalEntry from '@/routes/journal';
 import journal from '@/routes/journal';
-import pos from '@/routes/pos';
+import pos, { selectOutlet } from '@/routes/pos';
+import outlet from '@/routes/outlet';
 
 const mainNavItems: NavItem[] = [
     {
@@ -62,6 +63,11 @@ const mainNavItems: NavItem[] = [
         title: 'Overhead',
         href: overhead.index(),
         icon: Calculator,
+    },
+    {
+        title: 'Outlet',
+        href: outlet.index(),
+        icon: ShoppingCart,
     },
     {
     title: 'Finance',

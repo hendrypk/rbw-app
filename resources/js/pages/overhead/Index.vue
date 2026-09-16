@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted, watch, onUnmounted } from 'vue';
+import { ref, onMounted, onUnmounted } from 'vue';
 import AppSidebarLayout from '@/layouts/app/AppSidebarLayout.vue';
 import Button from '@/components/ui/button/Button.vue';
 import Input from '@/components/ui/input/Input.vue';
@@ -9,6 +9,7 @@ import { useOutlet } from '@/composables/useOutlet';
 import axios from 'axios';
 import OverheadCostModal from './OverheadCostModal.vue';
 import OverheadCostDetailModal from './OverheadCostDetailModal.vue';
+import OverheadMenuConnectionModal from './OverheadMenuConnectionModal.vue';
 
 defineOptions({ layout: AppSidebarLayout });
 
@@ -16,20 +17,22 @@ const { overheads, isLoading, fetchOverheads } = useOverheadCosts();
 const { success, error } = useSwal();
 const { getOutletId, getOutletParam } = useOutlet();
 
-
 const showModal = ref(false);
 const showViewModal = ref(false);
 const activeOverhead = ref(null);
 const selectedIds = ref<string[]>([]);
 const activeCategoryId = ref<string>('all');
 const selectedOutletId = ref<string>(localStorage.getItem('active_outlet_id') || 'all');
-
+const showMenuConnectionModal = ref(false);
 
 const openCreate = () => { activeOverhead.value = null; showModal.value = true; };
 const openEdit = (item: any) => { activeOverhead.value = item; showModal.value = true; };
 const openView = (item: any) => { activeOverhead.value = item; showViewModal.value = true; };
-
-
+const openMenuConnectionModal = (overhead: any) => {
+    showViewModal.value = false;
+    activeOverhead.value = overhead;
+    showMenuConnectionModal.value = true;
+};
 const loadData = () => {
     const params = getOutletParam();
     fetchOverheads(params);
@@ -40,11 +43,9 @@ const handleOutletChanged = () => {
     loadData();
 };
 
-
 onMounted(async () => {
     fetchOverheads();
     window.addEventListener('outlet-changed', handleOutletChanged);
-
 });
 
 onUnmounted(() => {
@@ -52,17 +53,19 @@ onUnmounted(() => {
 });
 
 const toggleSelectAll = () => {
-    selectedIds.value = selectedIds.value.length === overheads.value.length 
-        ? [] 
+    selectedIds.value = selectedIds.value.length === overheads.value.length
+        ? []
         : overheads.value.map(o => o.id);
 };
 
 const toggleStatus = async (item: any) => {
     try {
         const targetStatus = !item.is_active;
-        await axios.put(`/api/overhead-costs/${item.id}`, { is_active: targetStatus });
-        item.is_active = targetStatus;
+        await axios.patch(`/api/overhead-costs/${item.id}/status`, {
+            is_active: targetStatus
+        });
         success('Berhasil', `Status biaya ${item.name} berhasil diubah.`);
+        loadData();
     } catch (err) {
         error('Gagal', 'Gagal mengubah status.');
     }
@@ -118,9 +121,13 @@ const bulkDelete = async () => {
                     <thead class="bg-muted/50 text-muted-foreground">
                         <tr>
                             <th class="px-6 py-4 w-12">
-                                <Input type="checkbox" 
-                                    :checked="selectedIds.length === overheads.length && overheads.length > 0" 
-                                    @change="toggleSelectAll" />
+                                <!-- PERUBAHAN: Gunakan input checkbox native agar tidak bentrok dengan DOM hydration Vue -->
+                                <input
+                                    type="checkbox"
+                                    class="rounded border-slate-300 text-primary focus:ring-primary cursor-pointer"
+                                    :checked="selectedIds.length === overheads.length && overheads.length > 0"
+                                    @change="toggleSelectAll"
+                                />
                             </th>
                             <th class="px-6 py-4">Nama Komponen Biaya</th>
                             <th class="px-6 py-4">Nominal</th>
@@ -131,7 +138,14 @@ const bulkDelete = async () => {
                     </thead>
                     <tbody class="divide-y divide-border/50">
                         <tr v-for="item in overheads" :key="item.id" class="group hover:bg-muted/30 transition-colors">
-                            <td class="px-6 py-4"><input type="checkbox" v-model="selectedIds" :value="item.id" /></td>
+                            <td class="px-6 py-4">
+                                <input
+                                    type="checkbox"
+                                    class="rounded border-slate-300 text-primary focus:ring-primary cursor-pointer"
+                                    v-model="selectedIds"
+                                    :value="item.id"
+                                />
+                            </td>
                             <td class="px-6 py-4 font-medium">{{ item.name }}</td>
                             <td class="px-6 py-4 font-semibold text-red-600">Rp {{ Number(item.amount).toLocaleString() }}</td>
                             <td class="px-6 py-4 capitalize text-muted-foreground">{{ item.type || 'per_porsi' }}</td>
@@ -156,7 +170,22 @@ const bulkDelete = async () => {
             <p class="mt-1 text-sm text-muted-foreground">Yuk tambahkan komponen master biaya pertama Anda untuk outlet ini!</p>
         </div>
     </div>
-    
+
     <OverheadCostModal :show="showModal" :overhead="activeOverhead" @close="showModal = false" @saved="fetchOverheads" />
-    <OverheadCostDetailModal :show="showViewModal" :overheads="activeOverhead" @close="showViewModal = false" />
+<OverheadCostDetailModal
+    :show="showViewModal"
+    :overhead="activeOverhead"
+    @close="showViewModal = false"
+    @connect-menu="openMenuConnectionModal"
+/>
+
+<OverheadMenuConnectionModal
+        :show="showMenuConnectionModal"
+        :overhead="activeOverhead"
+        :outlet-id="selectedOutletId"
+        @close="showMenuConnectionModal = false"
+        @saved="fetchOverheads"
+    />
+    <!-- PERUBAHAN: Saya ubah prop "overheads" menjadi "overhead" (singular) karena data yang dikirim cuma satu item -->
+    <!-- <OverheadCostDetailModal :show="showViewModal" :overhead="activeOverhead" @close="showViewModal = false" /> -->
 </template>

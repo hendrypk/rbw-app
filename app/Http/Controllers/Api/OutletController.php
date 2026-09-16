@@ -43,99 +43,40 @@ class OutletController extends Controller
         }
     }
 
-    public function store(Request $request): JsonResponse
+public function store(Request $request)
     {
         $validated = $request->validate([
             'name'      => 'required|string|max:255',
             'code'      => 'required|string|max:50|unique:outlets,code',
             'address'   => 'nullable|string',
-            'phone'     => 'nullable|string|max:25',
+            'phone'     => 'nullable|string|max:30',
             'is_active' => 'boolean',
         ]);
 
-        try {
-            $outlet = Outlet::create([
-                'name'      => $validated['name'],
-                'code'      => $validated['code'],
-                'address'   => $validated['address'] ?? null,
-                'phone'     => $validated['phone'] ?? null,
-                'is_active' => $validated['is_active'] ?? true,
-            ]);
+        Outlet::create($validated);
 
-            return response()->json([
-                'success' => true,
-                'message' => 'Outlet berhasil ditambahkan',
-                'data'    => $outlet
-            ], 201);
-        } catch (\Exception $e) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Gagal menambahkan outlet: ' . $e->getMessage()
-            ], 500);
-        }
+        return redirect()->back()->with('success', 'Outlet berhasil ditambahkan.');
     }
 
-    public function show(string $id): JsonResponse
+    public function update(Request $request, Outlet $outlet)
     {
-        try {
-            $outlet = Outlet::findOrFail($id);
+        $validated = $request->validate([
+            'name'      => 'required|string|max:255',
+            'code'      => 'required|string|max:50|unique:outlets,code,' . $outlet->id,
+            'address'   => 'nullable|string',
+            'phone'     => 'nullable|string|max:30',
+            'is_active' => 'boolean',
+        ]);
 
-            return response()->json([
-                'success' => true,
-                'message' => 'Detail outlet ditemukan',
-                'data'    => $outlet
-            ]);
-        } catch (\Exception $e) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Outlet tidak ditemukan'
-            ], 404);
-        }
+        $outlet->update($validated);
+
+        return redirect()->back()->with('success', 'Outlet berhasil diperbarui.');
     }
 
-    public function update(Request $request, string $id): JsonResponse
+    public function destroy(Outlet $outlet)
     {
-        try {
-            $outlet = Outlet::findOrFail($id);
+        $outlet->delete();
 
-            $validated = $request->validate([
-                'name'      => 'sometimes|required|string|max:255',
-                'code'      => 'sometimes|required|string|max:50|unique:outlets,code,' . $id,
-                'address'   => 'nullable|string',
-                'phone'     => 'nullable|string|max:25',
-                'is_active' => 'boolean',
-            ]);
-
-            $outlet->update($validated);
-
-            return response()->json([
-                'success' => true,
-                'message' => 'Outlet berhasil diperbarui',
-                'data'    => $outlet
-            ]);
-        } catch (\Exception $e) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Gagal memperbarui outlet: ' . $e->getMessage()
-            ], 500);
-        }
-    }
-
-    public function destroy(string $id): JsonResponse
-    {
-        try {
-            $outlet = Outlet::findOrFail($id);
-            $outlet->delete();
-
-            return response()->json([
-                'success' => true,
-                'message' => 'Outlet berhasil dihapus'
-            ]);
-        } catch (\Exception $e) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Gagal menghapus outlet: ' . $e->getMessage()
-            ], 500);
-        }
+        return redirect()->back()->with('success', 'Outlet berhasil dihapus.');
     }
 }

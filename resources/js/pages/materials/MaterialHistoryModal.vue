@@ -5,10 +5,11 @@ import { router } from '@inertiajs/vue3';
 import Modal from '@/components/ui/Modal.vue';
 import { History, ArrowDownRight, ArrowUpRight, TrendingUp, TrendingDown, Layers } from '@lucide/vue';
 import DatePresetFilter from '@/components/DatePresetFilter.vue';
+import Button from '@/components/ui/button/Button.vue';
 
-const props = defineProps<{ 
-    show: boolean, 
-    material?: any | null 
+const props = defineProps<{
+    show: boolean,
+    material?: any | null
 }>();
 
 const emit = defineEmits(['close']);
@@ -173,22 +174,22 @@ watch(() => props.show, (newVal) => {
                         <div class="space-y-1.5">
                             <label class="font-semibold text-muted-foreground">Jenis Penyesuaian</label>
                             <div class="grid grid-cols-3 gap-2">
-                                <button 
-                                    type="button" 
+                                <button
+                                    type="button"
                                     @click="adjustmentForm.adjustment_type = 'in'"
                                     :class="['py-2.5 px-2 rounded-xl font-bold border transition-all cursor-pointer text-center', adjustmentForm.adjustment_type === 'in' ? 'bg-emerald-500/10 border-emerald-500 text-emerald-600 dark:text-emerald-400' : 'border-border bg-card text-muted-foreground']"
                                 >
                                     Stok Masuk
                                 </button>
-                                <button 
-                                    type="button" 
+                                <button
+                                    type="button"
                                     @click="adjustmentForm.adjustment_type = 'out'"
                                     :class="['py-2.5 px-2 rounded-xl font-bold border transition-all cursor-pointer text-center', adjustmentForm.adjustment_type === 'out' ? 'bg-rose-500/10 border-rose-500 text-rose-600 dark:text-rose-400' : 'border-border bg-card text-muted-foreground']"
                                 >
                                     Stok Keluar
                                 </button>
-                                <button 
-                                    type="button" 
+                                <button
+                                    type="button"
                                     @click="adjustmentForm.adjustment_type = 'actual'; adjustmentForm.qty = Number(material?.stock_qty || 0);"
                                     :class="['py-2.5 px-2 rounded-xl font-bold border transition-all cursor-pointer text-center', adjustmentForm.adjustment_type === 'actual' ? 'bg-primary/10 border-primary text-primary' : 'border-border bg-card text-muted-foreground']"
                                 >
@@ -202,13 +203,13 @@ watch(() => props.show, (newVal) => {
                                 {{ adjustmentForm.adjustment_type === 'actual' ? 'Jumlah Qty Aktual di Gudang' : 'Jumlah Qty' }}
                             </label>
                             <div class="relative flex items-center">
-                                <input 
-                                    type="number" 
-                                    v-model.number="adjustmentForm.qty" 
-                                    :min="adjustmentForm.adjustment_type === 'actual' ? '0' : '0.0001'" 
+                                <input
+                                    type="number"
+                                    v-model.number="adjustmentForm.qty"
+                                    :min="adjustmentForm.adjustment_type === 'actual' ? '0' : '0.0001'"
                                     step="any"
                                     placeholder="0"
-                                    class="w-full h-11 rounded-xl border border-border bg-card pl-4 pr-16 font-mono font-bold text-foreground focus:outline-none focus:ring-1 focus:ring-primary" 
+                                    class="w-full h-11 rounded-xl border border-border bg-card pl-4 pr-16 font-mono font-bold text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
                                 />
                                 <span class="absolute right-4 text-xs font-bold text-muted-foreground uppercase pointer-events-none">
                                     {{ material?.base_unit }}
@@ -221,11 +222,11 @@ watch(() => props.show, (newVal) => {
 
                         <div class="space-y-1.5">
                             <label class="font-semibold text-muted-foreground">Catatan / Alasan Penyesuaian</label>
-                            <input 
-                                type="text" 
-                                v-model="adjustmentForm.notes" 
-                                placeholder="Contoh: Stok opname / Barang rusak" 
-                                class="w-full h-11 rounded-xl border border-border bg-card px-4 text-foreground focus:outline-none focus:ring-1 focus:ring-primary" 
+                            <input
+                                type="text"
+                                v-model="adjustmentForm.notes"
+                                placeholder="Contoh: Stok opname / Barang rusak"
+                                class="w-full h-11 rounded-xl border border-border bg-card px-4 text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
                             />
                         </div>
 
@@ -264,8 +265,8 @@ watch(() => props.show, (newVal) => {
                             <td class="px-5 py-4 whitespace-nowrap">
                                 <span :class="[
                                     'inline-flex items-center gap-1 px-3 py-1 rounded-full text-[11px] font-bold',
-                                    item.movement_type === 'in' 
-                                        ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400' 
+                                    item.movement_type === 'in'
+                                        ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'
                                         : 'bg-rose-500/10 text-rose-600 dark:text-rose-400'
                                 ]">
                                     <ArrowDownRight v-if="item.movement_type === 'in'" class="w-3.5 h-3.5" />
@@ -274,8 +275,8 @@ watch(() => props.show, (newVal) => {
                                 </span>
                             </td>
                             <td class="px-5 py-4 font-semibold text-foreground">
-                                <div 
-                                    @click="navigateToDetail(item)" 
+                                <div
+                                    @click="navigateToDetail(item)"
                                     :class="{ 'cursor-pointer text-primary hover:underline inline-flex items-center gap-1 group': item.reference_type?.includes('PurchaseOrderItem') }"
                                 >
                                     {{ item.notes || '-' }}

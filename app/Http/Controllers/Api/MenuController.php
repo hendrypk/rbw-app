@@ -7,6 +7,7 @@ use App\Models\Category;
 use App\Models\Menu;
 use App\Models\MenuPrice;
 use App\Models\OverheadCost;
+use App\Models\RawMaterial;
 use App\Services\MenuService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -175,7 +176,6 @@ class MenuController extends Controller
 
     public function destroy(Menu $menu): JsonResponse
     {
-        // Cek apakah menu sudah pernah digunakan dalam transaksi (order items)
         if ($menu->orderItems()->exists() || method_exists($menu, 'orderItems') && $menu->orderItems()->count() > 0) {
             return response()->json([
                 'message' => 'Menu tidak dapat dihapus karena sudah memiliki riwayat transaksi/penjualan. Anda dapat menonaktifkannya.'
@@ -198,7 +198,6 @@ class MenuController extends Controller
             'ids.*' => 'string|exists:menus,id',
         ]);
 
-        // Cek apakah ada menu dari daftar yang dipilih sudah memiliki transaksi
         $menusWithOrders = Menu::whereIn('id', $data['ids'])
             ->has('orderItems')
             ->exists();
@@ -231,7 +230,6 @@ class MenuController extends Controller
         ]);
     }
 
-    // 1. Method untuk cek apakah nominal overhead di menu sama dengan master yang aktif
     public function checkOverheadSync(Request $request): JsonResponse
     {
         $outletId = $request->input('outlet_id');
@@ -304,7 +302,7 @@ class MenuController extends Controller
             ->exists();
 
         return response()->json([
-            'is_out_of_sync' => $isOutofSync // Pastikan key-nya konsisten snake_case
+            'is_out_of_sync' => $isOutofSync
         ]);
     }
 
@@ -327,7 +325,6 @@ class MenuController extends Controller
                 ];
             })->toArray();
 
-            // Gunakan service yang sudah ada untuk kalkulasi ulang total HPP & harga jual
             $this->menuService->saveRecipesAndPrices($menu, $recipesData, $pricesData);
         }
 
@@ -338,7 +335,6 @@ class MenuController extends Controller
 
     public function userIndex(Request $request)
     {
-        // Ambil kategori yang visible, memiliki menu aktif, dan urutkan berdasarkan 'sort'
         $categories = Category::where('is_visible', true)
             ->whereHas('menus', function ($query) {
                 $query->where('is_active', true);
@@ -410,5 +406,107 @@ class MenuController extends Controller
             'message' => 'Status menu berhasil diperbarui',
             'data' => $menu
         ]);
+    }
+
+    public function copyToOutlets(Request $request, Menu $menu)
+    {
+        $request->validate([
+            'outlet_ids'   => 'required|array',
+            'outlet_ids.*' => 'exists:outlets,id',
+        ]);
+
+        DB::beginTransaction();
+        try {
+            $menu->load(['recipes.rawMaterial', 'prices', 'categories']);
+
+            foreach ($request->outlet_ids as $outletId) {
+                $originalName = $menu->name;
+                $baseName = preg_replace('/ copy \d+$/', '', $originalName);
+
+                $newName = $baseName;
+                $counter = 1;
+
+                while (Menu::where('outlet_id', $outletId)->where('name', $newName)->exists()) {
+                    $newName = $baseName . ' copy ' . $counter;
+                    $counter++;
+                }
+
+                $newMenu = $menu->replicate();
+                $newMenu->outlet_id = $outletId;
+                $newMenu->name = $newName;
+                $newMenu->save();
+
+                if ($menu->categories->isNotEmpty()) {
+                    $pivotData = [];
+
+                    foreach ($menu->categories as $originalCategory) {
+                        $targetCategory = Category::firstOrCreate(
+                            [
+                                'outlet_id' => $outletId,
+                                'name'      => $originalCategory->name,
+                            ],
+                            [
+                                'is_active' => $originalCategory->is_active ?? true,
+                            ]
+                        );
+
+                        $pivotData[$targetCategory->id] = [
+                            'id'   => (string) \Str::uuid(),
+                            'sort' => $originalCategory->pivot->sort ?? 0
+                        ];
+                    }
+
+                    $newMenu->categories()->sync($pivotData);
+                }
+
+                foreach ($menu->recipes as $recipe) {
+                    $originalMaterial = $recipe->rawMaterial;
+
+                    if (!$originalMaterial) continue;
+
+                    $targetMaterial = RawMaterial::firstOrCreate(
+                        [
+                            'outlet_id' => $outletId,
+                            'name'      => $originalMaterial->name,
+                        ],
+                        [
+                            'base_unit'         => $originalMaterial->base_unit,
+                            'purchase_unit'     => $originalMaterial->purchase_unit,
+                            'conversion_factor' => $originalMaterial->conversion_factor,
+                            'min_stock'         => $originalMaterial->min_stock,
+                            'is_active'         => $originalMaterial->is_active,
+                            'stock_qty'         => 0,
+                            'avg_cost'          => $originalMaterial->avg_cost,
+                            'last_cost'         => $originalMaterial->last_cost,
+                        ]
+                    );
+
+                    $newMenu->recipes()->create([
+                        'raw_material_id' => $targetMaterial->id,
+                        'qty_usage'       => $recipe->qty_usage,
+                    ]);
+                }
+
+                foreach ($menu->prices as $price) {
+                    $newMenu->prices()->create([
+                        'channel'              => $price->channel,
+                        'margin_percent'       => $price->margin_percent,
+                        'selling_price'        => $price->selling_price,
+                        'platform_fee_percent' => $price->platform_fee_percent,
+                        'nett_price'           => $price->nett_price,
+                        'is_active'            => $price->is_active,
+                    ]);
+                }
+
+                $newMenu->recalculateHpp();
+            }
+
+            DB::commit();
+            return response()->json(['message' => 'Menu berhasil dicopy ke outlet tujuan.']);
+
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return response()->json(['message' => 'Terjadi kesalahan sistem saat menyalin menu: ' . $e->getMessage()], 500);
+        }
     }
 }
