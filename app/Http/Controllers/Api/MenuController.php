@@ -336,67 +336,79 @@ class MenuController extends Controller
         ]);
     }
 
-public function userIndex(Request $request)
-{
-    // Ambil kategori yang visible, memiliki menu aktif, dan urutkan berdasarkan 'sort'
-    $categories = Category::where('is_visible', true)
-        ->whereHas('menus', function ($query) {
-            $query->where('is_active', true);
-        })
-        ->orderBy('sort', 'asc')
-        ->get();
+    public function userIndex(Request $request)
+    {
+        // Ambil kategori yang visible, memiliki menu aktif, dan urutkan berdasarkan 'sort'
+        $categories = Category::where('is_visible', true)
+            ->whereHas('menus', function ($query) {
+                $query->where('is_active', true);
+            })
+            ->orderBy('sort', 'asc')
+            ->get();
 
-    $menus = Menu::active()
-        ->with([
-            'categories' => function ($query) {
-                $query->orderBy('category_menu.sort', 'asc');
-            },
-            'prices' => function ($query) {
-                $query->where('channel', 'offline')->where('is_active', true);
-            }
-        ])
-        ->when($request->filled('category_id'), function ($query) use ($request) {
-            $query->whereHas('categories', function ($q) use ($request) {
-                $q->where('categories.id', $request->category_id);
-            });
-        })
-        ->get()
-        ->map(function ($menu) {
-            $priceOffline = $menu->prices->first();
+        $menus = Menu::active()
+            ->with([
+                'categories' => function ($query) {
+                    $query->orderBy('category_menu.sort', 'asc');
+                },
+                'prices' => function ($query) {
+                    $query->where('channel', 'offline')->where('is_active', true);
+                }
+            ])
+            ->when($request->filled('category_id'), function ($query) use ($request) {
+                $query->whereHas('categories', function ($q) use ($request) {
+                    $q->where('categories.id', $request->category_id);
+                });
+            })
+            ->get()
+            ->map(function ($menu) {
+                $priceOffline = $menu->prices->first();
 
-            $mappedCategories = $menu->categories->map(function ($cat) {
+                $mappedCategories = $menu->categories->map(function ($cat) {
+                    return [
+                        'id' => $cat->id,
+                        'name' => $cat->name,
+                        'sort' => $cat->pivot?->sort ?? 0,
+                    ];
+                });
+
+                $primaryCategory = $menu->categories->first();
+                $pivotSort = $primaryCategory?->pivot?->sort ?? 0;
+
                 return [
-                    'id' => $cat->id,
-                    'name' => $cat->name,
-                    'sort' => $cat->pivot?->sort ?? 0,
+                    'id' => $menu->id,
+                    'name' => $menu->name,
+                    'description' => $menu->description,
+                    'image' => $menu->image_path,
+                    'categories'  => $mappedCategories,
+                    'category_id' => $primaryCategory?->id,
+                    'category' => $primaryCategory ? [
+                        'id' => $primaryCategory->id,
+                        'name' => $primaryCategory->name,
+                    ] : null,
+                    'sort' => $pivotSort,
+                    'price' => $priceOffline ? (float) $priceOffline->selling_price : 0,
                 ];
             });
 
-            $primaryCategory = $menu->categories->first();
-            $pivotSort = $primaryCategory?->pivot?->sort ?? 0;
+        return response()->json([
+            'status' => 'success',
+            'data' => [
+                'categories' => $categories,
+                'menus' => $menus,
+            ]
+        ]);
+    }
 
-            return [
-                'id' => $menu->id,
-                'name' => $menu->name,
-                'description' => $menu->description,
-                'image' => $menu->image_path,
-                'categories'  => $mappedCategories,
-                'category_id' => $primaryCategory?->id,
-                'category' => $primaryCategory ? [
-                    'id' => $primaryCategory->id,
-                    'name' => $primaryCategory->name,
-                ] : null,
-                'sort' => $pivotSort,
-                'price' => $priceOffline ? (float) $priceOffline->selling_price : 0,
-            ];
-        });
+    public function updateStatus(Request $request, Menu $menu)
+    {
+        $menu->update([
+            'is_active' => $request->is_active
+        ]);
 
-    return response()->json([
-        'status' => 'success',
-        'data' => [
-            'categories' => $categories,
-            'menus' => $menus,
-        ]
-    ]);
-}
+        return response()->json([
+            'message' => 'Status menu berhasil diperbarui',
+            'data' => $menu
+        ]);
+    }
 }

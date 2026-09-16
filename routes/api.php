@@ -26,15 +26,15 @@ use SebastianBergmann\CodeCoverage\Report\Xml\Report;
 Route::get('/test-doku-token', [QrisController::class, 'testGetToken']);
 
 Route::prefix('api/v1/user')->group(function () {
-    
+
     Route::post('/register', [CustomerAuthController::class, 'register']);
     Route::post('/login', [CustomerAuthController::class, 'login']);
-    
+
 
     Route::middleware(['auth:sanctum,customer'])->group(function () {
         Route::get('/check', function (Request $request) {
             return response()->json([
-                'authenticated' => true, 
+                'authenticated' => true,
                 'user' => $request->user()
             ]);
         });
@@ -99,6 +99,7 @@ Route::middleware(['auth', 'verified', 'resolve.outlet'])->prefix('api')->name('
     Route::post('menus/overhead-sync', [MenuController::class, 'syncOverhead']);
     Route::post('menus/sync-recipes', [MenuController::class, 'syncRecipes']);
     Route::post('menus/bulk-destroy', [MenuController::class, 'bulkDestroy']);
+    Route::patch('menus/{menu}/status', [MenuController::class, 'updateStatus']);
     Route::apiResource('menus', MenuController::class);
     Route::apiResource('overhead-costs', OverheadCostController::class);
     Route::apiResource('categories', CategoryController::class);
@@ -118,7 +119,7 @@ Route::middleware(['auth', 'verified', 'resolve.outlet'])->prefix('api')->name('
         Route::post('/shifts/{shift}/close', [CashierShiftController::class, 'closeShift']);
         Route::get('/dashboard/summary', [OrderController::class, 'getSummary']);
     });
-    
+
     // QRIS Payment
     Route::prefix('payment/qris')->group(function () {
         Route::post('/generate', [QrisController::class, 'generate']);
