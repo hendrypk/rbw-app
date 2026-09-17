@@ -14,7 +14,7 @@ class JournalEntry extends Model
 {
     use HasUuids, SoftDeletes;
 
-    protected $fillable = ['outlet_id', 'entry_date', 'reference_type', 'reference_id', 'description', 'total_amount'];
+    protected $fillable = ['outlet_id', 'entry_date', 'reference_type', 'is_manual_journal', 'reference_id', 'description', 'total_amount'];
     protected $casts = ['entry_date' => 'date', 'total_amount' => 'decimal:2'];
 
     public function items(): HasMany
@@ -31,10 +31,10 @@ class JournalEntry extends Model
      * CORE ENGINE: Membuat jurnal otomatis dengan opsi akun dinamis dan tanggal kustom dari user
      */
     public static function createEntryFromMapping(
-        string $type, 
-        float $j1Amount, 
-        float $j2Amount = 0, 
-        ?Model $reference = null, 
+        string $type,
+        float $j1Amount,
+        float $j2Amount = 0,
+        ?Model $reference = null,
         array $replacements = [],
         ?string $customDebitAccountId = null,
         ?string $customCreditAccountId = null,
@@ -48,7 +48,7 @@ class JournalEntry extends Model
                 $query->where('outlet_id', $outletId)->orWhereNull('outlet_id');
             })
             ->first();
-            
+
         if (!$mapping) throw new Exception("Mapping untuk tipe '{$type}' belum terdaftar.");
 
         // Tentukan akun riil yang dipakai (Prioritas input user, fallback ke mapping)
@@ -66,7 +66,7 @@ class JournalEntry extends Model
         $dateToUse = $entryDate ?? now()->toDateString();
 
         DB::transaction(function () use ($mapping, $j1Amount, $j2Amount, $reference, $replacements, $debitAccountJ1, $creditAccountJ1, $outletId, $dateToUse) {
-            
+
             // --- AYAT JURNAL 1 ---
             if ($j1Amount > 0) {
                 $desc1 = self::parseTemplate($mapping->description_template ?? 'Transaksi', $replacements);
@@ -125,7 +125,7 @@ class JournalEntry extends Model
                 foreach ($oldEntry->items as $oldItem) {
                     $newEntry->items()->create([
                         'account_id' => $oldItem->account_id,
-                        'type'       => $oldItem->type === 'debit' ? 'credit' : 'debit', 
+                        'type'       => $oldItem->type === 'debit' ? 'credit' : 'debit',
                         'amount'     => $oldItem->amount
                     ]);
                 }

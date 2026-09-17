@@ -1,4 +1,4 @@
-import { ref, computed, onMounted } from 'vue';
+import { ref, onMounted } from 'vue';
 import axios from 'axios';
 
 export interface JournalItem {
@@ -14,34 +14,59 @@ export interface JournalEntry {
     description: string;
     total_amount: number;
     items: JournalItem[];
+    is_manual_journal: boolean;
 }
 
 export function useJournal() {
     const journals = ref<JournalEntry[]>([]);
     const isLoading = ref<boolean>(false);
-    
+
+    // State Paginasi
+    const currentPage = ref<number>(1);
+    const lastPage = ref<number>(1);
+    const totalData = ref<number>(0);
+    const perPage = ref<number>(10);
+
     // Set default filter: Awal bulan ini s/d hari ini
     const today = new Date().toISOString().split('T')[0];
     const firstDayOfMonth = new Date(new Date().getFullYear(), new Date().getMonth(), 2).toISOString().split('T')[0];
-    
+
     const startDate = ref<string>(firstDayOfMonth);
     const endDate = ref<string>(today);
 
-    // Fetch data dari backend Laravel dengan query string filter tanggal
-    const fetchJournals = async () => {
+    // Fetch data dari backend Laravel dengan parameter halaman dan filter tanggal
+    const fetchJournals = async (page = 1) => {
         isLoading.value = true;
         try {
             const response = await axios.get('/api/finance/journal-entry', {
                 params: {
+                    page: page,
+                    per_page: perPage.value,
                     start_date: startDate.value,
                     end_date: endDate.value
                 }
             });
-            journals.value = response.data.data;
+
+            // Mengambil struktur data dari Laravel Paginator (response.data.data)
+            const paginatedResponse = response.data.data;
+
+            journals.value = paginatedResponse.data;
+            currentPage.value = paginatedResponse.current_page;
+            lastPage.value = paginatedResponse.last_page;
+            totalData.value = paginatedResponse.total;
+
         } catch (error) {
             console.error('Gagal memuat data jurnal umum:', error);
         } finally {
             isLoading.value = false;
+        }
+    };
+
+    // Fungsi navigasi halaman
+    const changePage = (page: number) => {
+        if (page >= 1 && page <= lastPage.value) {
+            currentPage.value = page;
+            fetchJournals(page);
         }
     };
 
@@ -51,13 +76,14 @@ export function useJournal() {
         return 'Rp ' + (num || 0).toLocaleString('id-ID');
     };
 
-    // Jalankan fetch otomatis saat filter tanggal diubah oleh user
+    // Jalankan fetch otomatis kembali ke halaman 1 saat filter tanggal diubah
     const handleFilterChange = () => {
-        fetchJournals();
+        currentPage.value = 1;
+        fetchJournals(1);
     };
 
     onMounted(() => {
-        fetchJournals();
+        fetchJournals(1);
     });
 
     return {
@@ -65,7 +91,11 @@ export function useJournal() {
         isLoading,
         startDate,
         endDate,
+        currentPage,
+        lastPage,
+        totalData,
         fetchJournals,
+        changePage,
         handleFilterChange,
         formatCurrency
     };
