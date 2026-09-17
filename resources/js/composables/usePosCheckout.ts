@@ -34,12 +34,12 @@ export interface CompletedOrderData {
 export function usePosCheckout() {
     // --- UI & Modal States ---
     const isPaymentModalOpen = ref<boolean>(false);
-    const isCustomerAddModalOpen = ref<boolean>(false); // Tambahkan ini
+    const isCustomerAddModalOpen = ref<boolean>(false);
     const isCustomerModalOpen = ref<boolean>(false);
     const isDiscountModalOpen = ref<boolean>(false);
     const isQrisModalOpen = ref<boolean>(false);
     const isGeneratingQris = ref<boolean>(false);
-    const isSuccessModalOpen = ref<boolean>(false); // State untuk modal sukses universal
+    const isSuccessModalOpen = ref<boolean>(false);
     const checking = ref<boolean>(false);
 
     // --- Transaction Form States ---
@@ -54,34 +54,33 @@ export function usePosCheckout() {
     // --- Cart, QRIS & Success Order States ---
     const cart = ref<CartItem[]>([]);
     const qrisData = ref<QrisData>({ invoiceNo: '', referenceNo: '', qrContent: '' });
-    // const paymentStatus = ref<'PENDING' | 'SUCCESS' | 'FAILED'>('PENDING');
     const paymentStatus = ref<'PENDING' | 'SUCCESS' | 'FAILED'>('PENDING');
 
-    const { 
-        vouchers, 
-        appliedVoucher, 
-        isLoadingVouchers, 
-        fetchVouchers, 
-        validateAndApplyVoucher, 
-        removeVoucher 
+    const {
+        vouchers,
+        appliedVoucher,
+        isLoadingVouchers,
+        fetchVouchers,
+        validateAndApplyVoucher,
+        removeVoucher
     } = useVoucher();
 
     let statusInterval: any = undefined;
 
     // --- Computed Financials ---
-    const cartSubtotal = computed<number>(() => 
+    const cartSubtotal = computed<number>(() =>
         cart.value.reduce((sum: number, item: CartItem) => sum + item.subtotal, 0)
     );
-    
+
     const taxAmount = computed<number>(() => cartSubtotal.value * 0.11);
-    
+
     const totalDiscount = computed<number>(() => {
         if (appliedVoucher.value) {
             return appliedVoucher.value.discount_amount;
         }
         return Number(discountInput.value) || 0;
     });
-    
+
      const finalTotal = computed<number>(() => {
         const total = (cartSubtotal.value + Number(transactionFee.value)) - Number(totalDiscount.value);
         const roundedTotal = Math.round(total);
@@ -116,7 +115,7 @@ export function usePosCheckout() {
 
     const closeSuccessModal = () => {
         isSuccessModalOpen.value = false;
-        resetPosState(); // Reset keranjang setelah modal sukses ditutup user
+        resetPosState();
     };
 
     const openCustomerModal = () => {
@@ -142,7 +141,7 @@ export function usePosCheckout() {
         customerId.value = '';
         amountPaidInput.value = 0;
         paymentStatus.value = 'PENDING';
-        removeVoucher(); 
+        removeVoucher();
     };
 
     const getCartValidationItems = () => {
@@ -156,7 +155,6 @@ export function usePosCheckout() {
     const submitCheckout = async (type: 'save' | 'pay') => {
         if (cart.value.length === 0) return;
 
-        // Jika metode pembayaran QRIS dan memilih bayar, arahkan ke QRIS Handler
         if (paymentMethod.value === 'qris' && type === 'pay') {
             await handleQrisCheckout();
             return;
@@ -167,21 +165,18 @@ export function usePosCheckout() {
                 customer_name: customerName.value || 'Pelanggan POS',
                 customer_id: customerId.value || null,
                 payment_method: paymentMethod.value,
-                discount: totalDiscount.value, // ⬅️ PERBAIKI DARI discountInput.value MENJADI totalDiscount.value
-                voucher_id: appliedVoucher.value?.voucher_id || null, // ⬅️ Pastikan voucher_id terkirim
+                discount: totalDiscount.value,
+                voucher_id: appliedVoucher.value?.voucher_id || null,
                 transaction_fee: transactionFee.value,
                 notes: orderNote.value,
-                items: cart.value.map((item: CartItem) => ({ 
-                    menu_id: item.menu_id, 
-                    quantity: item.quantity 
+                items: cart.value.map((item: CartItem) => ({
+                    menu_id: item.menu_id,
+                    quantity: item.quantity
                 })),
                 action_type: type,
                 amount_paid: type === 'pay' ? amountPaidInput.value : 0
             };
-            
-            console.log("🚀 PAYLOAD CHECKOUT POS DIKIRIM:", payload);
-            console.log("🏷️ Applied Voucher Object:", appliedVoucher.value);
-            
+
             const activeOutletId = localStorage.getItem('active_outlet_id');
 
             const response = await axios.post('/api/pos/checkout', payload, {
@@ -189,14 +184,12 @@ export function usePosCheckout() {
                     'X-Outlet-ID': activeOutletId
                 }
             });
-            console.log("🔥 [DEBUG CASH] Respons Backend:", response.data);
+
             const orderData = response.data.data || response.data;
             const validOrderNumber = orderData?.order_number || orderData?.orderNumber || orderData?.invoice_no || orderData?.id || '-';
-            // const orderData = response.data.data;
-            
+
             toast.success(`Transaksi ${orderData.order_number} berhasil diproses!`);
 
-            // Jika dibayar tunai (pay), simpan data struk dan tampilkan modal sukses universal
             if (type === 'pay') {
                 lastCompletedOrder.value = {
                     orderNumber: validOrderNumber,
@@ -209,7 +202,7 @@ export function usePosCheckout() {
                     items: [...cart.value],
                     paymentMethod: paymentMethod.value
                 };
-                
+
                 closePaymentModal();
                 paymentStatus.value = 'SUCCESS';
                 isSuccessModalOpen.value = true;
@@ -218,14 +211,12 @@ export function usePosCheckout() {
             }
         } catch (error: any) {
             toast.error(error.response?.data?.message || 'Gagal memproses transaksi');
-            console.error("❌ Detail Error Checkout:", error.response?.data || error);
-
         }
     };
 
     // --- DOKU QRIS Dynamic Checkout Handler ---
     const handleQrisCheckout = async () => {
-        if (isGeneratingQris.value) return; 
+        if (isGeneratingQris.value) return;
         isGeneratingQris.value = true;
 
         try {
@@ -236,12 +227,12 @@ export function usePosCheckout() {
                 customer_id: customerId.value || null,
                 payment_method: 'qris',
                 discount: totalDiscount.value,
-                voucher_id: appliedVoucher.value?.voucher_id || null, // ⬅️ Kirim voucher_id jika ada
+                voucher_id: appliedVoucher.value?.voucher_id || null,
                 transaction_fee: Number(transactionFee.value) || 0,
                 notes: orderNote.value || '',
-                items: cart.value.map((item: CartItem) => ({ 
-                    menu_id: item.menu_id, 
-                    quantity: item.quantity 
+                items: cart.value.map((item: CartItem) => ({
+                    menu_id: item.menu_id,
+                    quantity: item.quantity
                 })),
                 action_type: 'save',
                 amount_paid: 0
@@ -271,9 +262,7 @@ export function usePosCheckout() {
 
             if (qrisResponse.data.status === 'success') {
                 qrisData.value.invoiceNo = registeredOrder.order_number;
-                
-                // ✅ Simpan order_id (atau id) dari respons backend agar tidak null
-                (qrisData.value as any).orderId = registeredOrder.order_id || registeredOrder.id; 
+                (qrisData.value as any).orderId = registeredOrder.order_id || registeredOrder.id;
 
                 qrisData.value.referenceNo = qrisResponse.data.data.reference_no;
                 qrisData.value.qrContent = qrisResponse.data.data.qr_content;
@@ -281,14 +270,13 @@ export function usePosCheckout() {
                 isQrisModalOpen.value = true;
                 paymentStatus.value = 'PENDING';
                 startPollingStatus();
-            
+
             } else {
                 throw new Error(qrisResponse.data.message || 'Gagal meng-generate QRIS DOKU');
             }
         } catch (error: any) {
             const errorMsg = error.response?.data?.error || error.response?.data?.message || error.message || 'Gagal menyiapkan QRIS';
             toast.error(errorMsg);
-            console.error('QRIS Checkout Error:', error.response?.data || error);
         } finally {
             isGeneratingQris.value = false;
         }
@@ -305,25 +293,18 @@ export function usePosCheckout() {
                     reference_no: qrisData.value.referenceNo
                 });
 
-                // JIKA PEMBAYARAN DARI GATEWAY SUDAH SUKSES/PAID
                 if (response.data.status === 'success' && response.data.paid) {
                     paymentStatus.value = 'SUCCESS';
                     clearInterval(statusInterval);
 
-                    // --- LANGSUNG AMBIL ENDPOINT MARK-PAID DI SINI ---
                     const currentOrderId = (qrisData.value as any).orderId;
-                    console.log("ID Order yang mau dilunasi:", currentOrderId); // Cek F12 Console browser
 
                     if (currentOrderId) {
-                        const res = await axios.post(`/api/pos/orders/${currentOrderId}/mark-paid`, {
+                        await axios.post(`/api/pos/orders/${currentOrderId}/mark-paid`, {
                             payment_method: 'qris'
                         });
-                        console.log("Respon mark-paid:", res.data);
-                    } else {
-                        console.error("ERROR: orderId kosong/null!");
                     }
 
-                    // Panggil fungsi untuk memunculkan modal sukses & data struk
                     handleQrisSuccessAction();
 
                 } else if (response.data.status === 'FAILED') {
@@ -331,7 +312,7 @@ export function usePosCheckout() {
                     clearInterval(statusInterval);
                 }
             } catch (error) {
-                console.error('Gagal mengecek status pembayaran', error);
+                // Silent error on background poll
             }
         }, 4000);
     };

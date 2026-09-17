@@ -333,16 +333,26 @@ class MenuController extends Controller
         ]);
     }
 
-    public function userIndex(Request $request)
+public function userIndex(Request $request)
     {
+        // 1. Ambil Kategori yang hanya memiliki menu aktif DAN berada di outlet tersebut
         $categories = Category::where('is_visible', true)
-            ->whereHas('menus', function ($query) {
+            ->whereHas('menus', function ($query) use ($request) {
                 $query->where('is_active', true);
+
+                // Filter berdasarkan outlet_id jika dikirim dari frontend
+                if ($request->filled('outlet_id')) {
+                    $query->where('outlet_id', $request->outlet_id);
+                }
             })
             ->orderBy('sort', 'asc')
             ->get();
 
+        // 2. Ambil Menu yang aktif dan berada di outlet tersebut
         $menus = Menu::active()
+            ->when($request->filled('outlet_id'), function ($query) use ($request) {
+                $query->where('outlet_id', $request->outlet_id);
+            })
             ->with([
                 'categories' => function ($query) {
                     $query->orderBy('category_menu.sort', 'asc');

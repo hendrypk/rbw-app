@@ -38,6 +38,7 @@ Route::prefix('api/v1/user')->group(function () {
                 'user' => $request->user()
             ]);
         });
+        Route::get('outlets', [OutletController::class, 'index']);
         Route::get('/profile', [CustomerAuthController::class, 'profile']);
         Route::post('/logout', [CustomerAuthController::class, 'logout']);
         Route::get('/categories', [CategoryController::class, 'index']);

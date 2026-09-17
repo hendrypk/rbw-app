@@ -17,8 +17,9 @@ class PosService
     public function completeOrder(array $orderData, array $itemsData): Order
     {
         return DB::transaction(function () use ($orderData, $itemsData) {
-            
+
             $order = Order::create([
+                'transaction_at' => $orderData['transaction_at'],
                 'outlet_id'        => $orderData['outlet_id'] ?? null,
                 'customer_id'      => $orderData['customer_id'] ?? null,     // <-- TAMBAHKAN INI
                 'voucher_id'      => $orderData['voucher_id'] ?? null,     // <-- TAMBAHKAN INI
@@ -32,7 +33,8 @@ class PosService
                 'amount_paid'      => $orderData['amount_paid'],
                 'payment_method'   => $orderData['payment_method'],
                 'status'           => $orderData['status'],
-                'notes'            => $orderData['notes']
+                'notes'            => $orderData['notes'],
+                'is_self_order' => $orderData['is_self_order']
             ]);
 
             $accumulatedTotalHpp = 0;
@@ -79,7 +81,7 @@ class PosService
                     'menu_id'       => $menu->id,
                     'quantity'      => $itemQuantity,
                     'price'         => $item['price'],
-                    'hpp'           => $menuHppUnit, 
+                    'hpp'           => $menuHppUnit,
                     'overhead_cost' => $menu->overhead_cost ?? 0,
                     'subtotal'      => $item['subtotal']
                 ]);
@@ -146,14 +148,14 @@ class PosService
 
             // 3. Ubah status order menjadi voided
             $order->update(['status' => 'voided']);
-            $order->delete(); 
+            $order->delete();
         });
     }
 
     public function rewardCustomerPoints(Order $order)
     {
         if (!$order->customer_id || $order->status !== 'paid') {
-            return; 
+            return;
         }
 
         $amountForPoints = $order->final_total;

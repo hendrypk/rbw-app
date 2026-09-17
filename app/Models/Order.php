@@ -36,6 +36,7 @@ class Order extends Model
         'payment_method',
         'status',
         'notes',
+        'is_self_order',
         'transaction_fee',
         'amount_paid'
     ];

@@ -31,7 +31,7 @@ class OrderController extends Controller
             'items'           => 'required|array|min:1',
             'items.*.menu_id' => 'required|uuid|exists:menus,id',
             'items.*.quantity'=> 'required|integer|min:1',
-            'action_type'     => 'required|string|in:save,pay', 
+            'action_type'     => 'required|string|in:save,pay',
             'amount_paid'     => 'nullable|numeric|min:0',
         ]);
 
@@ -76,19 +76,20 @@ class OrderController extends Controller
 
             // Sinkronisasi status
             $status = 'unpaid';
-            $journalType = 'pos_pending'; 
+            $journalType = 'pos_pending';
 
             if ($request->action_type === 'pay') {
                 $amountPaid = floatval($request->amount_paid ?? 0);
                 if ($amountPaid >= $finalTotal) {
                     $status = 'paid';
-                    $journalType = 'pos_revenue_' . $request->payment_method; 
+                    $journalType = 'pos_revenue_' . $request->payment_method;
                 }
             }
 
             $outletId = session('active_outlet_id') ?? $request->header('X-Outlet-ID');
 
             $orderData = [
+                'transaction_at' => now(),
                 'outlet_id'      => $outletId,
                 'customer_id' => $request->customer_id ?? null,
                 'voucher_id'     => $request->voucher_id ?? null,
@@ -119,7 +120,7 @@ class OrderController extends Controller
             if ($order->status === 'paid') {
                 // Jurnal Ayat 1: Sisi Finansial Penerimaan Uang
                 JournalEntry::createEntryFromMapping(
-                    type: $journalType, 
+                    type: $journalType,
                     j1Amount: (float) $order->final_total,
                     reference: $order,
                     replacements: $replacements
@@ -138,7 +139,7 @@ class OrderController extends Controller
                 // if (strtolower($request->payment_method) === 'cash' && !empty($request->customer_id)) {
                 //     $this->posService->rewardCustomerPoints($order);
                 // }
-                
+
             } else {
                 JournalEntry::createEntryFromMapping(
                     type: 'pos_pending',
@@ -180,7 +181,7 @@ class OrderController extends Controller
 
             // 3. Catat Jurnal Keuangan Sisi Penerimaan Uang
             JournalEntry::createEntryFromMapping(
-                type: $journalType, 
+                type: $journalType,
                 j1Amount: (float) $order->final_total,
                 reference: $order,
                 replacements: $replacements
@@ -212,7 +213,7 @@ class OrderController extends Controller
     }
 
     /**
-     * Endpoint untuk mengubah status order QRIS yang tadinya pending/unpaid 
+     * Endpoint untuk mengubah status order QRIS yang tadinya pending/unpaid
      * menjadi paid (lunas) setelah pembayaran sukses diterima dari gateway.
      */
     public function markOrderAsPaid(Request $request, $id): JsonResponse
@@ -237,18 +238,18 @@ class OrderController extends Controller
             ]);
 
             $replacements = ['order_number' => $order->order_number];
-            $journalType = 'pos_revenue_' . $request->payment_method; 
+            $journalType = 'pos_revenue_' . $request->payment_method;
 
             // 2. Catat Jurnal Finansial Pendapatan
             JournalEntry::createEntryFromMapping(
-                type: $journalType, 
+                type: $journalType,
                 j1Amount: (float) $order->final_total,
                 reference: $order,
                 replacements: $replacements
             );
 
             $this->posService->rewardCustomerPoints($order);
-            
+
             return response()->json([
                 'success' => true,
                 'message' => 'Status order berhasil diubah menjadi lunas (paid) dan jurnal tercatat.',
@@ -266,7 +267,7 @@ class OrderController extends Controller
     public function void(string $id, Request $request): JsonResponse
     {
         $request->validate(['reason' => 'nullable|string|max:255']);
-        
+
         try {
             $reason = $request->input('reason', 'Pembatalan/Void oleh Kasir');
             $this->posService->voidOrder($id, $reason);
@@ -299,7 +300,7 @@ class OrderController extends Controller
     public function getPaidInvoices(): JsonResponse
     {
         $invoices = Order::with('items')
-            ->where('status', 'paid') 
+            ->where('status', 'paid')
             ->orderBy('created_at', 'desc')
             ->limit(50)
             ->get();
@@ -321,7 +322,7 @@ class OrderController extends Controller
                 'success' => true,
                 'data'    => $orders
             ], 200);
-            
+
         } catch (\Exception $e) {
             return response()->json([
                 'success' => false,
@@ -334,6 +335,7 @@ class OrderController extends Controller
     public function userCheckout(Request $request): JsonResponse
     {
         $request->validate([
+            'outlet_id' => 'required|uuid|exists:outlets,id',
             'items' => 'required|array|min:1',
             'items.*.menu_id' => 'required|uuid|exists:menus,id',
             'items.*.quantity' => 'required|integer|min:1',
@@ -366,7 +368,7 @@ class OrderController extends Controller
 
             foreach ($request->items as $itemData) {
                 $menu = Menu::active()->with(['prices' => function($query) {
-                    $query->where('channel', 'offline')->where('is_active', true); 
+                    $query->where('channel', 'offline')->where('is_active', true);
                 }])->findOrFail($itemData['menu_id']);
 
                 $priceOffline = $menu->prices->first();
@@ -374,7 +376,7 @@ class OrderController extends Controller
 
                 if ($sellingPrice <= 0) {
                     return response()->json([
-                        'status' => 'error', 
+                        'status' => 'error',
                         'message' => "Menu '{$menu->name}' belum memiliki harga aktif."
                     ], 422);
                 }
@@ -395,17 +397,20 @@ class OrderController extends Controller
             $finalTotal = max(0, ($totalSubtotal - $discount) - $pointsToUse);
 
             $orderData = [
-                'customer_name'    => $request->customer_name,
-                'customer_phone'   => $request->customer_phone,
+                'transaction_at' => now(),
+                'outlet_id' => $request->outlet_id,
+                'customer_name' => $request->customer_name,
+                'customer_phone' => $request->customer_phone,
                 'shipping_address' => $request->shipping_address,
-                'customer_id'      => $customer ? $customer->id : null, 
+                'customer_id'      => $customer ? $customer->id : null,
                 'voucher_id'       => $request->voucher_id ?? null, // ⬅️ Simpan voucher_id
                 'subtotal'         => $totalSubtotal,
                 'discount'         => $discount,                    // ⬅️ Simpan nominal diskon
                 'final_total'      => $finalTotal,                  // ⬅️ Simpan total bersih setelah diskon
-                'payment_method'   => 'pending', 
+                'payment_method'   => 'pending',
                 'status'           => 'unpaid',
                 'notes'            => $request->notes,
+                'is_self_order' => true,
                 'amount_paid'      => floatval($request->amount_paid ?? 0), // ⬅️ Tambahkan baris pengaman ini
             ];
 
@@ -480,7 +485,7 @@ class OrderController extends Controller
             }
 
             // Cari order berdasarkan order_number dan pastikan milik customer yang sedang login
-            $order = Order::with(['items.menu', 'voucher', 'points'])
+            $order = Order::with(['items.menu', 'voucher', 'points', 'outlet'])
                 ->where('order_number', $orderNumber)
                 ->where('customer_id', $customer->id)
                 ->first();
@@ -548,7 +553,7 @@ class OrderController extends Controller
 
         $orderIds = $orders->pluck('id');
         $soldProducts = collect();
-        
+
         if ($orderIds->isNotEmpty()) {
             $soldProducts = OrderItem::whereIn('order_id', $orderIds)
                 ->with('menu')
