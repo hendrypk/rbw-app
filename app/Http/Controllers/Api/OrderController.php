@@ -89,6 +89,7 @@ class OrderController extends Controller
             $outletId = session('active_outlet_id') ?? $request->header('X-Outlet-ID');
 
             $orderData = [
+                'is_self_order' => false,
                 'transaction_at' => now(),
                 'outlet_id'      => $outletId,
                 'customer_id' => $request->customer_id ?? null,

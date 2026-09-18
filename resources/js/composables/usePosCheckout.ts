@@ -223,6 +223,7 @@ export function usePosCheckout() {
             closePaymentModal();
 
             const registerPayload = {
+                is_self_order: false,
                 customer_name: customerName.value || 'Pelanggan POS',
                 customer_id: customerId.value || null,
                 payment_method: 'qris',
