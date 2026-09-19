@@ -6,51 +6,76 @@ use App\Models\Order;
 use App\Models\RawMaterial;
 use App\Models\StockLedger;
 use App\Models\JournalEntry;
+use App\Models\Menu;
 use Illuminate\Support\Facades\DB;
 use Exception;
 
 class PosService
 {
     /**
-     * Selesaikan Transaksi POS (Lunas / Pending)
+     * 1. Fungsi khusus untuk membuat Record Order & Order Items (Kalkulasi HPP saja, tidak potong stok)
      */
-    public function completeOrder(array $orderData, array $itemsData): Order
+    public function createOrder(array $orderData, array $itemsData): Order
     {
         return DB::transaction(function () use ($orderData, $itemsData) {
-
-            $order = Order::create([
-                'transaction_at' => $orderData['transaction_at'],
-                'outlet_id'        => $orderData['outlet_id'] ?? null,
-                'customer_id'      => $orderData['customer_id'] ?? null,     // <-- TAMBAHKAN INI
-                'voucher_id'      => $orderData['voucher_id'] ?? null,     // <-- TAMBAHKAN INI
-                'customer_name'    => $orderData['customer_name'],
-                'total_hpp'        => 0,
-                'total_overhead'   => 0,
-                'subtotal'         => $orderData['subtotal'],
-                // 'tax'            => $orderData['tax'],
-                'discount'         => $orderData['discount'],
-                'final_total'      => $orderData['final_total'],
-                'amount_paid'      => $orderData['amount_paid'],
-                'payment_method'   => $orderData['payment_method'],
-                'status'           => $orderData['status'],
-                'notes'            => $orderData['notes'],
-                'is_self_order' => $orderData['is_self_order']
-            ]);
+            $order = Order::create($orderData);
 
             $accumulatedTotalHpp = 0;
             $accumulatedOverhead = 0;
 
             foreach ($itemsData as $item) {
-                $menu = \App\Models\Menu::with('recipes.rawMaterial')->findOrFail($item['menu_id']);
+                $menu = Menu::with('recipes.rawMaterial')->findOrFail($item['menu_id']);
                 $itemQuantity = (float) $item['quantity'];
+
+                // Kalkulasi HPP
                 $menuHppUnit = 0;
+                foreach ($menu->recipes as $recipe) {
+                    $materialUnitCost = (float) $recipe->rawMaterial->avg_cost;
+                    $menuHppUnit += ((float) $recipe->qty_usage * $materialUnitCost);
+                }
+
+                // Kalkulasi Overhead
+                $itemOverhead = (float) ($menu->overhead_cost ?? 0) * $itemQuantity;
+                $accumulatedOverhead += $itemOverhead;
+
+                // Simpan Item
+                $order->items()->create([
+                    'menu_id'       => $menu->id,
+                    'quantity'      => $itemQuantity,
+                    'price'         => $item['price'],
+                    'hpp'           => $menuHppUnit,
+                    'overhead_cost' => $menu->overhead_cost ?? 0,
+                    'subtotal'      => $item['subtotal']
+                ]);
+
+                $accumulatedTotalHpp += ($menuHppUnit * $itemQuantity);
+            }
+
+            $order->update([
+                'total_hpp'      => $accumulatedTotalHpp,
+                'total_overhead' => $accumulatedOverhead,
+            ]);
+
+            return $order;
+        });
+    }
+
+    /**
+     * 2. Fungsi khusus untuk mengeksekusi Pemotongan Stok Bahan Baku
+     */
+    public function deductStock(Order $order): void
+    {
+        DB::transaction(function () use ($order) {
+            $order->loadMissing('items.menu.recipes.rawMaterial');
+
+            foreach ($order->items as $orderItem) {
+                $menu = $orderItem->menu;
+                $itemQuantity = (float) $orderItem->quantity;
 
                 foreach ($menu->recipes as $recipe) {
                     $material = $recipe->rawMaterial;
                     $totalUsageQty = (float) $recipe->qty_usage * $itemQuantity;
-
                     $materialUnitCost = (float) $material->avg_cost;
-                    $menuHppUnit += ((float) $recipe->qty_usage * $materialUnitCost);
 
                     $stockBefore = (float) $material->stock_qty;
                     $stockAfter = $stockBefore - $totalUsageQty;
@@ -73,29 +98,64 @@ class PosService
 
                     $material->update(['stock_qty' => $stockAfter]);
                 }
-
-                $itemOverhead = (float) ($menu->overhead_cost ?? 0) * $itemQuantity;
-                $accumulatedOverhead += $itemOverhead;
-
-                $order->items()->create([
-                    'menu_id'       => $menu->id,
-                    'quantity'      => $itemQuantity,
-                    'price'         => $item['price'],
-                    'hpp'           => $menuHppUnit,
-                    'overhead_cost' => $menu->overhead_cost ?? 0,
-                    'subtotal'      => $item['subtotal']
-                ]);
-
-                $accumulatedTotalHpp += ($menuHppUnit * $itemQuantity);
             }
-
-            $order->update([
-                'total_hpp'      => $accumulatedTotalHpp,
-                'total_overhead' => $accumulatedOverhead,
-            ]);
-
-            return $order;
         });
+    }
+
+    /**
+     * 3. Fungsi khusus untuk Jurnal saat Checkout (HPP & Piutang/Kas)
+     */
+    public function recordCheckoutJournals(Order $order): void
+    {
+        $replacements = ['order_number' => $order->order_number];
+
+        // Ayat 1: Finansial (Lunas -> Kas, Belum Lunas -> Piutang)
+        if ($order->status === 'paid') {
+            JournalEntry::createEntryFromMapping(
+                type: 'pos_revenue_' . $order->payment_method,
+                j1Amount: (float) $order->final_total,
+                reference: $order,
+                replacements: $replacements
+            );
+            JournalEntry::createEntryFromMapping(
+                type: 'pos_sales_hpp',
+                j1Amount: (float) $order->total_hpp,
+                reference: $order,
+                replacements: $replacements
+            );
+
+        } else {
+            JournalEntry::createEntryFromMapping(
+                type: 'pos_pending',
+                j1Amount: (float) $order->final_total,
+                reference: $order,
+                replacements: $replacements
+            );
+        }
+
+        // Ayat 2: Pencatatan HPP (Karena stok sudah dipotong, HPP diakui)
+        // if ($order->total_hpp > 0) {
+        //     JournalEntry::createEntryFromMapping(
+        //         type: 'pos_sales_hpp',
+        //         j1Amount: (float) $order->total_hpp,
+        //         reference: $order,
+        //         replacements: $replacements
+        //     );
+        // }
+    }
+
+    /**
+     * 4. Fungsi khusus untuk Jurnal Pelunasan (Settlement dari Pending -> Paid)
+     */
+    public function recordPaymentSettlementJournal(Order $order): void
+    {
+        // Jurnal penerimaan kas dari piutang (misal QRIS cair)
+        JournalEntry::createEntryFromMapping(
+            type: 'pos_revenue_' . $order->payment_method,
+            j1Amount: (float) $order->final_total,
+            reference: $order,
+            replacements: ['order_number' => $order->order_number]
+        );
     }
 
     /**

@@ -21,8 +21,8 @@ class OrderController extends Controller
     public function checkout(Request $request): JsonResponse
     {
         $request->validate([
-            'customer_id'     => 'nullable|uuid|exists:customers,id', // Validasi customer_id jika dipilih
-            'voucher_id'      => 'nullable|uuid|exists:vouchers,id', // ⬅️ Tambahkan validasi voucher_id
+            'customer_id'     => 'nullable|uuid|exists:customers,id',
+            'voucher_id'      => 'nullable|uuid|exists:vouchers,id',
             'customer_name'   => 'nullable|string|max:100',
             'payment_method'  => 'required|string|in:cash,qris,edc,pending',
             'discount'        => 'nullable|numeric|min:0',
@@ -36,12 +36,6 @@ class OrderController extends Controller
         ]);
 
         try {
-            // Generate Invoice unik (INV-YYYYMMDD-XXXX)
-            $mmyy = Carbon::now()->format('my'); // 'm' = bulan (08), 'y' = tahun 2 digit (26)
-            $random4Digit = str_pad(mt_rand(0, 9999), 4, '0', STR_PAD_LEFT); // Angka acak 0000 - 9999
-
-            // Hasilnya misal: 08264912
-            // Pengumpulan data item pesanan
             $totalSubtotal = 0;
             $itemsData = [];
 
@@ -69,34 +63,27 @@ class OrderController extends Controller
                 ];
             }
 
-            // Hitung nilai bersih
             $discount = floatval($request->discount ?? 0);
             $fee = floatval($request->transaction_fee ?? 0);
             $finalTotal = max(0, ($totalSubtotal + $fee) - $discount);
 
-            // Sinkronisasi status
             $status = 'unpaid';
-            $journalType = 'pos_pending';
+            $amountPaid = floatval($request->amount_paid ?? 0);
 
-            if ($request->action_type === 'pay') {
-                $amountPaid = floatval($request->amount_paid ?? 0);
-                if ($amountPaid >= $finalTotal) {
-                    $status = 'paid';
-                    $journalType = 'pos_revenue_' . $request->payment_method;
-                }
+            if ($request->action_type === 'pay' && $amountPaid >= $finalTotal) {
+                $status = 'paid';
             }
 
             $outletId = session('active_outlet_id') ?? $request->header('X-Outlet-ID');
 
             $orderData = [
-                'is_self_order' => false,
+                'is_self_order'  => false,
                 'transaction_at' => now(),
                 'outlet_id'      => $outletId,
-                'customer_id' => $request->customer_id ?? null,
+                'customer_id'    => $request->customer_id ?? null,
                 'voucher_id'     => $request->voucher_id ?? null,
                 'customer_name'  => $request->customer_name ?? 'Pelanggan POS',
                 'subtotal'       => $totalSubtotal,
-                // 'tax'            => $fee,
                 'discount'       => $discount,
                 'final_total'    => $finalTotal,
                 'amount_paid'    => $request->amount_paid,
@@ -105,58 +92,34 @@ class OrderController extends Controller
                 'notes'          => $request->notes
             ];
 
-            // 1. Jalankan core engine POS service (pengurangan stok resep & buat record order)
-            $order = $this->posService->completeOrder($orderData, $itemsData);
+            DB::beginTransaction();
+
+            $order = $this->posService->createOrder($orderData, $itemsData);
+
+            if ($status === 'paid') {
+                $this->posService->deductStock($order);
+
+                $this->posService->recordCheckoutJournals($order);
+
+                if (!empty($request->customer_id)) {
+                    $this->posService->rewardCustomerPoints($order);
+                }
+            }
 
             if (!empty($request->voucher_id)) {
-                $voucher = \App\Models\Voucher::find($request->voucher_id);
-                if ($voucher) {
-                    $voucher->increment('used_count');
-                }
+                \App\Models\Voucher::where('id', $request->voucher_id)->increment('used_count');
             }
 
-            // 2. Eksekusi Akuntansi Otomatis via Account Mapping
-            $replacements = ['order_number' => $order->order_number];
-
-            if ($order->status === 'paid') {
-                // Jurnal Ayat 1: Sisi Finansial Penerimaan Uang
-                JournalEntry::createEntryFromMapping(
-                    type: $journalType,
-                    j1Amount: (float) $order->final_total,
-                    reference: $order,
-                    replacements: $replacements
-                );
-
-                // Jurnal Ayat 2: Sisi Pengurangan Inventaris Dapur (HPP)
-                if ($order->total_hpp > 0) {
-                    JournalEntry::createEntryFromMapping(
-                        type: 'pos_sales_hpp',
-                        j1Amount: (float) $order->total_hpp,
-                        reference: $order,
-                        replacements: $replacements
-                    );
-                }
-
-                // if (strtolower($request->payment_method) === 'cash' && !empty($request->customer_id)) {
-                //     $this->posService->rewardCustomerPoints($order);
-                // }
-
-            } else {
-                JournalEntry::createEntryFromMapping(
-                    type: 'pos_pending',
-                    j1Amount: (float) $order->final_total,
-                    reference: $order,
-                    replacements: $replacements
-                );
-            }
+            DB::commit();
 
             return response()->json([
                 'success' => true,
-                'message' => 'Checkout berhasil diproses, stok berkurang, dan jurnal tercatat.',
-                'data'    => ['order_id' => $order->id, 'order_number' => $order->order_number, 'final_total' => $order->final_total]
+                'message' => $status === 'paid' ? 'Transaksi berhasil diproses.' : 'Invoice QRIS tersimpan (Belum Bayar).',
+                'data'    => $order
             ], 201);
 
         } catch (\Exception $e) {
+            DB::rollBack();
             return response()->json(['success' => false, 'error' => $e->getMessage()], 500);
         }
     }
@@ -169,18 +132,24 @@ class OrderController extends Controller
         ]);
 
         try {
-            // 1. Update status order yang sudah ada menjadi paid
+            if ($order->status === 'paid') {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Order ini sudah berstatus lunas sebelumnya.'
+                ], 400);
+            }
+
+            DB::beginTransaction();
+
             $order->update([
                 'payment_method' => $request->payment_method,
                 'amount_paid'    => $request->amount_paid,
                 'status'         => 'paid',
             ]);
 
-            // 2. Tentukan jenis jurnal berdasarkan metode pembayaran
             $journalType = 'pos_revenue_' . $request->payment_method;
             $replacements = ['order_number' => $order->order_number];
 
-            // 3. Catat Jurnal Keuangan Sisi Penerimaan Uang
             JournalEntry::createEntryFromMapping(
                 type: $journalType,
                 j1Amount: (float) $order->final_total,
@@ -188,7 +157,6 @@ class OrderController extends Controller
                 replacements: $replacements
             );
 
-            // 4. Catat Jurnal HPP jika belum tercatat sebelumnya
             if ($order->total_hpp > 0) {
                 JournalEntry::createEntryFromMapping(
                     type: 'pos_sales_hpp',
@@ -198,13 +166,22 @@ class OrderController extends Controller
                 );
             }
 
+            $this->posService->deductStock($order);
+
+            if (!empty($order->customer_id)) {
+                $this->posService->rewardCustomerPoints($order);
+            }
+
+            DB::commit();
+
             return response()->json([
                 'success' => true,
-                'message' => 'Pembayaran order berhasil diproses dan jurnal tercatat.',
+                'message' => 'Pembayaran order berhasil diproses, stok dikurangi, dan jurnal tercatat.',
                 'data'    => $order
             ], 200);
 
         } catch (\Exception $e) {
+            DB::rollBack();
             return response()->json([
                 'success' => false,
                 'message' => 'Gagal memproses pembayaran',
@@ -220,44 +197,40 @@ class OrderController extends Controller
     public function markOrderAsPaid(Request $request, $id): JsonResponse
     {
         $request->validate([
-            'payment_method' => 'required|string|in:qris,edc,cash',
-            'customer_id'    => 'nullable|uuid|exists:customers,id', // Tambahkan opsional ini jika ingin diperbarui saat pelunasan
+            'payment_method' => 'required|string|in:cash,qris,edc',
+            'amount_paid'    => 'required|numeric|min:0',
+            'customer_id'    => 'nullable|uuid|exists:customers,id',
         ]);
 
         try {
             $order = Order::findOrFail($id);
 
-            if ($order->status === 'paid') {
-                return response()->json(['success' => true, 'message' => 'Order sudah berstatus lunas sebelumnya.']);
-            }
+            // if ($order->status === 'paid') {
+            //     return response()->json(['success' => true, 'message' => 'Order sudah berstatus lunas.'], 400);
+            // }
+
+            DB::beginTransaction();
 
             $order->update([
                 'status'         => 'paid',
                 'payment_method' => $request->payment_method,
-                'amount_paid' => $request->amount_paid,
-                'customer_id'    => $request->customer_id ?? $order->customer_id // Pertahankan atau perbarui jika dikirim
+                'amount_paid'    => $request->amount_paid,
+                'customer_id'    => $request->customer_id ?? $order->customer_id
             ]);
 
-            $replacements = ['order_number' => $order->order_number];
-            $journalType = 'pos_revenue_' . $request->payment_method;
+            $this->posService->deductStock($order);
 
-            // 2. Catat Jurnal Finansial Pendapatan
-            JournalEntry::createEntryFromMapping(
-                type: $journalType,
-                j1Amount: (float) $order->final_total,
-                reference: $order,
-                replacements: $replacements
-            );
+            $this->posService->recordCheckoutJournals($order);
 
-            $this->posService->rewardCustomerPoints($order);
+            if (!empty($order->customer_id)) {
+                $this->posService->rewardCustomerPoints($order);
+            }
 
-            return response()->json([
-                'success' => true,
-                'message' => 'Status order berhasil diubah menjadi lunas (paid) dan jurnal tercatat.',
-                'data'    => ['order_id' => $order->id, 'order_number' => $order->order_number]
-            ], 200);
+            DB::commit();
 
+            return response()->json(['success' => true, 'message' => 'Pembayaran berhasil dilunasi dan stok diperbarui.']);
         } catch (\Exception $e) {
+            DB::rollBack();
             return response()->json(['success' => false, 'error' => $e->getMessage()], 500);
         }
     }

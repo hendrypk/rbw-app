@@ -111,6 +111,7 @@ export function usePosCheckout() {
     const closeQrisModal = () => {
         isQrisModalOpen.value = false;
         if (statusInterval) clearInterval(statusInterval);
+        resetPosState();
     };
 
     const closeSuccessModal = () => {
@@ -176,7 +177,6 @@ export function usePosCheckout() {
                 action_type: type,
                 amount_paid: type === 'pay' ? amountPaidInput.value : 0
             };
-
             const activeOutletId = localStorage.getItem('active_outlet_id');
 
             const response = await axios.post('/api/pos/checkout', payload, {
@@ -220,7 +220,6 @@ export function usePosCheckout() {
         isGeneratingQris.value = true;
 
         try {
-            closePaymentModal();
 
             const registerPayload = {
                 is_self_order: false,
@@ -268,6 +267,7 @@ export function usePosCheckout() {
                 qrisData.value.referenceNo = qrisResponse.data.data.reference_no;
                 qrisData.value.qrContent = qrisResponse.data.data.qr_content;
 
+                closePaymentModal();
                 isQrisModalOpen.value = true;
                 paymentStatus.value = 'PENDING';
                 startPollingStatus();
@@ -302,7 +302,9 @@ export function usePosCheckout() {
 
                     if (currentOrderId) {
                         await axios.post(`/api/pos/orders/${currentOrderId}/mark-paid`, {
-                            payment_method: 'qris'
+                            payment_method: 'qris',
+                            amount_paid: finalTotal.value,
+                            customer_id: customerId.value || null
                         });
                     }
 
@@ -313,14 +315,13 @@ export function usePosCheckout() {
                     clearInterval(statusInterval);
                 }
             } catch (error) {
-                // Silent error on background poll
             }
         }, 4000);
     };
 
     const handleQrisSuccessAction = (orderDetail?: any) => {
         lastCompletedOrder.value = {
-            orderNumber: orderDetail?.order_number || '-',
+            orderNumber: orderDetail?.order_number || qrisData.value.invoiceNo || '-',
             customerName: customerName.value || 'Pelanggan Umum',
             customerId: customerId.value || null,
             subtotal: cartSubtotal.value,

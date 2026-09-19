@@ -103,7 +103,7 @@ let timerInterval: any = null;
 const filteredMenus = computed(() => {
     return menus.value.filter(menu => {
         const matchesSearch = menu.name.toLowerCase().includes(searchQuery.value.toLowerCase());
-        const matchesCategory = selectedCategory.value === 'all' || 
+        const matchesCategory = selectedCategory.value === 'all' ||
             (menu.categories && menu.categories.some((cat: any) => cat.id === selectedCategory.value)) ||
             menu.category_id === selectedCategory.value;
         return matchesSearch && matchesCategory;
@@ -132,13 +132,13 @@ const formattedCountdown = computed(() => {
 const handleOutletSelect = (outlet: any) => {
     if (!outlet || !outlet.id) {
         toast.error('Data outlet tidak valid. Gagal memilih outlet.');
-        return; 
+        return;
     }
     localStorage.setItem('active_outlet_id', outlet.id);
-    localStorage.setItem('active_outlet_name', outlet.name || 'Outlet'); 
+    localStorage.setItem('active_outlet_name', outlet.name || 'Outlet');
     currentOutletId.value = outlet.id;
     isOutletModalOpen.value = false;
-    window.location.reload(); 
+    window.location.reload();
 };
 
 const fetchData = async () => {
@@ -211,7 +211,7 @@ const removeFromCart = (menuId: string) => {
 const handlePrintReceipt = async () => {
     if (lastCompletedOrder.value && lastCompletedOrder.value.orderNumber !== '-') {
         const formattedData = mapTransactionToReceiptData(lastCompletedOrder.value);
-        
+
         // 1. Cetak Struk Kasir
         const textStruk = formatCashierReceipt(formattedData);
         await print(textStruk);
@@ -299,6 +299,7 @@ const handleQrisCheckout = async () => {
 const closeQrisModal = () => {
     if (timerInterval) clearInterval(timerInterval);
     baseCloseQrisModal();
+    toast.info('Tagihan QRIS disimpan sebagai Belum Bayar.');
 };
 
 const getInitials = (name: string) => name.split(' ').map(n => n[0]).slice(0, 2).join('').toUpperCase();
@@ -313,7 +314,7 @@ const startCategoryDrag = (e: MouseEvent | TouchEvent) => {
     isDraggingCategory.value = true;
     const clientX = 'touches' in e ? e.touches[0].clientX : e.clientX;
     const clientY = 'touches' in e ? e.touches[0].clientY : e.clientY;
-    
+
     dragStartPos = {
         x: clientX + floatingPos.value.x,
         y: clientY + floatingPos.value.y
@@ -368,11 +369,11 @@ onBeforeUnmount(() => {
 <template>
     <Head title="RBW POS" />
     <div class="h-full w-full flex flex-col md:flex-row overflow-hidden relative select-none">
-        
+
         <!-- ========================================================= -->
         <!-- LEFT PANEL: CART & CHECKOUT CONTAINER (SEKARANG DI KIRI)  -->
         <!-- ========================================================= -->
-        <div 
+        <div
             class="fixed lg:relative bottom-0 left-0 right-0 z-30 bg-white dark:bg-zinc-950 border-t lg:border-t-0 border-slate-200 dark:border-zinc-800 flex flex-col shadow-[0_-15px_40px_rgba(0,0,0,0.08)] lg:shadow-none transition-all duration-300 ease-out overflow-hidden"
             :style="{ width: windowWidth >= 1024 ? `${catalogWidth}%` : '100%' }"
             :class="[
@@ -381,8 +382,8 @@ onBeforeUnmount(() => {
             ]"
         >
             <!-- Mobile Swipe Handle (Pemicu Buka/Tutup Keranjang) -->
-            <div 
-                @click="isCartExpanded = !isCartExpanded" 
+            <div
+                @click="isCartExpanded = !isCartExpanded"
                 @touchstart="handleTouchStart"
                 @touchend="handleTouchEnd"
                 class="lg:hidden w-full flex flex-col items-center pt-3 pb-2 cursor-pointer shrink-0 bg-white dark:bg-zinc-950 z-10 relative"
@@ -398,7 +399,7 @@ onBeforeUnmount(() => {
             <!-- (Tampil saat isCartExpanded true di mobile)-->
             <!-- ========================================== -->
             <div :class="[isCartExpanded ? 'flex' : 'hidden lg:flex', 'flex-col flex-1 min-h-0 overflow-hidden bg-white dark:bg-zinc-950']">
-                
+
                 <!-- Header: Customer & Clear -->
                 <div class="px-5 py-3 flex items-center justify-between shrink-0 border-b border-slate-100 dark:border-zinc-900">
                     <button @click="openCustomerModal" class="flex items-center gap-3 group text-left max-w-[70%]">
@@ -422,7 +423,7 @@ onBeforeUnmount(() => {
                         <svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="21" r="1"/><circle cx="19" cy="21" r="1"/><path d="M2.05 2.05h2l2.66 12.42a2 2 0 0 0 2 1.58h9.78a2 2 0 0 0 1.95-1.57l1.65-7.43H5.12"/></svg>
                         <span class="text-sm font-medium">Keranjang kosong</span>
                     </div>
-                    
+
                     <div class="space-y-1">
                         <div v-for="item in cart" :key="item.menu_id" class="p-3 hover:bg-slate-50 dark:hover:bg-zinc-900 rounded-2xl transition-colors flex flex-col gap-3">
                             <div class="flex justify-between items-start gap-3">
@@ -452,7 +453,7 @@ onBeforeUnmount(() => {
             <!-- (Total Rp, Qty, Diskon, Simpan, Bayar)     -->
             <!-- ========================================== -->
             <div class="shrink-0 bg-white dark:bg-zinc-950 px-5 pt-3 pb-5 border-t border-slate-200 dark:border-zinc-800 shadow-[0_-5px_15px_rgba(0,0,0,0.02)]">
-                
+
                 <!-- Ringkasan Angka & Diskon -->
                 <div class="flex items-end justify-between mb-4">
                     <div class="flex flex-col">
@@ -465,8 +466,8 @@ onBeforeUnmount(() => {
                     </div>
 
                     <!-- Tombol Diskon Kapsul -->
-                    <button 
-                        @click="openDiscountModal" 
+                    <button
+                        @click="openDiscountModal"
                         class="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold transition-all active:scale-95"
                         :class="appliedVoucher ? 'bg-orange-100 text-orange-600 dark:bg-orange-900/40 dark:text-orange-400' : 'bg-slate-100 text-slate-600 hover:bg-slate-200 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-700'"
                     >
@@ -478,15 +479,15 @@ onBeforeUnmount(() => {
 
                 <!-- Action Buttons -->
                 <div class="flex gap-3">
-                    <button 
+                    <button
                         @click="submitCheckout('save')"
                         :disabled="cart.length === 0"
                         class="w-1/3 py-3.5 bg-slate-100 hover:bg-slate-200 dark:bg-zinc-800 dark:hover:bg-zinc-700 text-slate-900 dark:text-white font-bold rounded-2xl text-sm transition-all disabled:opacity-50 flex flex-col items-center justify-center gap-0.5"
                     >
                         <span>Simpan</span>
                     </button>
-                    
-                    <button 
+
+                    <button
                         @click="openPaymentModal"
                         :disabled="cart.length === 0"
                         class="w-2/3 py-3.5 bg-slate-900 hover:bg-slate-800 dark:bg-white dark:hover:bg-slate-200 dark:text-slate-900 text-white font-bold rounded-2xl text-sm transition-all disabled:opacity-50 flex justify-center items-center gap-2"
@@ -502,7 +503,7 @@ onBeforeUnmount(() => {
         <!-- ========================================================= -->
         <!-- DRAGGABLE RESIZER BAR                                     -->
         <!-- ========================================================= -->
-        <div 
+        <div
             @mousedown="startDrag"
             class="hidden md:flex w-1.5 bg-slate-200 dark:bg-zinc-800 hover:bg-primary cursor-col-resize items-center justify-center transition-colors shrink-0 z-10"
             title="Tarik untuk mengatur lebar kolom"
@@ -516,14 +517,14 @@ onBeforeUnmount(() => {
         <div class="flex-1 h-full overflow-y-auto p-4 space-y-4 custom-scrollbar flex flex-col transition-all duration-75">
             <div class="sticky top-0 z-20 pt-1 pb-1 shrink-0 bg-slate-100 dark:bg-zinc-950">
                 <div class="flex items-center gap-1.5 bg-white dark:bg-zinc-900 px-3 py-1.5 rounded-xl border border-slate-200 dark:border-zinc-800 shadow-2xs">
-                    <input 
+                    <input
                         v-model="searchQuery"
-                        type="text" 
-                        placeholder="Cari menu..." 
+                        type="text"
+                        placeholder="Cari menu..."
                         class="w-full py-1 text-sm bg-transparent border-none focus:outline-none text-slate-900 dark:text-white placeholder:text-slate-400 font-semibold"
                     />
                     <div class="relative view-dropdown-container shrink-0">
-                        <button 
+                        <button
                             @click="isViewDropdownOpen = !isViewDropdownOpen"
                             class="p-1.5 rounded-lg text-slate-600 dark:text-zinc-300 hover:bg-slate-100 dark:hover:bg-zinc-800 transition-colors cursor-pointer"
                             title="Tampilan Menu"
@@ -532,11 +533,11 @@ onBeforeUnmount(() => {
                         </button>
 
                         <!-- Dropdown Tampilan Menu -->
-                        <div 
-                            v-if="isViewDropdownOpen" 
+                        <div
+                            v-if="isViewDropdownOpen"
                             class="absolute right-0 mt-1 w-48 bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 rounded-xl shadow-lg p-2.5 z-50 space-y-2 text-xs"
                         >
-                            <div 
+                            <div
                                 @click="viewMode = 'grid'; isViewDropdownOpen = false"
                                 class="flex items-center justify-between cursor-pointer py-1 font-bold text-slate-800 dark:text-zinc-200"
                             >
@@ -546,17 +547,17 @@ onBeforeUnmount(() => {
 
                             <div v-if="viewMode === 'grid'" class="space-y-1 pt-1 border-t border-slate-100 dark:border-zinc-800" @mousedown.stop @touchstart.stop>
                                 <span class="text-[10px] text-slate-400 block">Zoom Grid</span>
-                                <input 
-                                    type="range" 
-                                    v-model.number="gridScale" 
-                                    min="1" 
-                                    max="4" 
-                                    step="1" 
+                                <input
+                                    type="range"
+                                    v-model.number="gridScale"
+                                    min="1"
+                                    max="4"
+                                    step="1"
                                     class="w-full cursor-pointer accent-primary h-4"
                                 />
                             </div>
 
-                            <div 
+                            <div
                                 @click="viewMode = 'list'; isViewDropdownOpen = false"
                                 class="flex items-center justify-between cursor-pointer pt-1 border-t border-slate-100 dark:border-zinc-800 font-bold text-slate-800 dark:text-zinc-200"
                             >
@@ -571,13 +572,13 @@ onBeforeUnmount(() => {
             <!-- ========================================== -->
             <!-- 2. FLOATING DRAGGABLE CATEGORY BUTTON      -->
             <!-- ========================================== -->
-            <div 
+            <div
                 class="fixed z-40 select-none cursor-grab active:cursor-grabbing touch-none"
                 :style="{ right: floatingPos.x + 'px', bottom: floatingPos.y + 'px' }"
                 @mousedown="startCategoryDrag"
                 @touchstart="startCategoryDrag"
             >
-                <button 
+                <button
                     @click="isCategoryModalOpen = true"
                     class="w-14 h-14 bg-slate-900 hover:bg-slate-800 text-white dark:bg-white dark:text-slate-900 rounded-full shadow-2xl flex items-center justify-center border-2 border-white/20 dark:border-zinc-900 transition-transform active:scale-95"
                     title="Filter Kategori"
@@ -598,7 +599,7 @@ onBeforeUnmount(() => {
                     </div>
 
                     <div class="space-y-2">
-                        <button 
+                        <button
                             @click="selectedCategory = 'all'; isCategoryModalOpen = false"
                             class="w-full text-left px-4 py-3 rounded-xl font-bold text-base transition-colors flex items-center justify-between"
                             :class="selectedCategory === 'all' ? 'bg-primary text-primary-foreground' : 'bg-slate-50 dark:bg-zinc-800 text-slate-700 dark:text-zinc-300'"
@@ -607,8 +608,8 @@ onBeforeUnmount(() => {
                             <span v-if="selectedCategory === 'all'">✓</span>
                         </button>
 
-                        <button 
-                            v-for="cat in categories" 
+                        <button
+                            v-for="cat in categories"
                             :key="cat.id"
                             @click="selectedCategory = cat.id; isCategoryModalOpen = false"
                             class="w-full text-left px-4 py-3 rounded-xl font-bold text-base transition-colors flex items-center justify-between"
@@ -621,10 +622,10 @@ onBeforeUnmount(() => {
                 </div>
             </div>
 
-<div v-if="viewMode === 'grid'" :class="['grid gap-3 pb-24 md:pb-4 transition-all duration-200', gridColumnsClass]">
-                <div 
-                    v-for="menu in filteredMenus" 
-                    :key="menu.id" 
+            <div v-if="viewMode === 'grid'" :class="['grid gap-3 pb-24 md:pb-4 transition-all duration-200', gridColumnsClass]">
+                <div
+                    v-for="menu in filteredMenus"
+                    :key="menu.id"
                     @click="addToCart(menu)"
                     class="bg-white dark:bg-zinc-900 rounded-2xl border border-slate-200 dark:border-zinc-800 shadow-xs cursor-pointer hover:border-primary active:scale-[0.97] transition-all flex flex-col justify-between overflow-hidden group relative"
                 >
@@ -658,9 +659,9 @@ onBeforeUnmount(() => {
 
             <!-- Menu Layout: LIST VIEW -->
             <div v-else class="space-y-2 pb-20 md:pb-4">
-                <div 
-                    v-for="menu in filteredMenus" 
-                    :key="menu.id" 
+                <div
+                    v-for="menu in filteredMenus"
+                    :key="menu.id"
                     @click="addToCart(menu)"
                     class="bg-white dark:bg-zinc-900 p-3 rounded-xl border border-slate-200 dark:border-zinc-800 shadow-xs cursor-pointer hover:border-primary transition-all flex items-center justify-between gap-4"
                 >
@@ -694,7 +695,7 @@ onBeforeUnmount(() => {
     <!-- ========================================================= -->
     <!-- MODALS                                                    -->
     <!-- ========================================================= -->
-    <PaymentModal 
+    <PaymentModal
         :is-payment-modal-open="isPaymentModalOpen"
         :is-qris-modal-open="isQrisModalOpen"
         :is-success-modal-open="isSuccessModalOpen"
@@ -715,30 +716,30 @@ onBeforeUnmount(() => {
         @handle-print-receipt="handlePrintReceipt"
     />
 
-    <CustomerSelectModal 
+    <CustomerSelectModal
         v-if="isCustomerModalOpen"
         :is-open="isCustomerModalOpen"
         v-model:customer-name="customerName"
-        @select="(customer: any) => { 
-            customerName = customer.name; 
-            customerId = customer.id; 
+        @select="(customer: any) => {
+            customerName = customer.name;
+            customerId = customer.id;
         }"
         @close="isCustomerModalOpen = false"
         @open-add="isCustomerModalOpen = false; isCustomerAddModalOpen = true;"
     />
 
-    <CustomerAddModal 
+    <CustomerAddModal
         v-if="isCustomerAddModalOpen"
         :is-open="isCustomerAddModalOpen"
         @back="isCustomerAddModalOpen = false; isCustomerModalOpen = true;"
-        @saved="(newCust: any) => { 
-            customerName = newCust.name; 
+        @saved="(newCust: any) => {
+            customerName = newCust.name;
             customerId = newCust.id;
         }"
         @close="isCustomerAddModalOpen = false"
     />
 
-    <DiscountModal 
+    <DiscountModal
         v-if="isDiscountModalOpen"
         :is-open="isDiscountModalOpen"
         :current-discount="discountInput"
@@ -754,12 +755,12 @@ onBeforeUnmount(() => {
         @close="isDiscountModalOpen = false"
     />
 
-    <OutletSelectModal 
+    <OutletSelectModal
         :is-open="isOutletModalOpen"
         :outlets="outlets || []"
         @select="handleOutletSelect"
     />
-    
+
 </template>
 
 <style scoped>

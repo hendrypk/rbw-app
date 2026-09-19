@@ -7,29 +7,24 @@ import {
     ClipboardList,
     Receipt,
     ArrowLeft,
-    User,
     CheckCircle2,
     Clock,
     Printer,
     FileText,
-    Calendar,
     DollarSign,
-    QrCode,
-    CreditCard,
-    Check,
-    X
+    SearchXIcon
 } from '@lucide/vue';
 import pos from '@/routes/pos';
-import { SearchXIcon } from '@lucide/vue';
 import { toast } from 'vue-sonner';
-import QrcodeVue from 'qrcode.vue';
 import PosLayout from '@/layouts/PosLayout.vue';
+
+// Import komponen modal pembayaran
+import PaymentModal from '@/components/pos/PaymentModal.vue';
 
 // Import composables thermal printer & receipt builder
 import { useThermalPrinter } from '@/composables/useThermalPrinter';
 import { mapTransactionToReceiptData } from '@/composables/useReceiptFormatter';
 import { formatCashierReceipt, formatCopyReceipt, formatKitchenReceipt } from '@/composables/useReceiptBuilder';
-
 
 defineOptions({
     layout: PosLayout
@@ -56,6 +51,7 @@ interface Transaction {
     id: number | string;
     order_number: string;
     customer_name?: string;
+    customer_id?: string | null;
     status: string;
     final_total: number;
     total?: number;
@@ -67,6 +63,9 @@ interface Transaction {
     amount_paid?: number;
     notes?: string;
     items?: TransactionItem[];
+    outlet?: {
+        name?: string;
+    };
 }
 
 // State Utama dengan Type Safety
@@ -78,9 +77,11 @@ const selectedTransaction = ref<Transaction | null>(null);
 
 // State Modal Pembayaran & QRIS
 const isPaymentModalOpen = ref(false);
+const isSuccessModalOpen = ref(false);
 const paymentMethod = ref('cash');
 const amountPaidInput = ref(0);
 const isGeneratingQris = ref(false);
+const modalCustomerName = ref('');
 
 const isQrisModalOpen = ref(false);
 const qrisData = ref({
@@ -89,6 +90,7 @@ const qrisData = ref({
     qrContent: ''
 });
 const qrisPaymentStatus = ref('PENDING'); // PENDING, SUCCESS, FAILED
+const paymentStatus = ref('PENDING');
 let statusInterval: ReturnType<typeof setInterval> | undefined = undefined;
 
 // State Countdown Timer (15 Menit)
@@ -176,13 +178,13 @@ const selectTransaction = (trx: Transaction) => {
 // HANDLER CETAK STRUK BLUETOOTH / FALLBACK
 // =========================================================
 const handlePrintCashierReceipt = async (transactionObj: any) => {
+    if (!transactionObj) return;
     const formattedData = mapTransactionToReceiptData(transactionObj);
     const textStruk = formatCashierReceipt(formattedData);
     await print(textStruk);
     toast.success("Struk kasir dicetak.");
 };
 
-// Handler Cetak Salinan Struk (Copy Receipt) saat tombol cetak diklik
 const handlePrintCopyReceipt = async () => {
     if (!selectedTransaction.value) {
         toast.error("Tidak ada transaksi yang dipilih.");
@@ -190,26 +192,19 @@ const handlePrintCopyReceipt = async () => {
     }
     const formattedData = mapTransactionToReceiptData(selectedTransaction.value);
     const textCopyStruk = formatCopyReceipt(formattedData);
-    console.log(textCopyStruk);
-    console.groupEnd();
     await print(textCopyStruk);
     toast.success("Salinan struk (Copy) dicetak.");
 };
 
-
-
-// Contoh 2: Cetak Tiket Dapur (Kitchen Ticket) secara bersamaan jika diperlukan
-const handlePrintKitchenTicket = async (transactionObj: any) => {
-    const formattedData = mapTransactionToReceiptData(transactionObj);
-    const textDapur = formatKitchenReceipt(formattedData);
-    await print(textDapur);
-    toast.success("Tiket dapur dikirim.");
-};
-
+// =========================================================
+// HANDLER MODAL & PEMBAYARAN
+// =========================================================
 const openPaymentModal = (trx: Transaction) => {
     selectedTransaction.value = trx;
     amountPaidInput.value = Number(trx.final_total);
+    modalCustomerName.value = trx.customer_name || 'Pelanggan Umum';
     paymentMethod.value = 'cash';
+    paymentStatus.value = 'PENDING';
     isPaymentModalOpen.value = true;
 };
 
@@ -217,23 +212,26 @@ const closePaymentModal = () => {
     isPaymentModalOpen.value = false;
 };
 
+const closeSuccessModal = () => {
+    isSuccessModalOpen.value = false;
+    fetchTransactions();
+};
+
 const processPayment = async () => {
     if (!selectedTransaction.value) return;
 
-    if (paymentMethod.value === 'qris') {
-        await handleQrisCheckout();
-        return;
-    }
-
     try {
+        // Melalui modal, event submit-cash dipastikan pembayarannya tunai
         const response = await axios.post(`/api/pos/orders/${selectedTransaction.value.id}/pay`, {
-            payment_method: paymentMethod.value,
-            amount_paid: paymentMethod.value === 'cash' ? amountPaidInput.value : selectedTransaction.value.final_total
+            payment_method: 'cash',
+            amount_paid: amountPaidInput.value,
+            customer_id: selectedTransaction.value.customer_id || null
         });
 
         if (response.data.success || response.status === 200) {
-            toast.success(`Order ${selectedTransaction.value.order_number} berhasil dilunasi!`);
             closePaymentModal();
+            paymentStatus.value = 'SUCCESS';
+            isSuccessModalOpen.value = true;
             fetchTransactions();
         }
     } catch (error: any) {
@@ -247,8 +245,6 @@ const handleQrisCheckout = async () => {
     isGeneratingQris.value = true;
 
     try {
-        closePaymentModal();
-
         const qrisResponse = await axios.post('/api/payment/qris/generate', {
             order_number: selectedTransaction.value.order_number,
             amount: Number(selectedTransaction.value.final_total)
@@ -259,6 +255,7 @@ const handleQrisCheckout = async () => {
             qrisData.value.referenceNo = qrisResponse.data.data.reference_no;
             qrisData.value.qrContent = qrisResponse.data.data.qr_content;
 
+            closePaymentModal(); // Tutup setelah sukses men-generate
             isQrisModalOpen.value = true;
             qrisPaymentStatus.value = 'PENDING';
             startCountdown();
@@ -289,6 +286,11 @@ const startPollingStatus = () => {
                 qrisPaymentStatus.value = 'SUCCESS';
                 clearInterval(statusInterval);
                 if (timerInterval) clearInterval(timerInterval);
+
+                isQrisModalOpen.value = false;
+                paymentStatus.value = 'SUCCESS';
+                isSuccessModalOpen.value = true;
+
                 fetchTransactions();
             } else if (response.data.status === 'FAILED') {
                 qrisPaymentStatus.value = 'FAILED';
@@ -315,74 +317,78 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-    <div class="flex flex-col md:flex-row h-screen w-full bg-slate-100 dark:bg-zinc-950 text-slate-800 dark:text-zinc-100 overflow-hidden font-sans">
+
+    <!-- GANTI h-screen menjadi h-full agar beradaptasi dengan sisa tinggi PosLayout -->
+    <div class="flex h-full w-full bg-[#F2F2F7] dark:bg-black text-slate-900 dark:text-white overflow-hidden font-sans selection:bg-orange-200">
 
         <!-- ========================================================= -->
-        <!-- KOLOM KIRI: LIST TRANSAKSI                                -->
+        <!-- KOLOM KIRI: LIST TRANSAKSI (Master View)                  -->
         <!-- ========================================================= -->
-        <div :class="['w-full md:w-[420px] flex-col bg-white dark:bg-zinc-900 border-r border-slate-200 dark:border-zinc-800 h-full shrink-0 shadow-sm z-10', selectedTransaction ? 'hidden md:flex' : 'flex']">
-            <div class="p-4 border-b border-slate-100 dark:border-zinc-800 flex items-center gap-3 bg-slate-50/50 dark:bg-zinc-900/50 shrink-0">
-                <Link :href="pos.index()" class="p-2 bg-white dark:bg-zinc-800 border border-slate-200 dark:border-zinc-700 rounded-xl text-slate-500 hover:text-slate-900 dark:hover:text-white transition-colors shadow-2xs">
-                    <ArrowLeft class="h-4 w-4" />
+        <div :class="['w-full md:w-[380px] lg:w-[420px] flex flex-col h-full bg-[#F2F2F7] dark:bg-black border-r border-slate-200 dark:border-[#2C2C2E] shrink-0 z-10', selectedTransaction ? 'hidden md:flex' : 'flex']">
+
+            <!-- Header List (Shrink-0 agar tetap di atas) -->
+            <div class="px-4 pt-6 pb-3 bg-[#F2F2F7]/95 dark:bg-black/95 backdrop-blur-xl z-20 shrink-0">
+                <Link :href="pos.index()" class="text-orange-500 hover:text-orange-600 flex items-center gap-1 text-[17px] font-medium mb-2 transition-colors active:opacity-70 w-fit">
+                    <ArrowLeft class="h-5 w-5" /> POS
                 </Link>
-                <div>
-                    <h3 class="font-black text-sm text-slate-900 dark:text-zinc-50 tracking-tight">Riwayat Transaksi</h3>
-                    <p class="text-[11px] text-slate-400 font-medium">Kelola invoice & order pending</p>
-                </div>
-            </div>
 
-            <div class="p-4 border-b border-slate-100 dark:border-zinc-800 shrink-0">
-                <div class="relative">
-                    <SearchXIcon class="absolute left-3.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400" />
+                <!-- Search Bar -->
+                <div class="relative flex items-center">
+                    <Search class="absolute left-3.5 h-[18px] w-[18px] text-slate-400 dark:text-zinc-500" />
                     <input
                         v-model="searchQuery"
                         type="text"
-                        placeholder="Cari nomor nota atau nama pelanggan..."
-                        class="w-full pl-10 pr-4 py-2.5 text-xs bg-slate-50 dark:bg-zinc-800/80 border border-slate-200 dark:border-zinc-700 rounded-xl focus:outline-none focus:border-primary text-slate-900 dark:text-white placeholder:text-slate-400 font-medium"
+                        placeholder="Cari transaksi..."
+                        class="w-full pl-10 pr-4 py-2.5 bg-slate-200/60 dark:bg-[#1C1C1E] rounded-[10px] text-[16px] focus:outline-none focus:ring-2 focus:ring-orange-500/50 text-black dark:text-white placeholder:text-slate-500 dark:placeholder:text-zinc-500 transition-all"
                     />
                 </div>
             </div>
 
-            <div class="px-4 py-2 border-b border-slate-100 dark:border-zinc-800 bg-slate-50/30 grid grid-cols-3 gap-1.5 shrink-0">
-                <button @click="activeFilter = 'all'" :class="['py-2 text-xs font-bold rounded-xl transition-all border', activeFilter === 'all' ? 'bg-slate-900 border-slate-900 text-white dark:bg-zinc-100 dark:text-zinc-900 shadow-sm' : 'bg-white border-slate-200 dark:bg-zinc-800 dark:border-zinc-700 text-slate-500']">Semua</button>
-                <button @click="activeFilter = 'unpaid'" :class="['py-2 text-xs font-bold rounded-xl transition-all border flex items-center justify-center gap-1.5', activeFilter === 'unpaid' ? 'bg-amber-500 border-amber-500 text-white shadow-sm' : 'bg-white border-slate-200 dark:bg-zinc-800 dark:border-zinc-700 text-amber-600']"><Clock class="h-3.5 w-3.5" /> Order</button>
-                <button @click="activeFilter = 'paid'" :class="['py-2 text-xs font-bold rounded-xl transition-all border flex items-center justify-center gap-1.5', activeFilter === 'paid' ? 'bg-emerald-600 border-emerald-600 text-white shadow-sm' : 'bg-white border-slate-200 dark:bg-zinc-800 dark:border-zinc-700 text-emerald-600']"><CheckCircle2 class="h-3.5 w-3.5" /> Lunas</button>
-            </div>
+            <!-- Area Scrollable List (Flex-1 mengambil sisa tinggi) -->
+            <div class="flex-1 overflow-y-auto px-4 py-2 custom-scrollbar">
 
-            <div class="flex-1 overflow-y-auto divide-y divide-slate-100 dark:divide-zinc-800/60 custom-scrollbar">
-                <div v-if="isLoading" class="p-8 text-center text-xs text-slate-400 animate-pulse">Memuat data transaksi...</div>
-                <div v-else-if="filteredTransactions.length === 0" class="text-center py-20 text-xs text-slate-400">Tidak ada transaksi ditemukan.</div>
+                <!-- Segmented Control Filter -->
+                <div class="bg-slate-200/60 dark:bg-[#1C1C1E] p-0.5 rounded-[9px] flex mb-6">
+                    <button @click="activeFilter = 'all'" :class="['flex-1 py-1.5 text-[13px] font-semibold rounded-[7px] transition-all', activeFilter === 'all' ? 'bg-white dark:bg-[#2C2C2E] shadow-sm text-black dark:text-white' : 'text-slate-500 dark:text-zinc-400']">Semua</button>
+                    <button @click="activeFilter = 'unpaid'" :class="['flex-1 py-1.5 text-[13px] font-semibold rounded-[7px] transition-all', activeFilter === 'unpaid' ? 'bg-white dark:bg-[#2C2C2E] shadow-sm text-black dark:text-white' : 'text-slate-500 dark:text-zinc-400']">Belum Bayar</button>
+                    <button @click="activeFilter = 'paid'" :class="['flex-1 py-1.5 text-[13px] font-semibold rounded-[7px] transition-all', activeFilter === 'paid' ? 'bg-white dark:bg-[#2C2C2E] shadow-sm text-black dark:text-white' : 'text-slate-500 dark:text-zinc-400']">Lunas</button>
+                </div>
 
-                <div
-                    v-else
-                    v-for="trx in filteredTransactions"
-                    :key="trx.id"
-                    @click="selectTransaction(trx)"
-                    :class="['p-4 flex items-start gap-3 cursor-pointer transition-all border-b border-slate-50 dark:border-zinc-800/50 hover:bg-slate-50 dark:hover:bg-zinc-800/30', selectedTransaction?.id === trx.id ? 'bg-primary/5 dark:bg-zinc-800/80 border-l-4 border-primary' : '']"
-                >
-                    <div :class="['p-2.5 rounded-2xl shrink-0', trx.status === 'paid' ? 'bg-emerald-50 text-emerald-600 dark:bg-emerald-950/40' : 'bg-amber-50 text-amber-600 dark:bg-amber-950/40']">
-                        <Receipt v-if="trx.status === 'paid'" class="h-4 w-4" />
-                        <ClipboardList v-else class="h-4 w-4" />
-                    </div>
-                    <div class="flex-1 min-w-0 space-y-1">
-                        <div class="flex items-center justify-between gap-2">
-                            <span class="font-extrabold text-xs text-slate-900 dark:text-zinc-100 truncate tracking-tight">{{ trx.order_number }}
-                            <span v-if="trx.is_self_order" class="px-1.5 py-0.2 bg-blue-50 text-blue-600 dark:bg-blue-950/40 dark:text-blue-400 text-[9px] font-bold rounded tracking-wide uppercase shrink-0">
-                                Self Order
-                            </span>
-                        </span>
-                            <span class="text-[10px] text-slate-400 font-mono shrink-0">{{ formatDate(trx.created_at ?? '') }}</span>
+                <!-- Empty State -->
+                <div v-if="isLoading" class="text-center mt-12 text-[15px] text-slate-500 animate-pulse">Memuat...</div>
+                <div v-else-if="filteredTransactions.length === 0" class="text-center mt-12 text-[15px] text-slate-500">Tidak ada transaksi.</div>
+
+                <!-- Grouped List -->
+                <div v-else class="bg-white dark:bg-[#1C1C1E] rounded-[10px] overflow-hidden mb-8 shadow-sm">
+                    <div
+                        v-for="(trx, index) in filteredTransactions"
+                        :key="trx.id"
+                        @click="selectTransaction(trx)"
+                        :class="[
+                            'flex items-center gap-3 p-3.5 cursor-pointer active:bg-slate-100 dark:active:bg-zinc-800 transition-colors relative',
+                            index !== filteredTransactions.length - 1 ? 'border-b border-slate-100 dark:border-[#2C2C2E] ml-12' : '',
+                            selectedTransaction?.id === trx.id ? 'bg-orange-50/50 dark:bg-orange-900/10' : ''
+                        ]"
+                    >
+                        <!-- Active Indicator (Orange Line) -->
+                        <div v-if="selectedTransaction?.id === trx.id" class="absolute left-0 top-0 bottom-0 w-1 bg-orange-500 rounded-r-full -ml-12"></div>
+
+                        <!-- Icon -->
+                        <div :class="['w-9 h-9 rounded-full flex items-center justify-center shrink-0 -ml-12', trx.status === 'paid' ? 'bg-green-100 text-green-600 dark:bg-green-950/40 dark:text-green-500' : 'bg-red-100 text-red-600 dark:bg-red-950/40 dark:text-red-500']">
+                            <Receipt v-if="trx.status === 'paid'" class="w-[18px] h-[18px]" />
+                            <Clock v-else class="w-[18px] h-[18px]" />
                         </div>
-                        <div class="flex items-center justify-between gap-2">
-                            <p class="text-xs text-slate-500 dark:text-zinc-400 font-semibold truncate">{{ trx.customer_name || 'Pelanggan Umum' }}</p>
-                            <!-- 🌟 Tampilkan Badge Self Order jika true -->
 
-                        </div>
-                        <div class="pt-1 flex items-center justify-between">
-                            <span :class="['px-2 py-0.5 rounded-md text-[9px] font-black uppercase tracking-wider', trx.status === 'paid' ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-400' : 'bg-amber-100 text-amber-700 dark:bg-amber-950/60 dark:text-amber-400']">
-                                {{ trx.status === 'paid' ? 'Lunas' : 'Belum Bayar' }}
-                            </span>
-                            <span class="text-xs font-black text-slate-900 dark:text-zinc-50 font-mono">Rp {{ Number(trx.final_total).toLocaleString('id-ID') }}</span>
+                        <!-- Data text -->
+                        <div class="flex-1 min-w-0 pr-1">
+                            <div class="flex justify-between items-center mb-0.5">
+                                <span class="font-semibold text-[16px] text-black dark:text-white truncate">{{ trx.customer_name || 'Pelanggan POS' }}</span>
+                                <span class="text-[14px] text-slate-500 dark:text-zinc-400 shrink-0 tabular-nums">Rp {{ Number(trx.final_total).toLocaleString('id-ID') }}</span>
+                            </div>
+                            <div class="flex justify-between items-center text-[13px]">
+                                <span class="text-slate-500 dark:text-zinc-400 truncate">{{ trx.order_number }}</span>
+                                <span class="text-slate-400 dark:text-zinc-500">{{ formatDate(trx.created_at ?? '') }}</span>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -405,7 +411,6 @@ onBeforeUnmount(() => {
                 <p class="text-xs font-medium text-center">Pilih transaksi di sebelah kiri untuk melihat rincian.</p>
             </div>
 
-            <!-- KONTAINER UTAMA KANAN: Scrollable penuh dengan padding bawah longgar -->
             <div v-else class="flex-1 h-full overflow-y-auto p-4 sm:p-6 md:p-8 custom-scrollbar">
                 <div class="w-full max-w-2xl mx-auto bg-white dark:bg-zinc-900 rounded-3xl border border-slate-200/80 dark:border-zinc-800 shadow-xl overflow-hidden flex flex-col mb-12">
 
@@ -455,7 +460,6 @@ onBeforeUnmount(() => {
                                 <span class="font-bold text-slate-800 dark:text-zinc-200 uppercase truncate">: {{ selectedTransaction.payment_method }}</span>
                             </div>
 
-                            <!-- 🌟 TAMBAHAN TIPE PESANAN (Self Order / Regular) -->
                             <div class="grid grid-cols-[80px_1fr] items-center">
                                 <span class="text-slate-400 font-semibold uppercase text-[10px]">Tipe</span>
                                 <span class="font-bold text-slate-800 dark:text-zinc-200 truncate">
@@ -472,6 +476,7 @@ onBeforeUnmount(() => {
                                 </span>
                             </div>
                         </div>
+
                         <div class="space-y-3">
                             <span class="text-[11px] font-black tracking-wider text-slate-400 uppercase block">Rincian Item Pesanan</span>
                             <div class="divide-y divide-slate-100 dark:divide-zinc-800/60 border-y border-slate-100 dark:border-zinc-800">
@@ -506,152 +511,28 @@ onBeforeUnmount(() => {
         </div>
 
         <!-- ========================================================= -->
-        <!-- MODAL PEMBAYARAN INTERAKTIF                               -->
+        <!-- PAYMENT MODAL COMPONENT (Reused from POS)                 -->
         <!-- ========================================================= -->
-        <div v-if="isPaymentModalOpen && selectedTransaction" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-            <div class="bg-white dark:bg-zinc-900 w-full max-w-xl rounded-3xl border border-slate-100 dark:border-zinc-800 overflow-hidden shadow-2xl flex flex-col">
-
-                <div class="p-5 border-b border-slate-100 dark:border-zinc-800 flex justify-between items-center bg-slate-50/50 dark:bg-zinc-900/40">
-                    <h4 class="font-bold text-sm text-slate-900 dark:text-zinc-100">Penyelesaian Pembayaran Invoice</h4>
-                    <button @click="closePaymentModal" class="p-1.5 rounded-full text-slate-400 hover:bg-slate-100 dark:hover:bg-zinc-800"><X class="h-4 w-4" /></button>
-                </div>
-
-                <div class="p-6 space-y-5">
-                    <div class="p-4 bg-slate-900 text-white dark:bg-zinc-100 dark:text-zinc-900 rounded-2xl flex items-center justify-between shadow-sm">
-                        <span class="text-xs font-semibold opacity-80">Total Tagihan:</span>
-                        <span class="text-lg sm:text-xl font-black tracking-tight font-mono">Rp {{ Number(selectedTransaction?.final_total || 0).toLocaleString('id-ID') }}</span>
-                    </div>
-
-                    <div class="space-y-2">
-                        <span class="text-[11px] font-bold text-slate-400 uppercase tracking-wider block">Pilih Metode Pembayaran</span>
-                        <div class="grid grid-cols-3 gap-2">
-                            <button v-for="method in ['cash', 'qris', 'edc']" :key="method" @click="paymentMethod = method" :class="['py-2.5 text-xs font-bold rounded-xl border uppercase transition-all', paymentMethod === method ? 'bg-slate-900 border-slate-900 text-white dark:bg-zinc-100 dark:text-zinc-900 shadow-sm' : 'bg-white border-slate-200 text-slate-500 dark:bg-zinc-800 dark:border-zinc-700 dark:text-zinc-400']">
-                                {{ method }}
-                            </button>
-                        </div>
-                    </div>
-
-                    <div v-if="paymentMethod === 'cash'" class="p-4 bg-slate-50 dark:bg-zinc-800/50 rounded-2xl space-y-3 border border-slate-200/60 dark:border-zinc-700">
-                        <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
-                            <button @click="amountPaidInput = Number(selectedTransaction.final_total)" class="py-2 bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-700 rounded-lg font-semibold text-slate-700 dark:text-zinc-200 shadow-2xs">Uang Pas</button>
-                            <button @click="amountPaidInput = 25000" class="py-2 bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-700 rounded-lg font-semibold text-slate-700 dark:text-zinc-200 shadow-2xs">25k</button>
-                            <button @click="amountPaidInput = 50000" class="py-2 bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-700 rounded-lg font-semibold text-slate-700 dark:text-zinc-200 shadow-2xs">50k</button>
-                            <button @click="amountPaidInput = 100000" class="py-2 bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-700 rounded-lg font-semibold text-slate-700 dark:text-zinc-200 shadow-2xs">100k</button>
-                        </div>
-                        <div class="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 text-xs pt-1">
-                            <span class="font-medium text-slate-500 dark:text-zinc-400">Nominal Tunai Diterima:</span>
-                            <input v-model.number="amountPaidInput" type="number" class="w-full sm:w-36 text-left sm:text-right font-bold px-3 py-2 bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-700 rounded-lg focus:outline-none text-slate-900 dark:text-white font-mono" />
-                        </div>
-                        <div v-if="amountPaidInput >= Number(selectedTransaction?.final_total || 0)" class="flex justify-between items-center text-xs text-emerald-600 font-bold bg-emerald-50 dark:bg-emerald-950/30 p-2.5 rounded-xl">
-                            <span>Kembalian:</span>
-                            <span class="font-mono">Rp {{ (amountPaidInput - Number(selectedTransaction.final_total)).toLocaleString('id-ID') }}</span>
-                        </div>
-                    </div>
-                </div>
-
-                <div class="p-5 border-t border-slate-100 dark:border-zinc-800 bg-slate-50 dark:bg-zinc-900/50 grid grid-cols-2 gap-3">
-                    <button @click="closePaymentModal" type="button" class="py-3 bg-white border border-slate-200 text-slate-700 dark:bg-zinc-800 dark:border-zinc-700 dark:text-zinc-300 font-bold rounded-2xl text-xs">Kembali</button>
-
-                    <button @click="processPayment" :disabled="isGeneratingQris" type="button" class="py-3 bg-emerald-600 hover:bg-emerald-500 text-white font-black rounded-2xl text-xs shadow-md transition-all flex items-center justify-center gap-2">
-                        <span v-if="isGeneratingQris" class="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin"></span>
-                        {{ paymentMethod === 'qris' ? (isGeneratingQris ? 'Memproses QR...' : 'Generate QRIS') : 'Konfirmasi Lunas' }}
-                    </button>
-                </div>
-            </div>
-        </div>
-
-        <!-- ========================================================= -->
-        <!-- DOKU QRIS MODAL                                           -->
-        <!-- ========================================================= -->
-        <div v-if="isQrisModalOpen" class="fixed inset-0 z-100 flex items-center justify-center p-4 sm:p-8 bg-slate-900/90 dark:bg-black/90 backdrop-blur-md transition-all duration-300">
-            <div class="bg-white dark:bg-zinc-900 w-full max-w-2xl rounded-4xl border border-slate-200/60 dark:border-zinc-800 shadow-2xl overflow-hidden flex flex-col relative max-h-[90vh] overflow-y-auto">
-
-                <div class="bg-slate-50 dark:bg-zinc-800/50 p-5 sm:px-8 border-b border-slate-100 dark:border-zinc-800 flex items-center justify-between">
-                    <h4 class="font-extrabold text-base sm:text-lg text-slate-800 dark:text-zinc-100 uppercase tracking-widest">Pembayaran QRIS</h4>
-                    <button @click="closeQrisModal" class="p-2 bg-white dark:bg-zinc-700 rounded-full text-slate-400 hover:text-slate-700 dark:hover:text-zinc-100 border border-slate-200 dark:border-zinc-600 shadow-sm transition-all hover:scale-105">
-                        <X class="w-5 h-5" />
-                    </button>
-                </div>
-
-                <div v-if="qrisPaymentStatus === 'PENDING'" class="p-5 sm:p-10 flex flex-col items-center">
-
-                    <div class="w-full bg-slate-50 dark:bg-zinc-800/50 rounded-3xl p-5 sm:p-6 mb-6 sm:mb-8 border border-slate-100 dark:border-zinc-700/50 space-y-4 shadow-sm">
-                        <div class="flex flex-col sm:flex-row justify-between items-center gap-2 pb-5 border-b border-slate-200 dark:border-zinc-700 border-dashed">
-                            <span class="text-xs sm:text-base font-bold text-slate-500 dark:text-zinc-400 uppercase tracking-wider">Total Tagihan</span>
-                            <span class="text-lg sm:text-xl font-black text-slate-900 dark:text-zinc-50 tracking-tight text-center">
-                                Rp {{ Number(selectedTransaction?.final_total || 0).toLocaleString('id-ID') }}
-                            </span>
-                        </div>
-                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2">
-                            <div class="flex justify-between sm:justify-start items-center gap-3">
-                                <span class="text-xs sm:text-sm font-medium text-slate-500 dark:text-zinc-400">Invoice:</span>
-                                <span class="font-bold text-xs sm:text-sm text-slate-700 dark:text-zinc-200 font-mono bg-slate-200 dark:bg-zinc-700 px-2.5 py-1 rounded-md">{{ qrisData.invoiceNo }}</span>
-                            </div>
-                            <div class="flex justify-between sm:justify-end items-center gap-3">
-                                <span class="text-xs sm:text-sm font-medium text-slate-500 dark:text-zinc-400">Pelanggan:</span>
-                                <span class="font-bold text-xs sm:text-base text-slate-800 dark:text-zinc-100">{{ selectedTransaction?.customer_name || 'Pelanggan Umum' }}</span>
-                            </div>
-                        </div>
-
-                        <div class="pt-3 border-t border-slate-200/60 dark:border-zinc-700 flex items-center justify-between">
-                            <span class="text-xs font-semibold text-slate-500 dark:text-zinc-400">Batas Waktu Bayar:</span>
-                            <span class="text-xs sm:text-sm font-black font-mono px-3 py-1 bg-red-50 dark:bg-red-950/40 text-red-600 dark:text-red-400 rounded-lg border border-red-200 dark:border-red-900/50">
-                                ⏱️ {{ formattedCountdown }}
-                            </span>
-                        </div>
-                    </div>
-
-                    <div class="p-4 sm:p-6 bg-white rounded-[2rem] shadow-[0_10px_40px_rgba(0,0,0,0.1)] border-2 border-slate-100 dark:border-zinc-700 mb-6 sm:mb-8 relative w-full flex justify-center">
-                        <div class="absolute -top-4 left-1/2 -translate-x-1/2 bg-blue-600 text-white px-5 py-1.5 rounded-full text-xs sm:text-sm font-black tracking-widest uppercase shadow-lg border-2 border-white dark:border-zinc-900 whitespace-nowrap">
-                            Scan Untuk Bayar
-                        </div>
-                        <qrcode-vue
-                            :value="qrisData.qrContent"
-                            :size="260"
-                            level="H"
-                            foreground="#0f172a"
-                            class="w-full h-auto max-w-[260px] sm:max-w-90 aspect-square object-contain"
-                        />
-                    </div>
-
-                    <div class="flex items-center gap-3 justify-center py-2.5 px-6 bg-amber-50 dark:bg-amber-950/40 text-amber-600 dark:text-amber-400 rounded-full text-xs sm:text-sm font-bold animate-pulse border border-amber-200 dark:border-amber-800/50 shadow-sm text-center">
-                        <span class="w-2.5 h-2.5 rounded-full bg-amber-500 shrink-0"></span>
-                        Menunggu Pembayaran Pelanggan...
-                    </div>
-                </div>
-
-                <div v-else-if="qrisPaymentStatus === 'SUCCESS'" class="py-12 sm:py-16 px-6 sm:px-8 space-y-6 flex flex-col items-center text-center">
-                    <div class="w-24 h-24 sm:w-28 sm:h-28 bg-emerald-100 dark:bg-emerald-950/50 rounded-full flex items-center justify-center text-emerald-500 text-5xl sm:text-6xl shadow-inner border-8 border-emerald-50 dark:border-emerald-900/30">
-                        ✓
-                    </div>
-                    <div class="space-y-2">
-                        <h3 class="font-black text-2xl sm:text-3xl text-slate-900 dark:text-zinc-50">Pembayaran Sukses!</h3>
-                        <p class="text-sm sm:text-base text-slate-500 dark:text-zinc-400 leading-relaxed max-w-md mx-auto">
-                            Tagihan sebesar <b class="text-slate-800 dark:text-zinc-200">Rp {{ Number(selectedTransaction?.final_total || 0).toLocaleString('id-ID') }}</b> telah lunas.
-                        </p>
-                    </div>
-
-                    <button @click="closeQrisModal" class="mt-8 w-full sm:w-2/3 py-4 bg-slate-900 hover:bg-slate-800 dark:bg-zinc-100 dark:hover:bg-white dark:text-zinc-900 text-white font-black rounded-2xl text-sm sm:text-base shadow-xl transition-all">
-                        Tutup & Refresh Data
-                    </button>
-                </div>
-
-                <div v-else class="py-12 sm:py-16 px-6 sm:px-8 space-y-6 flex flex-col items-center text-center">
-                    <div class="w-24 h-24 sm:w-28 sm:h-28 bg-red-100 dark:bg-red-950/50 rounded-full flex items-center justify-center text-red-500 text-5xl sm:text-6xl shadow-inner border-8 border-red-50 dark:border-red-900/30">
-                        ✕
-                    </div>
-                    <div class="space-y-2">
-                        <h3 class="font-black text-2xl sm:text-3xl text-slate-900 dark:text-zinc-50">Transaksi Gagal</h3>
-                        <p class="text-sm sm:text-base text-slate-500 dark:text-zinc-400 max-w-md mx-auto">Waktu pembayaran untuk tagihan ini telah habis atau dibatalkan oleh sistem.</p>
-                    </div>
-
-                    <button @click="closeQrisModal" class="mt-8 w-full sm:w-2/3 py-4 bg-white border-2 border-slate-200 text-slate-700 hover:bg-slate-50 dark:bg-zinc-800 dark:border-zinc-700 dark:text-zinc-300 font-black rounded-2xl text-sm sm:text-base shadow-sm transition-all">
-                        Tutup Jendela
-                    </button>
-                </div>
-
-            </div>
-        </div>
+        <PaymentModal
+            :is-payment-modal-open="isPaymentModalOpen"
+            :is-qris-modal-open="isQrisModalOpen"
+            :is-success-modal-open="isSuccessModalOpen"
+            :final-total="Number(selectedTransaction?.final_total || 0)"
+            :is-generating-qris="isGeneratingQris"
+            v-model:customer-name="modalCustomerName"
+            :discount-input="0"
+            v-model:amount-paid-input="amountPaidInput"
+            :qris-data="qrisData"
+            :qris-payment-status="qrisPaymentStatus"
+            :payment-status="paymentStatus"
+            :formatted-countdown="formattedCountdown"
+            @close-payment-modal="closePaymentModal"
+            @close-qris-modal="closeQrisModal"
+            @close-success-modal="closeSuccessModal"
+            @submit-cash="processPayment"
+            @handle-qris-checkout="handleQrisCheckout"
+            @handle-print-receipt="handlePrintCashierReceipt(selectedTransaction)"
+        />
 
     </div>
 </template>

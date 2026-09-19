@@ -49,7 +49,7 @@ const paymentMethod = ref<'cash' | 'qris'>('cash');
         <!-- ========================================================= -->
         <div v-if="isPaymentModalOpen" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-md">
             <div class="bg-white dark:bg-zinc-950 w-full max-w-xl rounded-[2.5rem] border border-slate-200/80 dark:border-zinc-800 shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-200">
-                
+
                 <!-- Header -->
                 <div class="p-6 pb-4 flex justify-between items-center border-b border-slate-100 dark:border-zinc-900">
                     <div>
@@ -74,17 +74,21 @@ const paymentMethod = ref<'cash' | 'qris'>('cash');
 
                     <!-- Pilihan Metode -->
                     <div class="grid grid-cols-2 gap-2 p-1.5 bg-slate-100 dark:bg-zinc-900 rounded-2xl">
-                        <button 
+                        <button
                             @click="paymentMethod = 'cash'; emit('update:amountPaidInput', finalTotal)"
                             type="button"
                             :class="['py-3.5 text-sm font-extrabold rounded-xl transition-all cursor-pointer', paymentMethod === 'cash' ? 'bg-white dark:bg-zinc-800 text-slate-900 dark:text-white shadow-sm' : 'text-slate-400 hover:text-slate-700']"
                         >
                             Tunai (Cash)
                         </button>
-                        <button 
+                        <button
                             @click="paymentMethod = 'qris'"
                             type="button"
-                            :class="['py-3.5 text-sm font-extrabold rounded-xl transition-all cursor-pointer', paymentMethod === 'qris' ? 'bg-white dark:bg-zinc-800 text-slate-900 dark:text-white shadow-sm' : 'text-slate-400 hover:text-slate-700']"
+                            :class="[
+                                'py-3.5 text-sm font-extrabold rounded-xl transition-all cursor-pointer',
+                                paymentMethod === 'qris' ? 'bg-white dark:bg-zinc-800 text-slate-900 dark:text-white shadow-sm' : 'text-slate-400 hover:text-slate-700',
+                                finalTotal <= 0 ? 'opacity-30 cursor-not-allowed' : ''
+                            ]"
                         >
                             QRIS
                         </button>
@@ -94,13 +98,13 @@ const paymentMethod = ref<'cash' | 'qris'>('cash');
                     <div v-if="paymentMethod === 'cash'" class="space-y-4">
                         <!-- Quick Cash Buttons (Pas aktif secara default) -->
                         <div class="grid grid-cols-4 gap-2 text-sm font-bold">
-                            <button 
-                                @click="emit('update:amountPaidInput', finalTotal)" 
-                                type="button" 
+                            <button
+                                @click="emit('update:amountPaidInput', finalTotal)"
+                                type="button"
                                 :class="[
                                     'py-3 border rounded-xl transition-all cursor-pointer active:scale-95',
-                                    amountPaidInput === finalTotal 
-                                        ? 'bg-slate-900 text-white dark:bg-white dark:text-slate-900 border-transparent shadow-sm' 
+                                    amountPaidInput === finalTotal
+                                        ? 'bg-slate-900 text-white dark:bg-white dark:text-slate-900 border-transparent shadow-sm'
                                         : 'bg-slate-50 hover:bg-slate-100 dark:bg-zinc-900 dark:hover:bg-zinc-800 border-slate-200/60 dark:border-zinc-800'
                                 ]"
                             >
@@ -110,18 +114,18 @@ const paymentMethod = ref<'cash' | 'qris'>('cash');
                             <button @click="emit('update:amountPaidInput', 50000)" type="button" class="py-3 bg-slate-50 hover:bg-slate-100 dark:bg-zinc-900 dark:hover:bg-zinc-800 border border-slate-200/60 dark:border-zinc-800 rounded-xl transition-all cursor-pointer active:scale-95">50k</button>
                             <button @click="emit('update:amountPaidInput', 100000)" type="button" class="py-3 bg-slate-50 hover:bg-slate-100 dark:bg-zinc-900 dark:hover:bg-zinc-800 border border-slate-200/60 dark:border-zinc-800 rounded-xl transition-all cursor-pointer active:scale-95">100k</button>
                         </div>
-                        
+
                         <!-- Input Nominal Bayar -->
                         <div class="flex items-center justify-between gap-4 bg-slate-50/50 dark:bg-zinc-900/30 p-3 rounded-2xl border border-slate-100 dark:border-zinc-800">
                             <span class="text-sm font-bold text-slate-600 dark:text-zinc-300">Nominal Diterima</span>
-                            <input 
+                            <input
                                 :value="amountPaidInput"
                                 @input="emit('update:amountPaidInput', Number(($event.target as HTMLInputElement).value))"
-                                type="number" 
-                                class="w-48 text-right font-black px-4 py-3 bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-700 rounded-xl font-mono text-lg focus:outline-none focus:border-primary" 
+                                type="number"
+                                class="w-48 text-right font-black px-4 py-3 bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-700 rounded-xl font-mono text-lg focus:outline-none focus:border-primary"
                             />
                         </div>
-                        
+
                         <!-- Kembalian -->
                         <div v-if="amountPaidInput >= finalTotal" class="flex justify-between items-center text-sm font-bold text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/30 px-4 py-3.5 rounded-2xl border border-emerald-100 dark:border-emerald-900/50">
                             <span>Kembalian</span>
@@ -132,9 +136,9 @@ const paymentMethod = ref<'cash' | 'qris'>('cash');
 
                 <!-- Footer -->
                 <div class="p-6 pt-0 flex gap-3">
-                    <button 
+                    <button
                         v-if="paymentMethod === 'qris'"
-                        @click="emit('handleQrisCheckout')" 
+                        @click="emit('handleQrisCheckout')"
                         :disabled="isGeneratingQris"
                         type="button"
                         class="w-full py-4 bg-slate-900 hover:bg-slate-800 dark:bg-white dark:hover:bg-zinc-200 dark:text-slate-900 text-white font-black rounded-2xl text-base shadow-lg flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50 transition-all active:scale-[0.99]"
@@ -143,13 +147,15 @@ const paymentMethod = ref<'cash' | 'qris'>('cash');
                         {{ isGeneratingQris ? 'Memproses QRIS...' : 'Generate QRIS' }}
                     </button>
 
-                    <button 
+                    <button
                         v-else
-                        @click="emit('submitCash')" 
+                        @click="emit('submitCash')"
+                        :disabled="amountPaidInput < finalTotal"
                         type="button"
-                        class="w-full py-4 bg-emerald-600 hover:bg-emerald-500 text-white font-black rounded-2xl text-base shadow-lg cursor-pointer transition-all active:scale-[0.99]"
+                        class="w-full py-4 font-black rounded-2xl text-base shadow-lg cursor-pointer transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                        :class="amountPaidInput < finalTotal ? 'bg-slate-300 text-slate-500 dark:bg-zinc-800 dark:text-zinc-500' : 'bg-emerald-600 hover:bg-emerald-500 text-white active:scale-[0.99]'"
                     >
-                        Proses Pembayaran Tunai
+                        {{ amountPaidInput < finalTotal ? 'Nominal Uang Kurang' : 'Proses Pembayaran Tunai' }}
                     </button>
                 </div>
 
@@ -161,7 +167,7 @@ const paymentMethod = ref<'cash' | 'qris'>('cash');
         <!-- ========================================================= -->
         <div v-if="isQrisModalOpen" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-md">
             <div class="bg-white dark:bg-zinc-950 w-full max-w-xl rounded-[2.5rem] border border-slate-200/80 dark:border-zinc-800 shadow-2xl overflow-hidden p-8 text-center space-y-4 animate-in fade-in zoom-in-95 duration-200">
-                
+
                 <div class="space-y-1">
                     <div class="text-[11px] font-extrabold text-slate-400 uppercase tracking-wider">Total Tagihan</div>
                     <div class="text-2xl font-black text-slate-900 dark:text-white font-mono">Rp {{ finalTotal.toLocaleString('id-ID') }}</div>
@@ -180,8 +186,8 @@ const paymentMethod = ref<'cash' | 'qris'>('cash');
 
                 <!-- Tombol Lebih Kecil -->
                 <div class="pt-1">
-                    <button 
-                        @click="emit('closeQrisModal')" 
+                    <button
+                        @click="emit('closeQrisModal')"
                         class="px-6 py-2.5 bg-slate-100 hover:bg-slate-200 dark:bg-zinc-900 dark:hover:bg-zinc-800 text-slate-700 dark:text-zinc-300 font-bold rounded-xl text-xs cursor-pointer transition-all active:scale-95"
                     >
                         Simpan & Bayar Nanti
