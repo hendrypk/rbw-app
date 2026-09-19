@@ -36,11 +36,12 @@ class Account extends Model
 
     public const CATEGORIES = [
         '1' => 'Kas & Bank',
-        '2' => 'Kewajiban',
-        '3' => 'Ekuitas',
-        '4' => 'Pendapatan',
-        '5' => 'Harga Pokok Penjualan',
-        '6' => 'Biaya',
+        '2' => 'Persediaan',
+        '3' => 'Kewajiban',
+        '4' => 'Ekuitas',
+        '5' => 'Pendapatan',
+        '6' => 'Harga Pokok Penjualan',
+        '7' => 'Biaya',
     ];
 
     public static function getCategoryLabels(): array
