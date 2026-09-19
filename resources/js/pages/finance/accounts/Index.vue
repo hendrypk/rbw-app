@@ -297,7 +297,8 @@ const totalCreditBalance = computed(() => {
                 <div class="p-6 space-y-4 text-xs">
                     <div class="space-y-1.5">
                         <label class="font-bold text-muted-foreground uppercase tracking-wider text-[10px]">Kategori Akun <span class="text-destructive">*</span></label>
-                        <Select v-model="form.category" :disabled="isEditMode">
+                        <Select v-model="form.category">
+                        <!-- <Select v-model="form.category" :disabled="isEditMode"> -->
                             <SelectTrigger class="w-full h-11 rounded-2xl border-border/80 bg-background px-4 text-xs font-medium text-foreground shadow-2xs disabled:opacity-60">
                                 <SelectValue placeholder="Pilih Kategori" />
                             </SelectTrigger>
