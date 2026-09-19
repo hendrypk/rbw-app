@@ -9,25 +9,45 @@ use Illuminate\Support\Facades\Hash;
 
 class CustomerController extends Controller
 {
-/**
+    /**
      * Menampilkan daftar semua customer (mendukung pencarian query).
      */
     public function index(Request $request)
     {
-        $query = Customer::query();
+        $query = Customer::query()
+            ->withCount(['orders' => function ($query) {
+                $query->where('status', 'paid');
+            }])
+            ->withSum(['orders as total_spent' => function ($query) {
+                $query->where('status', 'paid');
+            }], 'final_total')
+            ->withSum(['orderItems as total_portions' => function ($query) {
+                $query->whereHas('order', function ($q) {
+                    $q->where('status', 'paid');
+                });
+            }], 'quantity');
 
-        if ($request->has('search')) {
+        if ($request->filled('search')) {
             $search = $request->get('search');
-            $query->where('name', 'like', "%{$search}%")
+            $query->where(function($q) use ($search) {
+                $q->where('name', 'like', "%{$search}%")
                   ->orWhere('phone', 'like', "%{$search}%")
                   ->orWhere('email', 'like', "%{$search}%");
+            });
         }
 
-        $customers = $query->latest()->get();
+        $limit = $request->get('limit', 20);
+        $customers = $query->latest()->paginate($limit);
 
         return response()->json([
             'success' => true,
-            'data' => $customers
+            'data'    => $customers->items(),
+            'meta'    => [
+                'current_page' => $customers->currentPage(),
+                'last_page'    => $customers->lastPage(),
+                'per_page'     => $customers->perPage(),
+                'total'        => $customers->total(),
+            ]
         ]);
     }
 
@@ -44,12 +64,10 @@ class CustomerController extends Controller
             'shipping_address' => 'nullable|string',
         ]);
 
-        // Jika password diisi, lakukan Hashing (karena model Customer menggunakan Authenticatable)
         if (!empty($validated['password'])) {
             $validated['password'] = Hash::make($validated['password']);
         } else {
-            // Default password opsional jika dibuatkan langsung dari kasir POS tanpa password
-            $validated['password'] = Hash::make('password123'); 
+            $validated['password'] = Hash::make('password123');
         }
 
         $customer = Customer::create($validated);

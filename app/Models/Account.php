@@ -11,11 +11,11 @@ class Account extends Model
     use HasUuids, SoftDeletes;
 
     protected $fillable = [
-        'category', 
-        'account_number', 
-        'code', 
-        'name', 
-        'normal_balance', 
+        'category',
+        'account_number',
+        'code',
+        'name',
+        'normal_balance',
         'balance',
         'is_active',
         'opening_balance'
@@ -29,21 +29,18 @@ class Account extends Model
     {
         parent::boot();
 
-        // Otomatisasi generate format code sebelum simpan (Create / Update)
         static::saving(function ($account) {
             $account->code = $account->category . '-' . trim($account->account_number);
         });
     }
 
-    /**
-     * Label Helper untuk membaca nama Kategori teks di Frontend
-     */
     public const CATEGORIES = [
         '1' => 'Kas & Bank',
-        '2' => 'Pendapatan',
-        '3' => 'Kewajiban',
-        '4' => 'Ekuitas',
-        '5' => 'Biaya',
+        '2' => 'Kewajiban',
+        '3' => 'Ekuitas',
+        '4' => 'Pendapatan',
+        '5' => 'Harga Pokok Penjualan',
+        '6' => 'Biaya',
     ];
 
     public static function getCategoryLabels(): array
@@ -61,12 +58,9 @@ class Account extends Model
         $mutationType = strtolower($mutationType);
         $normalBalance = strtolower($this->normal_balance);
 
-        // Tentukan apakah mutasi ini sifatnya menambah atau mengurangi saldo normal
         if ($normalBalance === $mutationType) {
-            // Jika Saldo Normal DEBIT bertemu DEBIT, atau KREDIT bertemu KREDIT -> Bertambah
             $this->increment('balance', $amount);
         } else {
-            // Jika berbeda (misal Saldo Normal DEBIT bertemu KREDIT) -> Berkurang
             $this->decrement('balance', $amount);
         }
     }

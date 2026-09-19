@@ -33,14 +33,13 @@ const currentPage = ref(1);
 const loadMaterials = (page = 1) => {
     currentPage.value = page;
     const outletParams = getOutletParam();
-    fetchMaterials({ 
-        page: page, 
+    fetchMaterials({
+        page: page,
         search: searchQuery.value,
-        ...outletParams 
+        ...outletParams
     });
 };
 
-// Watch pencarian dengan debounce sederhana atau trigger langsung
 watch(searchQuery, () => {
     loadMaterials(1);
 });
@@ -59,7 +58,7 @@ onUnmounted(() => {
 });
 
 const formatNumber = (value: number | string) => {
-    const num = Number(value); 
+    const num = Number(value);
     return new Intl.NumberFormat('id-ID', {
         minimumFractionDigits: 2,
         maximumFractionDigits: 2,
@@ -137,10 +136,10 @@ const bulkDelete = () => {
         action: async () => {
             isDeleting.value = true;
             try {
-                const response = await axios.post('/api/raw-materials/bulk-delete', { 
-                    ids: selectedIds.value 
+                const response = await axios.post('/api/raw-materials/bulk-delete', {
+                    ids: selectedIds.value
                 });
-                
+
                 selectedIds.value = [];
                 success('Berhasil', response.data.message);
                 loadMaterials(currentPage.value);
@@ -165,14 +164,14 @@ const bulkDelete = () => {
                     Kelola stok bahan baku dan inventaris outlet secara real-time.
                 </p>
             </div>
-            
+
             <div class="flex items-center gap-2.5 sm:shrink-0">
                 <div class="relative w-full sm:w-64">
                     <Search class="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                    <Input 
-                        v-model="searchQuery" 
-                        placeholder="Cari material..." 
-                        class="h-9 pl-9 rounded-xl text-xs bg-card" 
+                    <Input
+                        v-model="searchQuery"
+                        placeholder="Cari material..."
+                        class="h-9 pl-9 rounded-xl text-xs bg-card"
                     />
                 </div>
                 <Button size="sm" class="h-9 px-5 rounded-xl text-xs font-bold shadow-sm bg-foreground text-background hover:opacity-90 transition-all" @click="openCreate">
@@ -182,8 +181,8 @@ const bulkDelete = () => {
         </div>
 
         <div class="space-y-4">
-            <div 
-                v-if="selectedIds.length > 0" 
+            <div
+                v-if="selectedIds.length > 0"
                 class="flex items-center justify-between rounded-2xl bg-destructive/10 px-5 py-3 border border-destructive/20 animate-in fade-in zoom-in-95 duration-200 shadow-xs"
             >
                 <div class="flex items-center gap-2.5 text-xs">
@@ -212,11 +211,11 @@ const bulkDelete = () => {
                         <thead class="bg-secondary/60 text-muted-foreground text-xs border-b border-border/70">
                             <tr>
                                 <th class="px-5 py-3.5 w-10">
-                                    <input 
-                                        type="checkbox" 
-                                        :checked="selectedIds.length === materials.length && materials.length > 0" 
-                                        @change="toggleSelectAll" 
-                                        class="rounded border-border accent-primary cursor-pointer" 
+                                    <input
+                                        type="checkbox"
+                                        :checked="selectedIds.length === materials.length && materials.length > 0"
+                                        @change="toggleSelectAll"
+                                        class="rounded border-border accent-primary cursor-pointer"
                                     />
                                 </th>
                                 <th class="px-5 py-3.5 font-bold">#</th>
@@ -229,7 +228,7 @@ const bulkDelete = () => {
                                 <th class="px-5 py-3.5 font-bold text-right">Aksi</th>
                             </tr>
                         </thead>
-                        
+
                         <tbody class="divide-y divide-border/60 text-xs">
                             <tr v-for="(m, index) in materials" :key="m.id" class="hover:bg-secondary/40 transition-colors">
                                 <td class="px-5 py-4">
@@ -272,18 +271,18 @@ const bulkDelete = () => {
 
                 <div v-if="meta && meta.last_page > 1" class="flex items-center justify-between border-t border-border/70 px-4 py-4 sm:px-6 mt-4">
                     <div class="flex flex-1 justify-between sm:hidden">
-                        <Button 
-                            variant="outline" 
-                            size="sm" 
-                            :disabled="meta.current_page === 1" 
+                        <Button
+                            variant="outline"
+                            size="sm"
+                            :disabled="meta.current_page === 1"
                             @click="loadMaterials(meta.current_page - 1)"
                         >
                             Previous
                         </Button>
-                        <Button 
-                            variant="outline" 
-                            size="sm" 
-                            :disabled="meta.current_page === meta.last_page" 
+                        <Button
+                            variant="outline"
+                            size="sm"
+                            :disabled="meta.current_page === meta.last_page"
                             @click="loadMaterials(meta.current_page + 1)"
                         >
                             Next
@@ -303,10 +302,10 @@ const bulkDelete = () => {
                         </div>
                         <div>
                             <nav class="isolate inline-flex -space-x-px rounded-xl shadow-xs gap-1.5" aria-label="Pagination">
-                                <Button 
-                                    variant="outline" 
+                                <Button
+                                    variant="outline"
                                     size="sm"
-                                    :disabled="meta.current_page === 1" 
+                                    :disabled="meta.current_page === 1"
                                     @click="loadMaterials(meta.current_page - 1)"
                                     class="h-8 px-3 rounded-xl text-xs"
                                 >
@@ -317,10 +316,10 @@ const bulkDelete = () => {
                                     Halaman {{ meta.current_page }} dari {{ meta.last_page }}
                                 </span>
 
-                                <Button 
-                                    variant="outline" 
+                                <Button
+                                    variant="outline"
                                     size="sm"
-                                    :disabled="meta.current_page === meta.last_page" 
+                                    :disabled="meta.current_page === meta.last_page"
                                     @click="loadMaterials(meta.current_page + 1)"
                                     class="h-8 px-3 rounded-xl text-xs"
                                 >
@@ -339,20 +338,20 @@ const bulkDelete = () => {
         </div>
     </div>
 
-    <MaterialHistoryModal 
+    <MaterialHistoryModal
         :show="showHistoryModal"
         :material="selectedMaterialForHistory"
         @close="showHistoryModal = false"
     />
 
-    <MaterialModal 
-        :show="showModal" 
+    <MaterialModal
+        :show="showModal"
         :material="activeMaterial"
-        @close="showModal = false" 
-        @saved="handleSaved" 
+        @close="showModal = false"
+        @saved="handleSaved"
     />
 
-    <ConifrmModal 
+    <ConifrmModal
         :show="isConfirmModalOpen"
         :title="confirmModalConfig.title"
         :message="confirmModalConfig.message"

@@ -12,7 +12,7 @@ class AccountMapping extends Model
     use HasUuids, BelongsToOutlet;
 
     protected $fillable = [
-        'transaction_event',   // Sesuai seeder & data dummy
+        'transaction_type',   // Sesuai seeder & data dummy
         'outlet_id',
         'debit_account_id',
         'credit_account_id',
@@ -36,11 +36,11 @@ class AccountMapping extends Model
     {
         // Gunakan $this->template sesuai nama kolom fisik MySQL
         $template = $this->template ?? 'Transaksi Otomatis: ' . $this->transaction_event;
-        
+
         foreach ($replacements as $key => $value) {
             $template = str_replace('{{' . $key . '}}', $value, $template);
         }
-        
+
         return $template;
     }
 }

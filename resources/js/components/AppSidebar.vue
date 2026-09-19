@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { Link } from '@inertiajs/vue3';
-import { ArrowLeftRightIcon, BookOpen, Box, Calculator, FolderGit2, Landmark, LayoutGrid, NotebookPen, Receipt, ShoppingCart, Truck, Utensils } from '@lucide/vue';
+import { ArrowLeftRightIcon, BookOpen, Box, Calculator, ChartBar, FolderGit2, Landmark, LayoutGrid, NotebookPen, Receipt, ShoppingCart, Truck, Utensils } from '@lucide/vue';
 import AppLogo from '@/components/AppLogo.vue';
 import NavFooter from '@/components/NavFooter.vue';
 import NavMain from '@/components/NavMain.vue';
@@ -27,6 +27,8 @@ import journalEntry from '@/routes/journal';
 import journal from '@/routes/journal';
 import pos, { selectOutlet } from '@/routes/pos';
 import outlet from '@/routes/outlet';
+import customers from '@/routes/customers';
+import reports from '@/routes/reports';
 
 const mainNavItems: NavItem[] = [
     {
@@ -50,6 +52,11 @@ const mainNavItems: NavItem[] = [
         icon: Truck,
     },
     {
+        title: 'Customer',
+        href: customers.index(),
+        icon: Receipt,
+    },
+    {
         title: 'Material',
         href: materials.index(),
         icon: Box,
@@ -68,6 +75,18 @@ const mainNavItems: NavItem[] = [
         title: 'Outlet',
         href: outlet.index(),
         icon: ShoppingCart,
+    },
+    {
+    title: 'Report',
+    icon: ChartBar,
+    children: [
+        {
+            title: 'Laba Rugi',
+            href: reports.finance.reports.index(),
+            icon: BookOpen,
+        },
+
+    ],
     },
     {
     title: 'Finance',
@@ -89,7 +108,7 @@ const mainNavItems: NavItem[] = [
             icon: NotebookPen,
         },
     ],
-}
+    }
 ];
 
 const footerNavItems: NavItem[] = [

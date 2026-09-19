@@ -82,7 +82,12 @@ Route::middleware(['auth', 'verified', 'resolve.outlet'])->prefix('api')->name('
         Route::apiResource('accounts', AccountController::class);
         Route::apiResource('account-mappings', AccountMappingController::class);
         Route::apiResource('journal-entry', JournalEntryController::class);
+        Route::get('categories', [AccountController::class, 'getCategories']);
     });
+
+    Route::prefix('reports')->group(function() {
+           Route::get('/finance/profit-and-loss', [ReportController::class, 'getProfitAndLoss']);
+        });
 
     // ----------------------------------------------------
     // 2. MASTER DATA & OPERATIONAL

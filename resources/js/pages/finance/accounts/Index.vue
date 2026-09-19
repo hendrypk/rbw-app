@@ -13,16 +13,27 @@ import SelectContent from '@/components/ui/select/SelectContent.vue';
 import SelectItem from '@/components/ui/select/SelectItem.vue';
 import Modal from '@/components/ui/Modal.vue';
 
-// ==========================================
-// COMPOSABLES & STATE MANAGEMENT
-// ==========================================
 const { accounts, loading, fetchAccounts, updateOpeningBalances } = useAccount();
 
 const searchQuery = ref('');
 const selectedCategoryFilter = ref('');
 
+const categoryLabels = ref<Record<string, string>>({});
+
+const fetchCategories = async () => {
+    try {
+        const response = await axios.get('/api/finance/categories');
+        if (response.data && response.data.data) {
+            categoryLabels.value = response.data.data;
+        }
+    } catch (error) {
+        console.error('Gagal memuat label kategori:', error);
+    }
+};
+
 onMounted(() => {
     fetchAccounts();
+    fetchCategories();
 });
 
 watch([searchQuery, selectedCategoryFilter], () => {
@@ -32,30 +43,17 @@ watch([searchQuery, selectedCategoryFilter], () => {
     });
 });
 
-const categoryLabels: Record<string, string> = {
-    '1': 'Kas & Bank',
-    '2': 'Pendapatan',
-    '3': 'Harga Pokok Pendapatan',
-    '4': 'Kewajiban',
-    '5': 'Ekuitas',
-    '6': 'Biaya',
-};
+const getCategoryLabel = (category: string) => categoryLabels.value[category] ?? '-';
 
-const getCategoryLabel = (category: string) => categoryLabels[category] ?? '-';
-
-// Filter data di sisi client
 const filteredAccounts = computed(() => {
     return accounts.value.filter(acc => {
-        const matchesSearch = acc.name.toLowerCase().includes(searchQuery.value.toLowerCase()) || 
+        const matchesSearch = acc.name.toLowerCase().includes(searchQuery.value.toLowerCase()) ||
                              (acc.code && acc.code.includes(searchQuery.value));
         const matchesCategory = selectedCategoryFilter.value === '' || acc.category === selectedCategoryFilter.value;
         return matchesSearch && matchesCategory;
     });
 });
 
-// ==========================================
-// MODAL AKUN (CREATE / EDIT)
-// ==========================================
 const isModalOpen = ref(false);
 const isEditMode = ref(false);
 const submitLoading = ref(false);
@@ -117,7 +115,7 @@ const handleSubmit = async () => {
             await axios.post('/api/finance/accounts', form);
             toast.success('Rekening Akun baru berhasil didaftarkan!');
         }
-        
+
         isModalOpen.value = false;
         fetchAccounts();
     } catch (error: any) {
@@ -127,9 +125,6 @@ const handleSubmit = async () => {
     }
 };
 
-// ==========================================
-// MODAL SALDO AWAL (OPENING BALANCE)
-// ==========================================
 const isOpeningModalOpen = ref(false);
 const openingProcessing = ref(false);
 const openingDate = ref('2026-01-01');
@@ -166,7 +161,7 @@ const submitOpeningBalances = async () => {
     openingProcessing.value = true;
     try {
         await updateOpeningBalances(
-            openingDate.value, 
+            openingDate.value,
             openingBalancesForm.value.map(item => ({ id: item.id, opening_balance: item.opening_balance }))
         );
         toast.success('Saldo awal berhasil disimpan dan disinkronkan!');
@@ -179,9 +174,6 @@ const submitOpeningBalances = async () => {
     }
 };
 
-// ==========================================
-// REKAPITULASI TABEL UTAMA
-// ==========================================
 const totalDebitBalance = computed(() => {
     return filteredAccounts.value
         .filter(acc => acc.normal_balance === 'debit')
@@ -291,7 +283,7 @@ const totalCreditBalance = computed(() => {
         <!-- Modal Form Clean Modern -->
         <div v-if="isModalOpen" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-xs animate-in fade-in duration-200">
             <div class="w-full max-w-md overflow-hidden rounded-3xl border border-border bg-card text-card-foreground shadow-2xl">
-                
+
                 <div class="px-6 py-5 border-b border-border/60 flex items-center justify-between">
                     <div>
                         <h3 class="text-sm font-bold tracking-tight text-foreground">
@@ -340,7 +332,7 @@ const totalCreditBalance = computed(() => {
                                 <button type="button" @click="form.normal_balance = 'credit'" :class="['flex-1 text-[10px] font-bold uppercase rounded-xl transition-all cursor-pointer', form.normal_balance === 'credit' ? 'bg-background text-primary shadow-xs' : 'text-muted-foreground']">Kredit</button>
                             </div>
                         </div>
-                        
+
                         <div class="space-y-1.5">
                             <label class="font-bold text-muted-foreground uppercase tracking-wider text-[10px]">Status</label>
                             <div class="flex h-11 p-1 bg-secondary rounded-2xl border border-border/80">
@@ -393,11 +385,11 @@ const totalCreditBalance = computed(() => {
                                 </span>
                             </td>
                             <td class="px-4 py-3 text-right">
-                                <input 
-                                    type="number" 
-                                    v-model.number="item.opening_balance" 
-                                    step="any" 
-                                    class="w-full h-9 px-3 text-right font-mono font-bold rounded-xl border border-border bg-background text-foreground shadow-2xs" 
+                                <input
+                                    type="number"
+                                    v-model.number="item.opening_balance"
+                                    step="any"
+                                    class="w-full h-9 px-3 text-right font-mono font-bold rounded-xl border border-border bg-background text-foreground shadow-2xs"
                                 />
                             </td>
                         </tr>
@@ -420,8 +412,8 @@ const totalCreditBalance = computed(() => {
                 <div>
                     <span :class="[
                         'px-3 py-1.5 rounded-xl text-[11px] font-bold uppercase tracking-wider inline-flex items-center gap-1.5',
-                        isOpeningBalanced 
-                            ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30' 
+                        isOpeningBalanced
+                            ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30'
                             : 'bg-rose-500/10 text-rose-600 dark:text-rose-400 border border-rose-500/30 animate-pulse'
                     ]">
                         <span :class="['size-1.5 rounded-full', isOpeningBalanced ? 'bg-emerald-500' : 'bg-rose-500']"></span>
@@ -434,11 +426,11 @@ const totalCreditBalance = computed(() => {
                 <Button type="button" variant="outline" size="sm" class="h-10 px-4 rounded-xl text-xs font-semibold cursor-pointer" @click="isOpeningModalOpen = false" :disabled="openingProcessing">
                     Batal
                 </Button>
-                <Button 
-                    type="button" 
-                    size="sm" 
-                    class="h-10 px-5 rounded-xl text-xs font-semibold cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed" 
-                    @click="submitOpeningBalances" 
+                <Button
+                    type="button"
+                    size="sm"
+                    class="h-10 px-5 rounded-xl text-xs font-semibold cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                    @click="submitOpeningBalances"
                     :disabled="openingProcessing || !isOpeningBalanced"
                 >
                     {{ openingProcessing ? 'Menyimpan...' : 'Simpan Saldo Awal' }}
