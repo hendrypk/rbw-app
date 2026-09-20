@@ -12,17 +12,25 @@ import SelectValue from '@/components/ui/select/SelectValue.vue';
 import SelectContent from '@/components/ui/select/SelectContent.vue';
 import SelectItem from '@/components/ui/select/SelectItem.vue';
 import Modal from '@/components/ui/Modal.vue';
+import { useOutlet } from '@/composables/useOutlet';
+import outlet from '@/routes/outlet';
 
-const { accounts, loading, fetchAccounts, updateOpeningBalances } = useAccount();
+const { accounts, loading, fetchAccounts, updateOpeningBalances, getOutletParam } = useAccount();
 
 const searchQuery = ref('');
 const selectedCategoryFilter = ref('');
 
 const categoryLabels = ref<Record<string, string>>({});
+const { getOutletId } = useOutlet();
+const selectedOutletId = ref<string>(localStorage.getItem('active_outlet_id') || 'all');
 
 const fetchCategories = async () => {
     try {
-        const response = await axios.get('/api/finance/categories');
+        const response = await axios.get('/api/finance/categories', {
+            params: {
+                outlet_id: selectedOutletId.value || '',
+            }
+        });
         if (response.data && response.data.data) {
             categoryLabels.value = response.data.data;
         }
@@ -101,18 +109,16 @@ const openEditModal = (account: Account) => {
 };
 
 const handleSubmit = async () => {
-    if (!form.account_number || !form.name) {
-        toast.error('Mohon lengkapi seluruh field yang wajib diisi!');
-        return;
-    }
-
     try {
         submitLoading.value = true;
+        const outletParam = getOutletParam(); // Mengambil outlet_id / active_outlet_id aktif
+        const payload = { ...form, ...outletParam };
+
         if (isEditMode.value && form.id) {
-            await axios.put(`/api/finance/accounts/${form.id}`, form);
+            await axios.put(`/api/finance/accounts/${form.id}`, payload);
             toast.success('Rekening Akun berhasil diperbarui!');
         } else {
-            await axios.post('/api/finance/accounts', form);
+            await axios.post('/api/finance/accounts', payload);
             toast.success('Rekening Akun baru berhasil didaftarkan!');
         }
 

@@ -58,5 +58,6 @@ export function useAccount(currentOutletId?: any) {
         loading,
         fetchAccounts,
         updateOpeningBalances,
+        getOutletParam
     };
 }

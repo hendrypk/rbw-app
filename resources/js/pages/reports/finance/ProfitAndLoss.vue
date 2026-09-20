@@ -54,6 +54,23 @@ const fetchReport = async () => {
     }
 };
 
+// Fungsi untuk memformat angka dengan tanda kurung jika bersaldo normal Kredit
+const formatRpCreditNormal = (value: number) => {
+    const absVal = Math.abs(value);
+    const formatted = new Intl.NumberFormat('id-ID', {
+        style: 'currency',
+        currency: 'IDR',
+        minimumFractionDigits: 0,
+        maximumFractionDigits: 0,
+    }).format(absVal);
+
+    // Jika nilai negatif atau tidak nol, bungkus dengan kurung
+    if (value !== 0) {
+        return `(${formatted.replace('IDR', '').trim()})`;
+    }
+    return formatted.replace('IDR', '').trim();
+};
+
 
 const handleOutletChanged = () => {
     selectedOutletId.value = getOutletId() || 'all';
@@ -72,8 +89,13 @@ onUnmounted(() => {
 
 watch(() => selectedOutletId.value, () => fetchReport());
 
-const formatRp = (amount: number) => {
-    return new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(amount || 0);
+const formatRp = (value: number) => {
+    return new Intl.NumberFormat('id-ID', {
+        style: 'currency',
+        currency: 'IDR',
+        minimumFractionDigits: 0,
+        maximumFractionDigits: 0,
+    }).format(value || 0).replace('IDR', '').trim();
 };
 </script>
 
@@ -93,29 +115,36 @@ const formatRp = (amount: number) => {
         </div>
 
         <div v-else-if="reportData" class="max-w-6xl mx-auto space-y-6">
-
             <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                 <div class="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 p-4 rounded-2xl shadow-xs space-y-1">
                     <span class="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Margin Laba Bersih</span>
-                    <div class="text-2xl font-black">{{ reportData?.ratios?.net_margin || 0 }}%</div>
-                    <span class="text-[11px] text-emerald-500 font-medium">Persentase laba dari pendapatan</span>
+                    <div class="text-2xl font-black" :class="(reportData?.total?.net_profit ?? 0) >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'">
+                        {{ reportData?.total?.trading_income ? ((reportData.total.net_profit / reportData.total.trading_income) * 100).toFixed(1) : '0.0' }}%
+                    </div>
+                    <span class="text-[11px] text-gray-400 font-medium">Persentase laba dari pendapatan</span>
                 </div>
 
                 <div class="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 p-4 rounded-2xl shadow-xs space-y-1">
                     <span class="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Margin Laba Kotor</span>
-                    <div class="text-2xl font-black">{{ reportData?.ratios?.gross_margin || 0 }}%</div>
-                    <span class="text-[11px] text-emerald-500 font-medium">Efisiensi produksi/modal</span>
+                    <div class="text-2xl font-black" :class="(reportData?.total?.gross_profit ?? 0) >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'">
+                        {{ reportData?.total?.trading_income ? ((reportData.total.gross_profit / reportData.total.trading_income) * 100).toFixed(1) : '0.0' }}%
+                    </div>
+                    <span class="text-[11px] text-gray-400 font-medium">Efisiensi produksi/modal</span>
                 </div>
 
                 <div class="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 p-4 rounded-2xl shadow-xs space-y-1">
                     <span class="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Rasio Biaya Operasional</span>
-                    <div class="text-2xl font-black">{{ reportData?.ratios?.opex_ratio || 0 }}%</div>
+                    <div class="text-2xl font-black text-gray-800 dark:text-gray-100">
+                        {{ reportData?.total?.trading_income ? ((reportData.total.expenses / reportData.total.trading_income) * 100).toFixed(1) : '0.0' }}%
+                    </div>
                     <span class="text-[11px] text-gray-400 font-medium">Beban terhadap pendapatan</span>
                 </div>
 
                 <div class="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 p-4 rounded-2xl shadow-xs space-y-1">
                     <span class="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Laba Bersih</span>
-                    <div class="text-xl font-black text-emerald-600">{{ formatRp(reportData?.net_profit?.amount) }}</div>
+                    <div class="text-xl font-black" :class="(reportData?.total?.net_profit ?? 0) >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'">
+                        {{ formatRp(reportData?.total?.net_profit) }}
+                    </div>
                     <span class="text-[11px] text-gray-400 font-medium">Net Profit Periode Ini</span>
                 </div>
             </div>
@@ -130,91 +159,77 @@ const formatRp = (amount: number) => {
                             </tr>
                         </thead>
                         <tbody class="divide-y divide-gray-100 dark:divide-gray-800">
-
                             <tr class="bg-gray-100/60 dark:bg-gray-800/30 font-bold">
                                 <td colspan="2" class="py-2.5 px-4 text-gray-700 dark:text-gray-300">Pendapatan</td>
                             </tr>
-                            <tr v-for="item in reportData?.revenues?.items" :key="item.code" class="hover:bg-gray-50/50 dark:hover:bg-gray-800/20">
-                                <td class="py-2.5 px-4 pl-6 text-gray-600 dark:text-gray-400">{{ item.name }} <span class="text-[10px] text-gray-400">({{ item.code }})</span></td>
-                                <td class="py-2.5 px-4 text-right font-medium">{{ formatRp(item.balance) }}</td>
+                            <tr v-for="item in reportData?.data?.sales" :key="item.account_id" class="hover:bg-gray-50/50 dark:hover:bg-gray-800/20">
+                                <td class="py-2.5 px-4 pl-6 text-gray-600 dark:text-gray-400">
+                                    {{ item.account.name }}
+                                    <span class="text-[10px] text-gray-400">({{ item.account.ref_code }})</span>
+                                </td>
+                                <td class="py-2.5 px-4 text-right font-medium text-gray-800 dark:text-gray-200">{{ formatRpCreditNormal(item.net) }}</td>
                             </tr>
 
-                            <tr class="bg-emerald-50/40 dark:bg-emerald-950/20 font-bold border-t border-emerald-100 dark:border-emerald-900/30">
-                                <td class="py-3 px-4 text-emerald-900 dark:text-emerald-200">Total Pendapatan</td>
-                                <td class="py-3 px-4 text-right text-emerald-600 dark:text-emerald-400 font-bold text-sm">{{ formatRp(reportData?.revenues?.total) }}</td>
+                            <tr class="bg-gray-50/60 dark:bg-gray-800/20 font-bold border-t border-gray-200 dark:border-gray-800">
+                                <td class="py-3 px-4 text-gray-800 dark:text-gray-200">Total Pendapatan</td>
+                                <td class="py-3 px-4 text-right font-bold text-sm text-gray-800 dark:text-gray-200">
+                                    {{ formatRpCreditNormal(reportData?.total?.trading_income) }}
+                                </td>
                             </tr>
 
                             <tr class="bg-gray-100/60 dark:bg-gray-800/30 font-bold">
                                 <td colspan="2" class="py-2.5 px-4 text-gray-700 dark:text-gray-300 pt-4">Beban Pokok Penjualan (HPP)</td>
                             </tr>
-                            <tr class="hover:bg-gray-50/50 dark:hover:bg-gray-800/20">
-                                <td class="py-2.5 px-4 pl-6 text-gray-600 dark:text-gray-400">Total HPP / Modal Produksi Terjual</td>
-                                <td class="py-2.5 px-4 text-right font-medium text-red-500">- {{ formatRp(reportData?.cogs?.total) }}</td>
+                            <tr v-for="item in reportData?.data?.cost_of_sales" :key="item.account_id" class="hover:bg-gray-50/50 dark:hover:bg-gray-800/20">
+                                <td class="py-2.5 px-4 pl-6 text-gray-600 dark:text-gray-400">
+                                    {{ item.account.name }}
+                                    <span class="text-[10px] text-gray-400">({{ item.account.ref_code }})</span>
+                                </td>
+                                <td class="py-2.5 px-4 text-right font-medium text-gray-800 dark:text-gray-200">{{ formatRp(item.net) }}</td>
                             </tr>
 
-                            <tr :class="[
-                                'font-bold border-t',
-                                (reportData?.gross_profit?.amount || 0) >= 0
-                                    ? 'bg-emerald-50/40 dark:bg-emerald-950/20 border-emerald-100 dark:border-emerald-900/30'
-                                    : 'bg-red-50/40 dark:bg-red-950/20 border-red-100 dark:border-red-900/30'
-                            ]">
-                                <td class="py-3 px-4 text-gray-800 dark:text-gray-200">
-                                    {{ (reportData?.gross_profit?.amount || 0) >= 0 ? 'Laba Kotor' : 'Rugi Kotor' }}
-                                    <span :class="[
-                                        'text-[10px] font-bold px-2 py-0.5 rounded-full ml-2',
-                                        (reportData?.gross_profit?.amount || 0) >= 0
-                                            ? 'text-emerald-700 bg-emerald-100 dark:bg-emerald-900/60 dark:text-emerald-300'
-                                            : 'text-red-700 bg-red-100 dark:bg-red-900/60 dark:text-red-300'
-                                    ]">
-                                        Margin: {{ reportData?.gross_profit?.margin }}%
+                            <tr class="bg-gray-100/40 dark:bg-gray-800/20 font-bold border-t border-gray-200 dark:border-gray-800">
+                                <td class="py-3 px-4 text-gray-800 dark:text-gray-200">Total Beban Pokok Penjualan</td>
+                                <td class="py-3 px-4 text-right font-bold text-gray-800 dark:text-gray-200">{{ formatRp(reportData?.total?.cost_of_sales) }}</td>
+                            </tr>
+
+                            <tr class="font-bold text-sm border-t-2 border-gray-300 dark:border-gray-700"
+                                :class="(reportData?.total?.gross_profit ?? 0) >= 0 ? 'bg-emerald-50/60 dark:bg-emerald-950/20 text-emerald-800 dark:text-emerald-300' : 'bg-rose-50/60 dark:bg-rose-950/20 text-rose-800 dark:text-rose-300'">
+                                <td class="py-3.5 px-4">LABA / RUGI KOTOR</td>
+                                <td class="py-3.5 px-4 text-right font-bold text-base">
+                                    <span class="ml-2 text-xs font-normal opacity-80">
+                                        ({{ reportData?.total?.trading_income ? ((reportData.total.gross_profit / reportData.total.trading_income) * 100).toFixed(1) : '0.0' }}%)
                                     </span>
-                                </td>
-                                <td :class="[
-                                    'py-3 px-4 text-right font-bold text-sm',
-                                    (reportData?.gross_profit?.amount || 0) >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400'
-                                ]">
-                                    {{ formatRp(reportData?.gross_profit?.amount) }}
+                                    {{ formatRp(reportData?.total?.gross_profit) }}
                                 </td>
                             </tr>
 
                             <tr class="bg-gray-100/60 dark:bg-gray-800/30 font-bold">
-                                <td colspan="2" class="py-2.5 px-4 text-gray-700 dark:text-gray-300 pt-4">Biaya Operasional (Beban)</td>
+                                <td colspan="2" class="py-2.5 px-4 text-gray-700 dark:text-gray-300 pt-4">Biaya Operasional</td>
                             </tr>
-                            <tr v-for="item in reportData?.expenses?.items" :key="item.code" class="hover:bg-gray-50/50 dark:hover:bg-gray-800/20">
-                                <td class="py-2.5 px-4 pl-6 text-gray-600 dark:text-gray-400">{{ item.name }} <span class="text-[10px] text-gray-400">({{ item.code }})</span></td>
-                                <td class="py-2.5 px-4 text-right font-medium">{{ formatRp(item.balance) }}</td>
+                            <tr v-for="item in reportData?.data?.expenses" :key="item.account_id" class="hover:bg-gray-50/50 dark:hover:bg-gray-800/20">
+                                <td class="py-2.5 px-4 pl-6 text-gray-600 dark:text-gray-400">
+                                    {{ item.account.name }}
+                                    <span class="text-[10px] text-gray-400">({{ item.account.ref_code }})</span>
+                                </td>
+                                <td class="py-2.5 px-4 text-right font-medium text-gray-800 dark:text-gray-200">{{ formatRp(item.net) }}</td>
                             </tr>
 
                             <tr class="bg-gray-100/40 dark:bg-gray-800/20 font-bold border-t border-gray-200 dark:border-gray-800">
                                 <td class="py-3 px-4 text-gray-800 dark:text-gray-200">Total Biaya Operasional</td>
-                                <td class="py-3 px-4 text-right text-red-500 font-bold">- {{ formatRp(reportData?.expenses?.total) }}</td>
+                                <td class="py-3 px-4 text-right font-bold text-gray-800 dark:text-gray-200">{{ formatRp(reportData?.total?.expenses) }}</td>
                             </tr>
 
-                            <tr :class="[
-                                'font-black text-sm border-t-2',
-                                (reportData?.net_profit?.amount || 0) >= 0
-                                    ? 'bg-emerald-100/60 dark:bg-emerald-900/40 border-emerald-500'
-                                    : 'bg-red-100/60 dark:bg-red-900/40 border-red-500'
-                            ]">
-                                <td class="py-4 px-4 text-gray-900 dark:text-gray-100">
-                                    {{ (reportData?.net_profit?.amount || 0) >= 0 ? 'LABA BERSIH' : 'RUGI BERSIH' }}
-                                    <span :class="[
-                                        'text-[10px] font-bold px-2 py-0.5 rounded-full ml-2',
-                                        (reportData?.net_profit?.amount || 0) >= 0
-                                            ? 'text-emerald-800 bg-emerald-200 dark:bg-emerald-800 dark:text-emerald-200'
-                                            : 'text-red-800 bg-red-200 dark:bg-red-800 dark:text-red-200'
-                                    ]">
-                                        Net Margin: {{ reportData?.net_profit?.margin }}%
+                            <tr class="font-black text-sm border-t-2"
+                                :class="(reportData?.total?.net_profit ?? 0) >= 0 ? 'bg-emerald-100/60 dark:bg-emerald-900/40 border-emerald-500 text-emerald-700 dark:text-emerald-300' : 'bg-rose-100/60 dark:bg-rose-900/40 border-rose-500 text-rose-700 dark:text-rose-300'">
+                                <td class="py-4 px-4">LABA / RUGI BERSIH</td>
+                                <td class="py-4 px-4 text-right font-black text-base">
+                                    {{ formatRp(reportData?.total?.net_profit) }}
+                                    <span class="ml-2 text-xs font-normal opacity-80">
+                                        ({{ reportData?.total?.trading_income ? ((reportData.total.net_profit / reportData.total.trading_income) * 100).toFixed(1) : '0.0' }}%)
                                     </span>
                                 </td>
-                                <td :class="[
-                                    'py-4 px-4 text-right font-black text-base',
-                                    (reportData?.net_profit?.amount || 0) >= 0 ? 'text-emerald-700 dark:text-emerald-300' : 'text-red-600 dark:text-red-400'
-                                ]">
-                                    {{ formatRp(reportData?.net_profit?.amount) }}
-                                </td>
                             </tr>
-
                         </tbody>
                     </table>
                 </div>

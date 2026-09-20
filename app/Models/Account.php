@@ -11,6 +11,7 @@ class Account extends Model
     use HasUuids, SoftDeletes;
 
     protected $fillable = [
+        'outlet_id',
         'category',
         'account_number',
         'code',

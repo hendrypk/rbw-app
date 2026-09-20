@@ -42,23 +42,33 @@ class AccountController extends Controller
     public function store(Request $request): JsonResponse
     {
         $data = $request->validate([
-            // Disesuaikan agar mencakup kategori '1' sampai '6' sesuai model Account::CATEGORIES
+            'outlet_id'      => ['nullable', 'exists:outlets,id'],
             'category'       => ['required', Rule::in(array_keys(Account::CATEGORIES))],
             'account_number' => [
                 'required',
                 'string',
                 'max:20',
                 Rule::unique('accounts')->where(function ($query) use ($request) {
-                    return $query->where('category', $request->category)
-                                 ->where('account_number', trim($request->account_number));
+                    $query->where('category', $request->category)
+                          ->where('account_number', trim($request->account_number));
+
+                    if ($request->filled('outlet_id')) {
+                        $query->where('outlet_id', $request->outlet_id);
+                    }
+
+                    return $query;
                 })
             ],
             'name'           => ['required', 'string', 'max:255'],
             'normal_balance' => ['required', Rule::in(['debit', 'credit'])],
             'is_active'      => ['boolean']
         ], [
-            'account_number.unique' => 'Nomor akun ini sudah terpakai di bawah kategori terpilih.'
+            'account_number.unique' => 'Nomor akun ini sudah terpakai di bawah kategori terpilih pada outlet ini.'
         ]);
+
+        if (empty($data['outlet_id']) && session()->has('active_outlet_id')) {
+            $data['outlet_id'] = session('active_outlet_id');
+        }
 
         $account = $this->accountService->createAccount($data);
 
@@ -67,7 +77,6 @@ class AccountController extends Controller
             'data'    => $account
         ], 201);
     }
-
     /**
      * Display the specified resource.
      */
@@ -82,22 +91,28 @@ class AccountController extends Controller
     public function update(Request $request, Account $account): JsonResponse
     {
         $data = $request->validate([
-            // Disesuaikan agar mencakup kategori '1' sampai '6' sesuai model Account::CATEGORIES
+            'outlet_id'      => ['nullable', 'exists:outlets,id'],
             'category'       => ['required', Rule::in(array_keys(Account::CATEGORIES))],
             'account_number' => [
                 'required',
                 'string',
                 'max:20',
-                Rule::unique('accounts')->where(function ($query) use ($request, $account) {
-                    return $query->where('category', $request->category)
-                                 ->where('account_number', trim($request->account_number));
+                Rule::unique('accounts')->where(function ($query) use ($request) {
+                    $query->where('category', $request->category)
+                          ->where('account_number', trim($request->account_number));
+
+                    if ($request->filled('outlet_id')) {
+                        $query->where('outlet_id', $request->outlet_id);
+                    }
+
+                    return $query;
                 })->ignore($account->id)
             ],
             'name'           => ['required', 'string', 'max:255'],
             'normal_balance' => ['required', Rule::in(['debit', 'credit'])],
             'is_active'      => ['boolean']
         ], [
-            'account_number.unique' => 'Nomor akun ini sudah terpakai di bawah kategori terpilih.'
+            'account_number.unique' => 'Nomor akun ini sudah terpakai di bawah kategori terpilih pada outlet ini.'
         ]);
 
         $updatedAccount = $this->accountService->updateAccount($account, $data);
