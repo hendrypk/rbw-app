@@ -153,7 +153,6 @@ class ReportController extends Controller
             ->get();
 
         // 2. Kumpulkan ID akun prioritas menggunakan Konstanta Model AccountMapping
-// 2. Kumpulkan ID akun prioritas berdasarkan spesifikasi kolom Debit / Kredit dari mapping
         $mappedSalesAccountIds = $mappings->whereIn('transaction_type', [
                 AccountMapping::TYPE_POS_REVENUE_CASH,
                 AccountMapping::TYPE_POS_REVENUE_QRIS
@@ -189,6 +188,9 @@ class ReportController extends Controller
         $fetchAccountsWithPriority = function ($categories, $priorityAccountIds = []) use ($outletId, $startDate, $endDate) {
             $accounts = Account::whereIn('category', $categories)
                 ->where('is_active', true)
+                ->when($outletId && $outletId !== 'all', function ($q) use ($outletId) {
+                    $q->where('outlet_id', $outletId);
+                })
                 ->get();
 
             $priorityAccounts = $accounts->whereIn('id', $priorityAccountIds);
