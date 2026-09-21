@@ -6,61 +6,69 @@ use Illuminate\Console\Command;
 use App\Models\Menu;
 use App\Models\Outlet;
 
-class CheckMenuDifferences extends Command
+// Pastikan nama class SAMA dengan nama file (MenuSync.php)
+class MenuSync extends Command
 {
     /**
-     * The name and signature of the console command.
+     * Signature bersih tanpa parameter (akan jalan secara interaktif)
      */
-    protected $signature = 'menu:check-diff
-                            {outlet_a_id : ID outlet referensi (Misal: Jakal 12)}
-                            {outlet_b_id : ID outlet yang akan dicek (Misal: Borobudur)}';
+    protected $signature = 'menu:check-diff';
 
     /**
-     * The console command description.
+     * Deskripsi command
      */
-    protected $description = 'Mengecek menu yang ada di Outlet A tetapi TIDAK ADA di Outlet B berdasarkan ID (mengabaikan urutan kata)';
+    protected $description = 'Mengecek perbedaan menu antar outlet secara interaktif';
 
     /**
-     * Helper: Menormalisasi nama menu dengan mengurutkan kata-katanya
-     * Contoh: "Roti Bakar Keju" -> ["bakar", "keju", "roti"] -> "bakar keju roti"
+     * Helper: Menormalisasi nama menu
      */
     private function normalizeMenuName($name)
     {
         $cleanStr = strtolower(trim(preg_replace('/\s+/', ' ', $name)));
-
         $words = explode(' ', $cleanStr);
-
         sort($words);
-
         return implode(' ', $words);
     }
 
     public function handle()
     {
-        $outletAId = $this->argument('outlet_a_id');
-        $outletBId = $this->argument('outlet_b_id');
+        $this->info("Mengambil data outlet dari database...");
 
-        $outletA = Outlet::find($outletAId);
-        $outletB = Outlet::find($outletBId);
+        $outlets = Outlet::all(['id', 'name']);
 
-        if (!$outletA) {
-            $this->error("Outlet A dengan ID ({$outletAId}) tidak ditemukan!");
+        if ($outlets->count() < 2) {
+            $this->error("Minimal harus ada 2 outlet di database untuk melakukan perbandingan!");
             return Command::FAILURE;
         }
 
-        if (!$outletB) {
-            $this->error("Outlet B dengan ID ({$outletBId}) tidak ditemukan!");
+        $outletNames = $outlets->pluck('name')->toArray();
+
+        $outletAName = $this->choice(
+            'Pilih Outlet Referensi (Outlet A / Acuan)',
+            $outletNames
+        );
+        $outletA = $outlets->where('name', $outletAName)->first();
+
+        $outletBName = $this->choice(
+            'Pilih Outlet Target (Outlet B / Yang akan dicek)',
+            $outletNames
+        );
+        $outletB = $outlets->where('name', $outletBName)->first();
+
+        if ($outletA->id === $outletB->id) {
+            $this->error("Anda memilih outlet yang sama! Perbandingan dibatalkan.");
             return Command::FAILURE;
         }
 
-        $this->info("Membandingkan Menu: {$outletA->name} vs {$outletB->name}...");
+        $this->newLine();
+        $this->info("Membandingkan Menu: [{$outletA->name}] vs [{$outletB->name}]...");
         $this->newLine();
 
         $menusA = Menu::where('outlet_id', $outletA->id)->get(['code', 'name']);
         $menusB = Menu::where('outlet_id', $outletB->id)->get(['code', 'name']);
 
-        $this->info("Total Menu {$outletA->name}: " . $menusA->count());
-        $this->info("Total Menu {$outletB->name}: " . $menusB->count());
+        $this->info("Total Menu {$outletA->name} : " . $menusA->count());
+        $this->info("Total Menu {$outletB->name} : " . $menusB->count());
         $this->newLine();
 
         $normalizedNamesB = [];
@@ -69,7 +77,6 @@ class CheckMenuDifferences extends Command
         }
 
         $missingInB = [];
-
         foreach ($menusA as $ma) {
             $normalizedNameA = $this->normalizeMenuName($ma->name);
 
@@ -82,7 +89,7 @@ class CheckMenuDifferences extends Command
         }
 
         if (empty($missingInB)) {
-            $this->info("✅ Semua menu di {$outletA->name} sudah terdaftar di {$outletB->name}.");
+            $this->info("✅ Semua menu di {$outletA->name} sudah ada di {$outletB->name}.");
         } else {
             $this->warn("⚠️ Ditemukan " . count($missingInB) . " menu di {$outletA->name} yang TIDAK ADA di {$outletB->name}:");
 
