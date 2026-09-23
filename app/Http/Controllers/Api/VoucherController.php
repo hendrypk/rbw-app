@@ -13,10 +13,19 @@ class VoucherController extends Controller
     /**
      * Ambil daftar semua voucher beserta menu terkait (untuk halaman manajemen).
      */
-    public function index(): JsonResponse
+    public function index(Request $request): JsonResponse
     {
-        $vouchers = Voucher::with('menus')->latest()->get();
-        
+        $query = Voucher::with('menus')->latest();
+
+        if ($request->has('outlet_id') && !empty($request->outlet_id)) {
+            $query->where(function ($q) use ($request) {
+                $q->where('outlet_id', $request->outlet_id)
+                  ->orWhereNull('outlet_id');
+            });
+        }
+
+        $vouchers = $query->get();
+
         return response()->json([
             'success' => true,
             'data'    => $vouchers
@@ -29,6 +38,7 @@ class VoucherController extends Controller
     public function store(Request $request): JsonResponse
     {
         $request->validate([
+            'outlet_id'    => 'nullable|exists:outlets,id',
             'code'         => 'required|string|unique:vouchers,code|max:50',
             'name'         => 'required|string|max:100',
             'type'         => 'required|string|in:fixed,percentage',
@@ -44,6 +54,7 @@ class VoucherController extends Controller
         ]);
 
         $voucher = Voucher::create([
+            'outlet_id'    => $request->outlet_id,
             'code'         => strtoupper($request->code),
             'name'         => $request->name,
             'type'         => $request->type,
@@ -62,8 +73,8 @@ class VoucherController extends Controller
         }
 
         return response()->json([
-            'success' => true, 
-            'message' => 'Voucher berhasil dibuat.', 
+            'success' => true,
+            'message' => 'Voucher berhasil dibuat.',
             'data'    => $voucher->load('menus')
         ], 201);
     }
@@ -75,6 +86,7 @@ class VoucherController extends Controller
     {
         $request->validate([
             'code'             => 'required|string',
+            'outlet_id'        => 'nullable',
             'items'            => 'required|array|min:1', // Item di keranjang kasir
             'items.*.menu_id'  => 'required|exists:menus,id',
             'items.*.subtotal' => 'required|numeric|min:0',
@@ -92,6 +104,10 @@ class VoucherController extends Controller
         // 1. Cek Waktu Mulai (Hanya jika started_at diisi / tidak permanent)
         if ($voucher->started_at && $now->lessThan($voucher->started_at)) {
             return response()->json(['success' => false, 'message' => 'Voucher ini belum mulai berlaku.'], 422);
+        }
+
+        if ($voucher->outlet_id && $request->has('outlet_id') && $voucher->outlet_id != $request->outlet_id) {
+            return response()->json(['success' => false, 'message' => 'Voucher ini tidak berlaku untuk outlet ini.'], 422);
         }
 
         // 2. Cek Masa Kedaluwarsa (Hanya jika expired_at diisi / tidak permanent)
@@ -119,7 +135,7 @@ class VoucherController extends Controller
         // Jika tidak ada satupun menu di keranjang yang cocok dengan ketentuan voucher
         if ($eligibleSubtotal <= 0) {
             return response()->json([
-                'success' => false, 
+                'success' => false,
                 'message' => 'Voucher tidak dapat digunakan karena tidak ada menu yang sesuai di keranjang.'
             ], 422);
         }
@@ -127,7 +143,7 @@ class VoucherController extends Controller
         // 5. Cek Minimum Belanja (Berdasarkan total subtotal menu yang valid)
         if ($eligibleSubtotal < $voucher->min_spend) {
             return response()->json([
-                'success' => false, 
+                'success' => false,
                 'message' => "Minimum belanja menu yang berhak diskon adalah Rp " . number_format($voucher->min_spend, 0, ',', '.')
             ], 422);
         }
@@ -139,7 +155,7 @@ class VoucherController extends Controller
         } else {
             // Tipe Persentase (%)
             $discountAmount = $eligibleSubtotal * (floatval($voucher->value) / 100);
-            
+
             // Batasi dengan max_discount jika diatur
             if ($voucher->max_discount !== null && $discountAmount > floatval($voucher->max_discount)) {
                 $discountAmount = floatval($voucher->max_discount);
@@ -174,7 +190,7 @@ class VoucherController extends Controller
         $voucher->delete();
 
         return response()->json([
-            'success' => true, 
+            'success' => true,
             'message' => 'Voucher berhasil dihapus.'
         ]);
     }

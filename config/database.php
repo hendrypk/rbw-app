@@ -44,6 +44,14 @@ return [
             'transaction_mode' => 'DEFERRED',
         ],
 
+        'sqlite_kledo' => [
+            'driver' => 'sqlite',
+            'url' => env('DB_URL'),
+            'database' => storage_path('app/kledo_invoices.db'),
+            'prefix' => '',
+            'foreign_key_constraints' => env('DB_FOREIGN_KEYS', true),
+        ],
+
         'mysql' => [
             'driver' => 'mysql',
             'url' => env('DB_URL'),
