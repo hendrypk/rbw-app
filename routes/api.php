@@ -114,6 +114,8 @@ Route::middleware(['auth', 'verified', 'resolve.outlet'])->prefix('api')->name('
     Route::post('/overhead-costs/{overheadCost}/sync-menus', [OverheadCostController::class, 'syncMenus']);
     Route::apiResource('overhead-costs', OverheadCostController::class);
     Route::apiResource('categories', CategoryController::class);
+    Route::get('/sales', [OrderController::class, 'getInvoices']);
+
 
     // ----------------------------------------------------
     // 3. POS API TRANSACTIONS (Tetap butuh resolve.outlet)

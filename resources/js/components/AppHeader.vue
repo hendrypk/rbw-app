@@ -38,6 +38,7 @@ import { toUrl } from '@/lib/utils';
 import { dashboard } from '@/routes';
 import type { BreadcrumbItem, NavItem } from '@/types';
 import axios from 'axios';
+import { confirm } from '@/composables/useSwal';
 
 type Props = {
     breadcrumbs?: BreadcrumbItem[];
@@ -70,13 +71,26 @@ onMounted(async () => {
     }
 });
 
-const handleOutletChange = () => {
-    localStorage.setItem('active_outlet_id', selectedOutletId.value);
-    window.dispatchEvent(new Event('outlet-changed'));
-    // Reload halaman agar seluruh state & request baru mengambil ID outlet yang diperbarui
-    window.location.reload();
-};
+const handleOutletChange = async () => {
+    const newOutletId = selectedOutletId.value;
 
+    const isConfirmed = await confirm(
+        'Pindah Outlet?',
+        'Halaman akan dimuat ulang untuk menyesuaikan data dengan outlet yang dipilih.',
+        'Ya, Pindah',
+        'Batal'
+    );
+
+    if (isConfirmed) {
+        localStorage.setItem('active_outlet_id', newOutletId);
+        previousOutletId.value = newOutletId;
+        window.dispatchEvent(new Event('outlet-changed'));
+        window.location.reload();
+    } else {
+        // JIKA USER KLIK "BATAL"
+        selectedOutletId.value = previousOutletId.value;
+    }
+};
 const activeItemStyles =
     'text-neutral-900 dark:bg-neutral-800 dark:text-neutral-100';
 
@@ -219,8 +233,8 @@ const rightNavItems: NavItem[] = [
                     <!-- Global Outlet Selector Dropdown di Header -->
                     <div class="flex items-center gap-1.5 bg-secondary/50 border border-input px-2.5 py-1 rounded-xl">
                         <Store class="size-4 text-muted-foreground shrink-0" />
-                        <select 
-                            v-model="selectedOutletId" 
+                        <select
+                            v-model="selectedOutletId"
                             @change="handleOutletChange"
                             class="h-7 bg-transparent text-foreground font-semibold text-xs outline-none cursor-pointer pr-2"
                         >

@@ -306,6 +306,42 @@ class OrderController extends Controller
         }
     }
 
+    public function getInvoices(Request $request): JsonResponse
+    {
+        $outletId = $request->header('X-Outlet-ID') ?? $request->input('outlet_id');
+
+        $query = Order::query()
+            // Jika ada relasi yang perlu dimuat, misalnya items atau customer:
+            // ->with(['customer', 'items'])
+            ->when($outletId && $outletId !== 'all', function ($q) use ($outletId) {
+                $q->where('outlet_id', $outletId);
+            });
+
+        // 1. Filter Pencarian (Search)
+        if ($request->filled('search')) {
+            $query->where('order_number', 'like', '%' . $request->search . '%');
+        }
+
+        // 2. Filter Status Pembayaran
+        if ($request->filled('status')) {
+            if ($request->status === 'paid') {
+                $query->where('payment_status', 'paid');
+            } elseif ($request->status === 'unpaid') {
+                $query->whereIn('payment_status', ['unpaid', 'partial']);
+            }
+        }
+
+        // 3. Eksekusi Query dengan Pagination (15 baris per halaman)
+        $orders = $query->latest('created_at')->paginate(15)->withQueryString();
+
+        // 4. Kembalikan respons dalam format JSON standar
+        return response()->json([
+            'success' => true,
+            'data'    => $orders,
+            'message' => 'Daftar penjualan berhasil diambil.'
+        ]);
+    }
+
     public function userCheckout(Request $request): JsonResponse
     {
         $request->validate([

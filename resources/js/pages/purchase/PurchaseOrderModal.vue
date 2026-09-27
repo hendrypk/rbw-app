@@ -15,8 +15,8 @@ import SelectContent from '@/components/ui/select/SelectContent.vue';
 import SelectItem from '@/components/ui/select/SelectItem.vue';
 import DatePicker from '@/components/pos/DatePicker.vue';
 
-const props = defineProps<{ 
-    show: boolean; 
+const props = defineProps<{
+    show: boolean;
     po?: any;
     activeOutletId?: string | null;
 }>();
@@ -27,7 +27,7 @@ const currentOutletId = ref<string | null>(localStorage.getItem('active_outlet_i
 
 const { suppliers, fetchSuppliers } = useSuppliers();
 const { materialOptions, fetchMaterialOptions } = useMaterials(currentOutletId);
-const { accounts, fetchAccounts } = useAccount();
+const { accounts, fetchAccounts } = useAccount(currentOutletId);
 
 const processing = ref(false);
 const errors = ref<Record<string, any>>({});
@@ -96,19 +96,18 @@ watch(() => props.show, (newVal) => {
                 : [{ raw_material_id: '', qty: 1, unit_price: 0 }]
         };
     } else {
-        form.value = { 
-            supplier_id: '', 
-            order_date: getTodayLocal(), 
+        form.value = {
+            supplier_id: '',
+            order_date: getTodayLocal(),
             payment_account_id: 'NO_ACCOUNT',
             amount_paid: 0,
-            notes: '', 
-            items: [{ raw_material_id: '', qty: 1, unit_price: 0 }] 
+            notes: '',
+            items: [{ raw_material_id: '', qty: 1, unit_price: 0 }]
         };
     }
 
-    // 2. FETCH DATA BACKGROUND (Tanpa memblokir render UI)
-    const headers = currentOutletId.value && currentOutletId.value !== 'all' 
-        ? { headers: { 'X-Outlet-ID': currentOutletId.value } } 
+    const headers = currentOutletId.value && currentOutletId.value !== 'all'
+        ? { headers: { 'X-Outlet-ID': currentOutletId.value } }
         : {};
 
     fetchSuppliers({ active: true }).catch(console.error);
@@ -118,15 +117,15 @@ watch(() => props.show, (newVal) => {
 
 const submit = async (status: string) => {
     processing.value = true;
-    errors.value = {}; 
-    
+    errors.value = {};
+
     const activeOutletId = localStorage.getItem('active_outlet_id');
-    const payload = { 
-        ...form.value, 
+    const payload = {
+        ...form.value,
         payment_account_id: form.value.payment_account_id === 'NO_ACCOUNT' ? null : form.value.payment_account_id,
         outlet_id: activeOutletId && activeOutletId !== 'all' ? activeOutletId : null,
         status,
-        final_total: totalAmount.value 
+        final_total: totalAmount.value
     };
 
     try {
@@ -151,7 +150,7 @@ const submit = async (status: string) => {
 <template>
     <div v-if="show" class="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6 bg-black/60 backdrop-blur-md">
         <div class="w-full max-w-4xl bg-white dark:bg-zinc-950 rounded-[2.5rem] shadow-2xl border border-slate-200/80 dark:border-zinc-800 flex flex-col max-h-[92vh] overflow-hidden text-slate-900 dark:text-zinc-50 animate-in fade-in zoom-in-95 duration-200">
-            
+
             <div class="px-6 py-5 border-b border-slate-100 dark:border-zinc-900 flex items-center justify-between shrink-0">
                 <div>
                     <h2 class="text-base sm:text-lg font-bold tracking-tight">{{ po ? 'Edit Purchase Order' : 'Buat Purchase Order' }}</h2>
@@ -164,7 +163,7 @@ const submit = async (status: string) => {
 
             <div class="flex-1 overflow-y-auto p-4 sm:p-6 space-y-6">
                 <form @submit.prevent class="space-y-6">
-                    
+
                     <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
                         <div class="space-y-1.5">
                             <Label>Supplier</Label>
@@ -180,7 +179,7 @@ const submit = async (status: string) => {
                             </Select>
                             <InputError :message="errors.supplier_id?.[0]" />
                         </div>
-                        
+
                         <div class="space-y-1.5">
                             <Label>Tanggal Pembelian</Label>
                             <DatePicker v-model="form.order_date" />
@@ -278,7 +277,7 @@ const submit = async (status: string) => {
                             <div class="flex justify-between text-slate-500"><span>Total Unik Item:</span> <span class="font-bold font-mono text-slate-800 dark:text-zinc-200">{{ totalItems }}</span></div>
                             <div class="flex justify-between text-slate-500"><span>Total Kuantitas:</span> <span class="font-bold font-mono text-slate-800 dark:text-zinc-200">{{ totalQty.toFixed(2) }}</span></div>
                             <div class="flex justify-between border-t border-slate-200 dark:border-zinc-800 pt-2.5 text-sm">
-                                <span class="font-bold text-slate-700 dark:text-zinc-300">Total Bruto:</span> 
+                                <span class="font-bold text-slate-700 dark:text-zinc-300">Total Bruto:</span>
                                 <span class="font-black font-mono text-primary">Rp {{ totalAmount.toLocaleString('id-ID') }}</span>
                             </div>
                             <div v-if="remainingBill > 0" class="flex justify-between text-rose-600 bg-rose-500/10 p-2 rounded-xl font-medium mt-1">

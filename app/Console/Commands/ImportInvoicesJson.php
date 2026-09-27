@@ -108,7 +108,7 @@ class ImportInvoicesJson extends Command
                         'discount'       => $discount,
                         'final_total'    => $finalTotal,
                         'payment_method' => 'cash',
-                        'status'         => 'unpaid',
+                        'status'         => 'paid',
                         'created_at'     => $rawCreatedAt,
                         'updated_at'     => $rawCreatedAt,
                     ]);

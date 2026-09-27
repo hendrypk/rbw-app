@@ -14,7 +14,7 @@ import {
     SidebarMenuButton,
     SidebarMenuItem,
 } from '@/components/ui/sidebar';
-import { dashboard } from '@/routes';
+import { dashboard, sales } from '@/routes';
 import type { NavItem } from '@/types';
 import menus from '@/routes/menus';
 import suppliers from '@/routes/suppliers';
@@ -64,6 +64,11 @@ const mainNavItems: NavItem[] = [
     {
         title: 'Purchase',
         href: purchase.index(),
+        icon: ShoppingCart,
+    },
+    {
+        title: 'Sales',
+        href: sales(),
         icon: ShoppingCart,
     },
     {

@@ -1,5 +1,6 @@
 import { ref } from 'vue';
 import axios from 'axios';
+import { useOutlet } from './useOutlet';
 
 export interface PurchaseOrder {
     id: string;
@@ -10,15 +11,18 @@ export interface PurchaseOrder {
     total_amount: number;
 }
 
-export function usePurchaseOrders() {
+export function usePurchaseOrders(currentOutletId?: any) {
     const purchaseOrders = ref<PurchaseOrder[]>([]);
     const isLoading = ref(false);
     const meta = ref<any>(null);
+    const { getOutletParam } = useOutlet(currentOutletId);
 
     const fetchPurchaseOrders = async (params: { page?: number; search?: string } = {}) => {
         isLoading.value = true;
         try {
-            const response = await axios.get('/api/purchase-orders', { params });
+            const outletParam = getOutletParam();
+            const queryParams = { ...params, ...outletParam };
+            const response = await axios.get('/api/purchase-orders', { params: queryParams });
             purchaseOrders.value = response.data.data;
             const { data, ...paginationInfo } = response.data;
             meta.value = paginationInfo;

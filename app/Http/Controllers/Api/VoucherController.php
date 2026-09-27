@@ -13,17 +13,19 @@ class VoucherController extends Controller
     /**
      * Ambil daftar semua voucher beserta menu terkait (untuk halaman manajemen).
      */
-    public function index(Request $request): JsonResponse
+public function index(Request $request): JsonResponse
     {
+        $outletId = $request->input('outlet_id', 'all');
+
+        // 1. Buat query builder terlebih dahulu (jangan pakai get() dulu)
         $query = Voucher::with('menus')->latest();
 
-        if ($request->has('outlet_id') && !empty($request->outlet_id)) {
-            $query->where(function ($q) use ($request) {
-                $q->where('outlet_id', $request->outlet_id)
-                  ->orWhereNull('outlet_id');
-            });
+        // 2. Berikan kondisi filter sebelum get()
+        if ($outletId && $outletId !== 'all') {
+            $query->where('outlet_id', $outletId);
         }
 
+        // 3. Eksekusi get() di akhir
         $vouchers = $query->get();
 
         return response()->json([
@@ -54,8 +56,8 @@ class VoucherController extends Controller
         ]);
 
         $voucher = Voucher::create([
-            'outlet_id'    => $request->outlet_id,
             'code'         => strtoupper($request->code),
+            'outlet_id'    => $request->outlet_id,
             'name'         => $request->name,
             'type'         => $request->type,
             'value'        => $request->value,
@@ -86,7 +88,6 @@ class VoucherController extends Controller
     {
         $request->validate([
             'code'             => 'required|string',
-            'outlet_id'        => 'nullable',
             'items'            => 'required|array|min:1', // Item di keranjang kasir
             'items.*.menu_id'  => 'required|exists:menus,id',
             'items.*.subtotal' => 'required|numeric|min:0',
@@ -104,10 +105,6 @@ class VoucherController extends Controller
         // 1. Cek Waktu Mulai (Hanya jika started_at diisi / tidak permanent)
         if ($voucher->started_at && $now->lessThan($voucher->started_at)) {
             return response()->json(['success' => false, 'message' => 'Voucher ini belum mulai berlaku.'], 422);
-        }
-
-        if ($voucher->outlet_id && $request->has('outlet_id') && $voucher->outlet_id != $request->outlet_id) {
-            return response()->json(['success' => false, 'message' => 'Voucher ini tidak berlaku untuk outlet ini.'], 422);
         }
 
         // 2. Cek Masa Kedaluwarsa (Hanya jika expired_at diisi / tidak permanent)

@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\AccountController;
 use App\Http\Controllers\AccountMappingController;
+use App\Http\Controllers\Api\OrderController;
 use App\Http\Controllers\ReportController;
 use App\Http\Controllers\CustomerController;
 use App\Http\Controllers\JournalEntryController;
@@ -29,12 +30,13 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::resource('outlet', OutletController::class);
     Route::resource('customers', CustomerController::class);
     Route::prefix('reports')->name('reports.')->group(function () {
-            Route::prefix('finance')->name('finance.')->group(function () {
-                Route::get('/', [ReportController::class, 'index'])
-                    ->name('reports.index');
+        Route::prefix('finance')->name('finance.')->group(function () {
+            Route::get('/', [ReportController::class, 'index'])
+                ->name('reports.index');
 
-            });
         });
+    });
+    Route::inertia('/sales', 'sales/Index')->name('sales');
 
     // Route::get('web-pos/orders', [PosController::class, 'orders'])->name('web-pos.orders');
     // Route::get('web-pos/invoices', [PosController::class, 'invoices'])->name('web-pos.invoices');
