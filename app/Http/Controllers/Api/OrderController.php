@@ -350,7 +350,6 @@ class OrderController extends Controller
             'items.*.menu_id' => 'required|uuid|exists:menus,id',
             'items.*.quantity' => 'required|integer|min:1',
             'customer_name' => 'required|string|max:255',
-            'customer_phone' => 'required|string|max:20',
             'shipping_address' => 'required|string',
             'notes' => 'nullable|string',
             'voucher_id'       => 'nullable|uuid|exists:vouchers,id', // ⬅️ Tambahkan validasi voucher_id
