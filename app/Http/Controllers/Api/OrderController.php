@@ -410,7 +410,6 @@ class OrderController extends Controller
                 'transaction_at' => now(),
                 'outlet_id' => $request->outlet_id,
                 'customer_name' => $request->customer_name,
-                'customer_phone' => $request->customer_phone,
                 'shipping_address' => $request->shipping_address,
                 'customer_id'      => $customer ? $customer->id : null,
                 'voucher_id'       => $request->voucher_id ?? null, // ⬅️ Simpan voucher_id
