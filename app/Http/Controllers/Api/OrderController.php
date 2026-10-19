@@ -424,7 +424,7 @@ class OrderController extends Controller
                 'amount_paid'      => floatval($request->amount_paid ?? 0), // ⬅️ Tambahkan baris pengaman ini
             ];
 
-            $order = $this->posService->completeOrder($orderData, $itemsData);
+            $order = $this->posService->createOrder($orderData, $itemsData);
             // $this->posService->rewardCustomerPoints($order);
 
             if (!empty($request->voucher_id)) {

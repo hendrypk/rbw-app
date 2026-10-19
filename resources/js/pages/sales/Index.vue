@@ -3,162 +3,82 @@
         <div class="flex items-center justify-between mb-6">
             <h1 class="text-2xl font-bold text-gray-900 dark:text-white">Daftar Penjualan</h1>
         </div>
-
-        <!-- Filter & Search Bar -->
-        <div class="flex flex-col md:flex-row gap-4 mb-6 bg-white dark:bg-zinc-900 p-4 rounded-xl border border-gray-100 dark:border-zinc-800">
-            <div class="flex-1">
-                <input
-                    v-model="form.search"
-                    @keyup.enter="handleFilter"
-                    type="text"
-                    placeholder="Cari No. Order atau Nama Pelanggan..."
-                    class="w-full px-4 py-2 border rounded-lg focus:ring focus:ring-emerald-200 dark:bg-zinc-800 dark:border-zinc-700 dark:text-white"
-                />
-            </div>
-            <div class="w-full md:w-64">
-                <select
-                    v-model="form.status"
-                    @change="handleFilter"
-                    class="w-full px-4 py-2 border rounded-lg focus:ring focus:ring-emerald-200 dark:bg-zinc-800 dark:border-zinc-700 dark:text-white"
-                >
-                    <option value="">Semua Status</option>
-                    <option value="paid">Lunas (Paid)</option>
-                    <option value="unpaid">Belum Lunas (Unpaid)</option>
-                </select>
-            </div>
-        </div>
-
-        <!-- Table -->
         <div class="bg-white dark:bg-zinc-900 rounded-xl border border-gray-100 dark:border-zinc-800 overflow-hidden relative">
 
-            <!-- Loading Overlay -->
             <div v-if="isLoading" class="absolute inset-0 z-10 bg-white/50 dark:bg-zinc-900/50 backdrop-blur-sm flex items-center justify-center">
                 <span class="text-emerald-600 font-medium animate-pulse">Memuat data...</span>
             </div>
 
-            <div class="overflow-x-auto">
-                <table class="w-full text-sm text-left text-gray-500 dark:text-gray-400">
-                    <thead class="text-xs text-gray-700 uppercase bg-gray-50 dark:bg-zinc-800 dark:text-gray-300">
+        <div v-else-if="orders.length > 0" class="table-container mt-8">
+            <div class="overflow-hidden rounded-xl border border-border bg-card shadow-sm">
+                <table class="w-full text-sm text-left">
+                        <thead class="bg-muted/50 text-muted-foreground">
                         <tr>
-                            <th class="px-6 py-4">No. Order</th>
-                            <th class="px-6 py-4">Tanggal</th>
-                            <th class="px-6 py-4">Total Harga</th>
-                            <th class="px-6 py-4 text-center">Status</th>
-                            <th class="px-6 py-4 text-center">Aksi</th>
+                            <th class="px-6 py-4 w-12">
+                                <!-- <Input type="checkbox"
+                                    :checked="selectedIds.length === orders.length && orders.length > 0"
+                                    @change="toggleSelectAll" /> -->
+                            </th>
+                            <th class="px-6 py-4">No. PO</th>
+                            <th class="px-6 py-4">Supplier</th>
+                            <th class="px-6 py-4">Total</th>
+                            <th class="px-6 py-4">Status</th>
+                            <th class="px-6 py-4 text-right">Aksi</th>
                         </tr>
                     </thead>
-                    <tbody>
-                        <!-- Loop sekarang langsung dari 'orders' -->
-                        <tr v-for="order in orders" :key="order.id" class="border-b dark:border-zinc-800 hover:bg-gray-50 dark:hover:bg-zinc-800/50">
-                            <td class="px-6 py-4 font-medium text-gray-900 dark:text-white">
-                                {{ order.order_number }}
-                                <div class="text-xs text-gray-500">{{ order.customer_name || 'Pelanggan Umum' }}</div>
+                    <tbody class="divide-y divide-border/50">
+                        <tr v-for="po in orders" :key="po.id" class="group hover:bg-muted/30 transition-colors">
+                            <td class="px-6 py-4"><input type="checkbox" v-model="selectedIds" :value="po.id" /></td>
+                            <td class="px-6 py-4 font-medium">{{ po.order_number }}</td>
+                            <td class="px-6 py-4">{{ po.customers?.name || '-' }}</td>
+                            <td class="px-6 py-4">Rp {{ Number(po.final_total).toLocaleString() }}</td>
+                            <td class="px-6 py-4"><span :class="['px-2 py-1 rounded-full text-xs', getStatusColor(po.status)]">{{ po.status }}</span></td>
+                            <td class="px-6 py-4 text-right">
+                                <!-- <Button variant="outline" size="sm" @click="openView(po)">Detail</Button>
+                                <Button variant="ghost" size="sm" @click="openEdit(po)">Edit</Button> -->
                             </td>
-                            <td class="px-6 py-4">
-                                {{ formatDate(order.transaction_at) }}
-                            </td>
-                            <td class="px-6 py-4 font-semibold text-gray-900 dark:text-white">
-                                {{ formatRupiah(order.final_total) }}
-                            </td>
-                            <td class="px-6 py-4 text-center">
-                                <span v-if="order.status === 'paid'" class="px-3 py-1 text-[11px] font-bold text-emerald-700 bg-emerald-100 rounded-full">
-                                    LUNAS
-                                </span>
-                                <span v-else class="px-3 py-1 text-[11px] font-bold text-red-700 bg-red-100 rounded-full">
-                                    BELUM LUNAS
-                                </span>
-                            </td>
-                            <td class="px-6 py-4 text-center">
-                                <Link :href="`/sales/${order.id}`" class="text-indigo-600 hover:text-indigo-900 font-medium">
-                                    Detail
-                                </Link>
-                            </td>
-                        </tr>
-
-                        <tr v-if="!isLoading && orders.length === 0">
-                            <td colspan="5" class="px-6 py-12 text-center text-gray-500">Tidak ada data ditemukan.</td>
                         </tr>
                     </tbody>
                 </table>
             </div>
-
-            <!-- Pagination menggunakan 'meta' -->
-            <div v-if="meta?.total > 0" class="p-4 border-t border-gray-100 dark:border-zinc-800 flex justify-between items-center text-sm text-gray-500">
-                <span>Menampilkan {{ meta.from }} - {{ meta.to }} dari {{ meta.total }}</span>
-                <div class="flex gap-2">
-                    <button
-                        v-for="(link, i) in meta.links"
-                        :key="i"
-                        @click.prevent="link.url ? handlePagination(link.url) : null"
-                        v-html="link.label"
-                        :disabled="!link.url"
-                        class="px-3 py-1 rounded border transition-colors"
-                        :class="[
-                            link.active ? 'bg-black text-white border-transparent' : 'bg-white hover:bg-gray-100',
-                            !link.url ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'
-                        ]"
-                    ></button>
-                </div>
-            </div>
+        </div>
         </div>
     </div>
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, watch } from 'vue';
-import { Link } from '@inertiajs/vue3';
-import { useOrder } from '@/composables/useOrder';
-import { useOutlet } from '@/composables/useOutlet';
+import { useOrders } from '@/composables/useOrder';
+import { useSwal } from '@/composables/useSwal';
+import AppSidebarLayout from '@/layouts/app/AppSidebarLayout.vue';
+import Layout from '@/layouts/settings/Layout.vue';
+import { onMounted, onUnmounted, ref } from 'vue';
+import { formatDate } from '@/composables/useFormateDate';
+import { Link } from '@lucide/vue';
 
-const { orders, isLoading, meta, fetchOrders } = useOrder();
-const { getOutletParam } = useOutlet(); // Sesuaikan dengan variabel yg di-export useOutlet
+defineProps({ Layout: AppSidebarLayout });
 
-// State untuk filter pencarian
-const form = ref({
-    search: '',
-    status: '',
-    page: 1, // Menyimpan state halaman yang sedang aktif
-});
+const { orders, isLoading, fetchOrders }  = useOrders();
+const { success, error } = useSwal();
+const showModal = ref(false);
+const showViewModal = ref(false);
+const activeOrder = ref(null);
+const selectedIds = ref<string[]>([]);
 
-// Fungsi fetch saat tombol Cari / Enter / Ganti Status
-const handleFilter = () => {
-    form.value.page = 1; // Jika difilter, reset ke halaman 1
-    fetchOrders(form.value);
-};
+const handleOutletChanged = () => {
+    fetchOrders();
+}
 
-// Fungsi khusus menangani klik pagination
-const handlePagination = (url: string) => {
-    // Laravel mengembalikan URL lengkap di meta.links (misal: http://localhost:8000/api/orders?page=2)
-    // Kita ekstrak angka halamannya, lalu masukkan ke params API kita
-    const urlObj = new URL(url);
-    const pageNum = urlObj.searchParams.get('page');
-
-    if (pageNum) {
-        form.value.page = Number(pageNum);
-        fetchOrders(form.value);
-    }
-};
-
-// Pantau perubahan Outlet
-// Apabila outlet berubah dari navbar/sidebar atas, muat ulang tabel ini dari hal 1
-watch(() => activeOutletId?.value, (newVal, oldVal) => {
-    if (newVal !== oldVal) {
-        handleFilter();
-    }
-});
-
-// Helper Formatter
-const formatRupiah = (angka: number) => {
-    return new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(angka || 0);
-};
-
-const formatDate = (dateString: string) => {
-    if (!dateString) return '-';
-    return new Date(dateString).toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' });
-};
-
-// Panggilan pertama saat komponen dimuat
 onMounted(() => {
-    handleFilter();
-});
+    fetchOrders();
+    window.addEventListener('outlet-changed', handleOutletChanged);
+})
+
+onUnmounted(() => {
+    window.removeEventListener('outlet-changed', handleOutletChanged);
+})
+
+const getStatusColor = (status: string) => {
+    return status === 'paid' ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700';
+};
+
 </script>
